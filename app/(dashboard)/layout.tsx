@@ -3,6 +3,9 @@ import { redirect } from "next/navigation"
 import Sidebar from "@/components/Sidebar"
 import Topbar from "@/components/Topbar"
 
+// Todas as páginas do dashboard são dinâmicas — nunca pre-renderizadas
+export const dynamic = "force-dynamic"
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect("/login")
