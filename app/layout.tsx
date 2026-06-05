@@ -1,14 +1,17 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
+export const viewport: Viewport = {
+  themeColor: "#1B6B2E",
+}
+
 export const metadata: Metadata = {
   title: "PCP ONLINE — Fertalvo",
   description: "Planejamento e Controle da Produção — Fertalvo",
   manifest: "/manifest.json",
-  themeColor: "#1B6B2E",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
