@@ -3,6 +3,8 @@ import { notFound } from "next/navigation"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
+export const dynamic = "force-dynamic"
+
 export default async function BoxInfoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const box = await prisma.box.findUnique({

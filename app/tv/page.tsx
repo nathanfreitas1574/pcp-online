@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-export const revalidate = 30
+export const dynamic = "force-dynamic"
 
 export default async function PainelTVPage() {
   const [boxes, alertasAbertos, tmpAtivos] = await Promise.all([
