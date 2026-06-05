@@ -8,11 +8,12 @@ import {
   LayoutDashboard, Box, Lock, ClipboardList, Truck,
   FileText, Users, LogOut, Download, Upload, BarChart2,
   Warehouse, Bell, Database, Calendar, Clock, Activity,
+  FlaskConical, TrendingUp, Tv, ListOrdered,
 } from "lucide-react"
 
 type NavItem =
   | { section: string }
-  | { href: string; label: string; icon: React.ElementType; badge?: boolean }
+  | { href: string; label: string; icon: React.ElementType; badge?: boolean; external?: boolean }
 
 const nav: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -21,6 +22,8 @@ const nav: NavItem[] = [
   { href: "/boxes", label: "Gestão de Box", icon: Box },
   { href: "/lacres", label: "Lacres", icon: Lock },
   { href: "/tmp", label: "TMP Caminhões", icon: Clock },
+  { href: "/fila", label: "Fila de Caminhões", icon: ListOrdered },
+  { href: "/transportadoras", label: "Transportadoras", icon: Truck },
   { section: "Expedição" },
   { href: "/expedicao", label: "Dashboard Expedição", icon: Upload },
   { href: "/consignacao", label: "Consignação NF", icon: FileText },
@@ -29,6 +32,8 @@ const nav: NavItem[] = [
   { section: "Estoque & BI" },
   { href: "/bi-estoques", label: "BI Estoques", icon: BarChart2 },
   { href: "/vistoria", label: "Vistoria Estoque", icon: Warehouse },
+  { href: "/qualidade", label: "Controle de Qualidade", icon: FlaskConical },
+  { href: "/analytics", label: "Analytics & Ranking", icon: TrendingUp },
   { section: "Operação" },
   { href: "/inventario", label: "Inventário", icon: ClipboardList },
   { href: "/movimentacao", label: "Movimentação", icon: Truck },
@@ -37,6 +42,7 @@ const nav: NavItem[] = [
   { href: "/logs", label: "Log Atividades", icon: Activity },
   { href: "/cadastros", label: "Cadastros", icon: Database },
   { href: "/usuarios", label: "Usuários", icon: Users },
+  { href: "/tv", label: "Painel TV", icon: Tv, external: true },
 ]
 
 export default function Sidebar() {
@@ -67,8 +73,18 @@ export default function Sidebar() {
               </p>
             )
           }
-          const { href, label, icon: Icon, badge } = item
+          const { href, label, icon: Icon, badge, external: isExternal } = item as { href: string; label: string; icon: React.ElementType; badge?: boolean; external?: boolean }
           const active = pathname === href
+          if (isExternal) {
+            return (
+              <a key={href} href={href} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition text-blue-200 hover:bg-blue-800 hover:text-white">
+                <Icon size={15} className="shrink-0" />
+                <span className="flex-1 truncate">{label}</span>
+                <span className="text-blue-400 text-xs">↗</span>
+              </a>
+            )
+          }
           return (
             <Link
               key={href}
