@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Box, Lock, ClipboardList, Truck,
   FileText, Users, LogOut, Download, Upload, BarChart2,
   Warehouse, Bell, Database, Calendar, Clock, Activity,
-  FlaskConical, TrendingUp, Tv, ListOrdered,
+  FlaskConical, TrendingUp, Tv, ListOrdered, DollarSign, QrCode,
 } from "lucide-react"
 
 type NavItem =
@@ -34,6 +34,7 @@ const nav: NavItem[] = [
   { href: "/vistoria", label: "Vistoria Estoque", icon: Warehouse },
   { href: "/qualidade", label: "Controle de Qualidade", icon: FlaskConical },
   { href: "/analytics", label: "Analytics & Ranking", icon: TrendingUp },
+  { href: "/financeiro", label: "Financeiro", icon: DollarSign },
   { section: "Operação" },
   { href: "/inventario", label: "Inventário", icon: ClipboardList },
   { href: "/movimentacao", label: "Movimentação", icon: Truck },
