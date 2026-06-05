@@ -1,0 +1,733 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  PCP
+  LIDER
+  AUDITOR
+  VIEWER
+}
+
+enum StatusLacre {
+  FECHADO
+  ABERTO
+  NAO_CONFORME
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+  TRANSFERENCIA
+}
+
+enum StatusMovimentacao {
+  PROGRAMADA
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(VIEWER)
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lacres            Lacre[]
+  movimentacoes     Movimentacao[]
+  inventariosFeitos InventarioItem[]
+  auditorias        AuditoriaBox[]
+  alertas           Alerta[]
+  logs              LogAtividade[]
+  twoFactor         TwoFactorConfig?
+}
+
+model Box {
+  id          String   @id @default(cuid())
+  codigo      String   @unique
+  descricao   String
+  localizacao String
+  capacidade  Int
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  produtos       ProdutoBox[]
+  lacres         Lacre[]
+  auditorias     AuditoriaBox[]
+  estoques       Estoque[]
+  alertas        Alerta[]
+  historico      HistoricoBox[]
+  programacoes   ProgramacaoSemanal[]
+  qualidades     QualidadeRegistro[]
+}
+
+model Produto {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  descricao String
+  unidade   String
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  boxes             ProdutoBox[]
+  estoques          Estoque[]
+  inventarioItems   InventarioItem[]
+  consignacaoItems  ConsignacaoItem[]
+  movimentacaoItems MovimentacaoItem[]
+  qualidades        QualidadeRegistro[]
+}
+
+model ProdutoBox {
+  id         String  @id @default(cuid())
+  boxId      String
+  produtoId  String
+  quantidade Float
+  createdAt  DateTime @default(now())
+
+  box     Box     @relation(fields: [boxId], references: [id])
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@unique([boxId, produtoId])
+}
+
+model Lacre {
+  id          String      @id @default(cuid())
+  boxId       String
+  usuarioId   String
+  data        DateTime    @default(now())
+  status      StatusLacre @default(FECHADO)
+  codigoLacre String?
+  observacao  String?
+  foto        String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  box     Box  @relation(fields: [boxId], references: [id])
+  usuario User @relation(fields: [usuarioId], references: [id])
+}
+
+model AuditoriaBox {
+  id         String   @id @default(cuid())
+  boxId      String
+  usuarioId  String
+  data       DateTime @default(now())
+  observacao String?
+  fotos      String[]
+  conforme   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  box     Box  @relation(fields: [boxId], references: [id])
+  usuario User @relation(fields: [usuarioId], references: [id])
+}
+
+model Inventario {
+  id        String   @id @default(cuid())
+  tipo      String
+  data      DateTime
+  status    String   @default("ABERTO")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens InventarioItem[]
+}
+
+model InventarioItem {
+  id           String  @id @default(cuid())
+  inventarioId String
+  produtoId    String
+  usuarioId    String
+  qtdSistema   Float
+  qtdContada   Float
+  diferenca    Float   @default(0)
+  ajustado     Boolean @default(false)
+  createdAt    DateTime @default(now())
+
+  inventario Inventario @relation(fields: [inventarioId], references: [id])
+  produto    Produto    @relation(fields: [produtoId], references: [id])
+  usuario    User       @relation(fields: [usuarioId], references: [id])
+}
+
+model Estoque {
+  id         String   @id @default(cuid())
+  produtoId  String
+  boxId      String
+  quantidade Float
+  updatedAt  DateTime @updatedAt
+
+  produto Produto @relation(fields: [produtoId], references: [id])
+  box     Box     @relation(fields: [boxId], references: [id])
+
+  @@unique([produtoId, boxId])
+}
+
+model Movimentacao {
+  id            String             @id @default(cuid())
+  usuarioId     String
+  tipo          TipoMovimentacao
+  status        StatusMovimentacao @default(PROGRAMADA)
+  origem        String?
+  destino       String?
+  dataPrevista  DateTime
+  dataRealizada DateTime?
+  viagens       Int                @default(1)
+  observacao    String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  usuario User             @relation(fields: [usuarioId], references: [id])
+  itens   MovimentacaoItem[]
+}
+
+model MovimentacaoItem {
+  id             String   @id @default(cuid())
+  movimentacaoId String
+  produtoId      String
+  quantidade     Float
+  createdAt      DateTime @default(now())
+
+  movimentacao Movimentacao @relation(fields: [movimentacaoId], references: [id])
+  produto      Produto      @relation(fields: [produtoId], references: [id])
+}
+
+model Cliente {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  nome      String
+  cnpj      String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consignacoes        Consignacao[]
+  contratosDescarga   ContratoDescarga[]
+  contratosExpedicao  ContratoExpedicao[]
+  quebras             Quebra[]
+}
+
+// ─── RECEBIMENTO / DESCARGA ───────────────────────────────────────────────────
+
+model ContratoDescarga {
+  id               String    @id @default(cuid())
+  numero           String    @unique
+  clienteId        String
+  produtoDesc      String
+  produtoAbreviado String?
+  tipoProduto      String?
+  navio            String?
+  origem           String?
+  mes              String?
+  semana           Int?
+  data             DateTime?
+  volProgramado    Float     @default(0)
+  volConfirmado    Float     @default(0)
+  cancelado        Float     @default(0)
+  adicionado       Float     @default(0)
+  realizado        Float     @default(0)
+  saldo            Float     @default(0)
+  status           String    @default("PROGRAMADO")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  cliente      Cliente              @relation(fields: [clienteId], references: [id])
+  programacoes DescargaProgramacao[]
+  registros    DescargaRegistro[]
+}
+
+model DescargaProgramacao {
+  id            String   @id @default(cuid())
+  contratoId    String
+  data          DateTime
+  mes           String?
+  semana        Int?
+  clienteNome   String?
+  produto       String?
+  armazem       String?
+  box           String?
+  volume        Float    @default(0)
+  seg           Float    @default(0)
+  ter           Float    @default(0)
+  qua           Float    @default(0)
+  qui           Float    @default(0)
+  sex           Float    @default(0)
+  sab           Float    @default(0)
+  realizado     Float    @default(0)
+  saldo         Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  contrato ContratoDescarga @relation(fields: [contratoId], references: [id])
+}
+
+model DescargaRegistro {
+  id              String    @id @default(cuid())
+  contratoId      String?
+  romaneio        String?
+  placa           String?
+  motorista       String?
+  clienteNome     String
+  transportadora  String?
+  produto         String
+  localDescarga   String?
+  tipoVeiculo     String?
+  origem          String?
+  pesoEntrada     Float?
+  pesoSaida       Float?
+  status          String    @default("REALIZADO")
+  turno           String?
+  dtPortaria      DateTime?
+  dtAgendamento   DateTime?
+  dtSaida         DateTime?
+  tmpMinutos      Float?
+  notaFiscal      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  contrato ContratoDescarga? @relation(fields: [contratoId], references: [id])
+}
+
+// ─── EXPEDIÇÃO ────────────────────────────────────────────────────────────────
+
+model ContratoExpedicao {
+  id               String    @id @default(cuid())
+  numero           String
+  clienteId        String
+  operacao         String?
+  produtoSistema   String?
+  produtoAbreviado String?
+  tipoProduto      String?
+  mes              String?
+  semana           Int?
+  data             DateTime?
+  volProgramado    Float     @default(0)
+  realizado        Float     @default(0)
+  saldo            Float     @default(0)
+  status           String    @default("PROGRAMADO")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  cliente   Cliente             @relation(fields: [clienteId], references: [id])
+  registros ExpedicaoRegistro[]
+}
+
+model ExpedicaoRegistro {
+  id                String    @id @default(cuid())
+  contratoId        String?
+  data              DateTime
+  mes               String?
+  semana            Int?
+  clienteNome       String
+  produto           String
+  linha             String?
+  operacao          String?
+  turno             String?
+  orcado            Float     @default(0)
+  forecast          Float     @default(0)
+  realizado         Float     @default(0)
+  capacidade        Float     @default(0)
+  notaFiscal        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  contrato ContratoExpedicao? @relation(fields: [contratoId], references: [id])
+}
+
+model ExpedicaoOrcado {
+  id         String   @id @default(cuid())
+  ano        Int
+  mes        Int
+  clienteNome String
+  orcado     Float    @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([ano, mes, clienteNome])
+}
+
+model ExpedicaoCapacidade {
+  id         String   @id @default(cuid())
+  ano        Int
+  mes        Int
+  linha      String
+  capacidade Float    @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([ano, mes, linha])
+}
+
+// ─── BI ESTOQUES ──────────────────────────────────────────────────────────────
+
+model EstoqueSnapshot {
+  id            String   @id @default(cuid())
+  data          DateTime
+  clienteNome   String
+  produto       String
+  classe        String?
+  saldoInicial  Float    @default(0)
+  entradas      Float    @default(0)
+  saidas        Float    @default(0)
+  saldoFinal    Float    @default(0)
+  createdAt     DateTime @default(now())
+
+  @@unique([data, clienteNome, produto])
+}
+
+model Quebra {
+  id              String   @id @default(cuid())
+  clienteId       String
+  clienteNome     String
+  produto         String
+  classe          String?
+  quebraTotal     Float    @default(0)
+  totalNfEmitida  Float    @default(0)
+  nfPendente      Float    @default(0)
+  data            DateTime
+  mes             String?
+  notaFiscal      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cliente Cliente @relation(fields: [clienteId], references: [id])
+}
+
+model Insumo {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  descricao String
+  unidade   String   @default("UN")
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movimentos InsumoMovimento[]
+}
+
+model InsumoMovimento {
+  id          String   @id @default(cuid())
+  insumoId    String
+  clienteNome String?
+  tipo        String
+  quantidade  Float
+  data        DateTime
+  mes         String?
+  createdAt   DateTime @default(now())
+
+  insumo Insumo @relation(fields: [insumoId], references: [id])
+}
+
+// ─── VISTORIA ESTOQUE ─────────────────────────────────────────────────────────
+
+model VistoriaBox {
+  id            String   @id @default(cuid())
+  boxCodigo     String
+  boxTipo       String
+  data          DateTime
+  clienteNome   String?
+  produto       String?
+  classe        String?
+  estoque       Float    @default(0)
+  capacidade    Float    @default(0)
+  pctOcupacao   Float    @default(0)
+  diasEstocado  Int?
+  statusBox     String   @default("LIVRE")
+  observacao    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([boxCodigo, data])
+}
+
+// ─── ALERTAS ──────────────────────────────────────────────────────────────────
+
+enum AlertaTipo {
+  BOX_CAPACIDADE_CRITICA
+  BOX_CAPACIDADE_ALTA
+  LACRE_NAO_CONFORME
+  INVENTARIO_DIVERGENCIA
+  MOVIMENTACAO_ATRASADA
+  ESTOQUE_BAIXO
+  NAO_CONFORMIDADE
+}
+
+enum AlertaSeveridade {
+  CRITICO
+  AVISO
+  INFO
+}
+
+enum AlertaStatus {
+  ABERTO
+  LIDO
+  RESOLVIDO
+}
+
+model Alerta {
+  id          String           @id @default(cuid())
+  tipo        AlertaTipo
+  severidade  AlertaSeveridade @default(AVISO)
+  status      AlertaStatus     @default(ABERTO)
+  titulo      String
+  descricao   String
+  referencia  String?
+  boxId       String?
+  usuarioId   String?
+  resolvidoPor String?
+  resolvidoEm DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  box     Box?  @relation(fields: [boxId], references: [id])
+  usuario User? @relation(fields: [usuarioId], references: [id])
+}
+
+// ─── LOG DE ATIVIDADES ────────────────────────────────────────────────────────
+
+model LogAtividade {
+  id         String   @id @default(cuid())
+  usuarioId  String?
+  usuarioNome String?
+  acao       String
+  modulo     String
+  descricao  String
+  ip         String?
+  referencia String?
+  createdAt  DateTime @default(now())
+
+  usuario User? @relation(fields: [usuarioId], references: [id])
+}
+
+// ─── PROGRAMAÇÃO SEMANAL ──────────────────────────────────────────────────────
+
+model ProgramacaoSemanal {
+  id          String   @id @default(cuid())
+  ano         Int
+  semana      Int
+  dataInicio  DateTime
+  dataFim     DateTime
+  boxId       String?
+  boxCodigo   String?
+  clienteNome String
+  produto     String
+  dom         Float    @default(0)
+  seg         Float    @default(0)
+  ter         Float    @default(0)
+  qua         Float    @default(0)
+  qui         Float    @default(0)
+  sex         Float    @default(0)
+  sab         Float    @default(0)
+  total       Float    @default(0)
+  realizado   Float    @default(0)
+  tipo        String   @default("RECEBIMENTO")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  box Box? @relation(fields: [boxId], references: [id])
+
+  @@unique([ano, semana, clienteNome, produto, tipo])
+}
+
+// ─── HISTÓRICO DO BOX ─────────────────────────────────────────────────────────
+
+model HistoricoBox {
+  id          String   @id @default(cuid())
+  boxId       String
+  boxCodigo   String
+  acao        String
+  produto     String?
+  clienteNome String?
+  volume      Float?
+  pctOcupacao Float?
+  usuarioNome String?
+  observacao  String?
+  createdAt   DateTime @default(now())
+
+  box Box @relation(fields: [boxId], references: [id])
+}
+
+// ─── TMP (TEMPO MÉDIO PERMANÊNCIA) ───────────────────────────────────────────
+
+model TmpRegistro {
+  id              String    @id @default(cuid())
+  placa           String
+  motorista       String?
+  clienteNome     String
+  produto         String?
+  localDescarga   String?
+  dtEntrada       DateTime
+  dtSaida         DateTime?
+  tmpMinutos      Float?
+  status          String    @default("EM_ANDAMENTO")
+  usuarioId       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Consignacao {
+  id          String    @id @default(cuid())
+  clienteId   String
+  numeroNF    String
+  dataEmissao DateTime
+  dataFatura  DateTime?
+  valorTotal  Float
+  status      String    @default("PENDENTE")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  cliente Cliente          @relation(fields: [clienteId], references: [id])
+  itens   ConsignacaoItem[]
+}
+
+model ConsignacaoItem {
+  id            String  @id @default(cuid())
+  consignacaoId String
+  produtoId     String
+  quantidade    Float
+  valorUnitario Float
+  valorTotal    Float
+  faturado      Boolean @default(false)
+  createdAt     DateTime @default(now())
+
+  consignacao Consignacao @relation(fields: [consignacaoId], references: [id])
+  produto     Produto     @relation(fields: [produtoId], references: [id])
+}
+
+// ─── MELHORIA 4: CONTROLE DE QUALIDADE ───────────────────────────────────────
+model QualidadeRegistro {
+  id           String   @id @default(cuid())
+  boxId        String?
+  boxCodigo    String?
+  produtoId    String?
+  produtoDesc  String
+  clienteNome  String?
+  lote         String?
+  resultado    String   @default("PENDENTE")
+  umidade      Float?
+  granulometria Float?
+  pureza       Float?
+  observacao   String?
+  responsavel  String?
+  fotos        String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  box     Box?     @relation(fields: [boxId], references: [id])
+  produto Produto? @relation(fields: [produtoId], references: [id])
+}
+
+// ─── MELHORIA 9: TRANSPORTADORAS ─────────────────────────────────────────────
+model Transportadora {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  nome      String
+  cnpj      String?
+  contato   String?
+  telefone  String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── MELHORIA 16: FILA DE CAMINHÕES ──────────────────────────────────────────
+model FilaCaminhao {
+  id             String    @id @default(cuid())
+  placa          String
+  motorista      String?
+  clienteNome    String
+  produto        String?
+  transportadora String?
+  dtChegada      DateTime  @default(now())
+  dtChamada      DateTime?
+  dtEntrada      DateTime?
+  posicao        Int?
+  status         String    @default("AGUARDANDO")
+  localDestino   String?
+  observacao     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─── MELHORIA 6: NOTIFICAÇÕES ────────────────────────────────────────────────
+model NotificacaoConfig {
+  id            String   @id @default(cuid())
+  tipo          String   @unique
+  ativo         Boolean  @default(false)
+  destinatarios String[]
+  eventos       String[]
+  apiKey        String?
+  apiUrl        String?
+  remetente     String?
+  config        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model NotificacaoLog {
+  id        String   @id @default(cuid())
+  tipo      String
+  destino   String
+  mensagem  String
+  status    String   @default("ENVIADO")
+  erro      String?
+  alertaId  String?
+  createdAt DateTime @default(now())
+}
+
+// ─── MELHORIA 2: IMPORTAÇÃO AGENDADA ─────────────────────────────────────────
+model ImportacaoAgendada {
+  id          String    @id @default(cuid())
+  nome        String
+  tipo        String
+  cronExpr    String    @default("0 6,12,18 * * *")
+  urlFonte    String?
+  caminhoArq  String?
+  ativo       Boolean   @default(false)
+  ultimaExec  DateTime?
+  ultimoStatus String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─── MELHORIA 17: API PÚBLICA ─────────────────────────────────────────────────
+model ApiKey {
+  id          String    @id @default(cuid())
+  nome        String
+  chave       String    @unique
+  permissoes  String[]
+  ativo       Boolean   @default(true)
+  ultimoUso   DateTime?
+  totalReqs   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─── MELHORIA 18: 2FA ─────────────────────────────────────────────────────────
+model TwoFactorConfig {
+  id          String   @id @default(cuid())
+  usuarioId   String   @unique
+  secret      String
+  ativo       Boolean  @default(false)
+  backupCodes String[]
+  createdAt   DateTime @default(now())
+  usuario     User     @relation(fields: [usuarioId], references: [id])
+}
+
+// ─── BACKUP ───────────────────────────────────────────────────────────────────
+model BackupLog {
+  id        String   @id @default(cuid())
+  tipo      String   @default("AUTOMATICO")
+  status    String   @default("OK")
+  tamanho   Int?
+  caminho   String?
+  erro      String?
+  createdAt DateTime @default(now())
+}
