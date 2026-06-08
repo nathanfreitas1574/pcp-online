@@ -12,11 +12,16 @@ export async function PATCH(
 
   const { id } = await params
   const body = await req.json()
-  const { volumeAtual, produto: produtoDesc, cliente } = body
+  const { volumeAtual, produto: produtoDesc, cliente, capacidade, navio, dataRecebimento } = body
 
   // Verifica se box existe
-  const box = await prisma.box.findUnique({ where: { id } })
+  let box = await prisma.box.findUnique({ where: { id } })
   if (!box) return NextResponse.json({ error: "Box não encontrado" }, { status: 404 })
+
+  // Atualiza capacidade do box, se informada e diferente da atual
+  if (capacidade !== undefined && capacidade !== null && Number(capacidade) > 0 && Number(capacidade) !== box.capacidade) {
+    box = await prisma.box.update({ where: { id }, data: { capacidade: Number(capacidade) } })
+  }
 
   // Encontra ou cria produto
   let produtoId: string | null = null
@@ -37,11 +42,17 @@ export async function PATCH(
   }
 
   if (produtoId) {
+    const dadosEstoque = {
+      quantidade: volumeAtual,
+      clienteNome: cliente || null,
+      navio: navio || null,
+      dataRecebimento: dataRecebimento ? new Date(dataRecebimento) : null,
+    }
     // Upsert do estoque
     await prisma.estoque.upsert({
       where: { produtoId_boxId: { produtoId, boxId: id } },
-      update: { quantidade: volumeAtual },
-      create: { produtoId, boxId: id, quantidade: volumeAtual },
+      update: dadosEstoque,
+      create: { produtoId, boxId: id, ...dadosEstoque },
     })
 
     // Zerar outros estoques do box (um produto por box)

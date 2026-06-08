@@ -161,11 +161,14 @@ model InventarioItem {
 }
 
 model Estoque {
-  id         String   @id @default(cuid())
-  produtoId  String
-  boxId      String
-  quantidade Float
-  updatedAt  DateTime @updatedAt
+  id               String    @id @default(cuid())
+  produtoId        String
+  boxId            String
+  quantidade       Float
+  clienteNome      String?
+  navio            String?
+  dataRecebimento  DateTime?
+  updatedAt        DateTime  @updatedAt
 
   produto Produto @relation(fields: [produtoId], references: [id])
   box     Box     @relation(fields: [boxId], references: [id])

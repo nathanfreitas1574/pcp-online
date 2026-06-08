@@ -11,6 +11,8 @@ export type BoxData = {
   volumeAtual: number
   produto: string | null
   cliente: string | null
+  navio?: string | null
+  dataRecebimento?: string | Date | null
   diasEstocado?: number | null
   ultimoLacre?: string | null
 }
@@ -154,6 +156,11 @@ export default function BoxVisual({
   const [novoVol, setNovoVol] = useState(String(box.volumeAtual))
   const [novoProduto, setNovoProduto] = useState(box.produto ?? "")
   const [novoCliente, setNovoCliente] = useState(box.cliente ?? "")
+  const [novoNavio, setNovoNavio] = useState(box.navio ?? "")
+  const [novaData, setNovaData] = useState(
+    box.dataRecebimento ? new Date(box.dataRecebimento).toISOString().slice(0, 10) : ""
+  )
+  const [novaCapacidade, setNovaCapacidade] = useState(String(box.capacidade))
   const [saving, setSaving] = useState(false)
 
   const pct = box.capacidade > 0 ? (box.volumeAtual / box.capacidade) * 100 : 0
@@ -162,10 +169,14 @@ export default function BoxVisual({
   async function handleSave() {
     setSaving(true)
     const vol = parseFloat(novoVol) || 0
+    const cap = parseFloat(novaCapacidade) || box.capacidade
     await fetch(`/api/boxes/${box.id}/estoque`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ volumeAtual: vol, produto: novoProduto, cliente: novoCliente }),
+      body: JSON.stringify({
+        volumeAtual: vol, produto: novoProduto, cliente: novoCliente, capacidade: cap,
+        navio: novoNavio, dataRecebimento: novaData || null,
+      }),
     })
     setSaving(false)
     setEditing(false)
@@ -218,6 +229,31 @@ export default function BoxVisual({
         </div>
       </div>
 
+      {(box.cliente || box.navio || box.dataRecebimento) && (
+        <div className="grid grid-cols-3 gap-2 text-xs text-center">
+          {box.cliente && (
+            <div className="bg-gray-50 rounded-lg p-1.5">
+              <p className="text-gray-400">Cliente</p>
+              <p className="font-medium text-gray-700 truncate">{box.cliente}</p>
+            </div>
+          )}
+          {box.navio && (
+            <div className="bg-gray-50 rounded-lg p-1.5">
+              <p className="text-gray-400">Navio</p>
+              <p className="font-medium text-gray-700 truncate">{box.navio}</p>
+            </div>
+          )}
+          {box.dataRecebimento && (
+            <div className="bg-gray-50 rounded-lg p-1.5">
+              <p className="text-gray-400">Recebido em</p>
+              <p className="font-medium text-gray-700 truncate">
+                {new Date(box.dataRecebimento).toLocaleDateString("pt-BR")}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {box.diasEstocado && (
         <p className="text-xs text-gray-400 text-center">{box.diasEstocado} dias estocado</p>
       )}
@@ -231,8 +267,8 @@ export default function BoxVisual({
             {/* Mini preview while editing */}
             <div className="mb-4 pl-6">
               <BoxTank
-                pct={box.capacidade > 0 ? ((parseFloat(novoVol) || 0) / box.capacidade) * 100 : 0}
-                capacidade={box.capacidade}
+                pct={(parseFloat(novaCapacidade) || box.capacidade) > 0 ? ((parseFloat(novoVol) || 0) / (parseFloat(novaCapacidade) || box.capacidade)) * 100 : 0}
+                capacidade={parseFloat(novaCapacidade) || box.capacidade}
                 volumeAtual={parseFloat(novoVol) || 0}
                 produto={novoProduto || null}
                 cliente={novoCliente || null}
@@ -241,14 +277,26 @@ export default function BoxVisual({
 
             <div className="space-y-3">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Capacidade do box (ton)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="100"
+                  value={novaCapacidade}
+                  onChange={(e) => setNovaCapacidade(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Volume atual (ton)
-                  <span className="text-gray-400 font-normal ml-1">— capacidade: {box.capacidade.toLocaleString("pt-BR")} ton</span>
+                  <span className="text-gray-400 font-normal ml-1">— capacidade: {(parseFloat(novaCapacidade) || box.capacidade).toLocaleString("pt-BR")} ton</span>
                 </label>
                 <input
                   type="number"
                   min="0"
-                  max={box.capacidade}
+                  max={parseFloat(novaCapacidade) || box.capacidade}
                   step="0.1"
                   value={novoVol}
                   onChange={(e) => setNovoVol(e.target.value)}
@@ -258,7 +306,7 @@ export default function BoxVisual({
                 <input
                   type="range"
                   min="0"
-                  max={box.capacidade}
+                  max={parseFloat(novaCapacidade) || box.capacidade}
                   step="100"
                   value={parseFloat(novoVol) || 0}
                   onChange={(e) => setNovoVol(e.target.value)}
@@ -286,6 +334,28 @@ export default function BoxVisual({
                   placeholder="Ex: FTO"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Navio</label>
+                  <input
+                    type="text"
+                    value={novoNavio}
+                    onChange={(e) => setNovoNavio(e.target.value)}
+                    placeholder="Ex: MSC Lucinda"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data recebimento</label>
+                  <input
+                    type="date"
+                    value={novaData}
+                    onChange={(e) => setNovaData(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
             </div>
 

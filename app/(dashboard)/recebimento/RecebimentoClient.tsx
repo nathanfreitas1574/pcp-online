@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Truck, Clock, TrendingUp, BarChart2, Upload } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -56,14 +56,42 @@ export default function RecebimentoClient({
 }) {
   const [aba, setAba] = useState<"programacao" | "relatorio" | "importar">("programacao")
   const [filtroLocal, setFiltroLocal] = useState("Todos")
+  const [filtroProduto, setFiltroProduto] = useState("")
+  const [filtroCliente, setFiltroCliente] = useState("")
+  const [dataInicio, setDataInicio] = useState("")
+  const [dataFim, setDataFim] = useState("")
+  const [registrosPeriodo, setRegistrosPeriodo] = useState<Registro[] | null>(null)
+  const [carregandoPeriodo, setCarregandoPeriodo] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState("")
 
   const aderencia = totalPlanejado > 0 ? (totalRealizado / totalPlanejado) * 100 : 0
 
   const locaisDescarga = ["Todos", "Tombador", "Estruturado", "Produto Acabado"]
-  const registrosFiltrados =
-    filtroLocal === "Todos" ? registros : registros.filter((r) => r.localDescarga === filtroLocal)
+
+  // Quando um período é definido, busca o histórico no servidor (não limitado aos 100 mais recentes)
+  useEffect(() => {
+    if (!dataInicio && !dataFim) {
+      setRegistrosPeriodo(null)
+      return
+    }
+    setCarregandoPeriodo(true)
+    const params = new URLSearchParams()
+    if (dataInicio) params.set("inicio", dataInicio)
+    if (dataFim) params.set("fim", dataFim)
+    fetch(`/api/recebimento/registros?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data) => setRegistrosPeriodo(data.registros ?? []))
+      .finally(() => setCarregandoPeriodo(false))
+  }, [dataInicio, dataFim])
+
+  const baseRegistros = registrosPeriodo ?? registros
+  const registrosFiltrados = baseRegistros.filter((r) => {
+    const matchLocal = filtroLocal === "Todos" || r.localDescarga === filtroLocal
+    const matchProduto = filtroProduto === "" || r.produto.toLowerCase().includes(filtroProduto.toLowerCase())
+    const matchCliente = filtroCliente === "" || r.clienteNome.toLowerCase().includes(filtroCliente.toLowerCase())
+    return matchLocal && matchProduto && matchCliente
+  })
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -171,7 +199,7 @@ export default function RecebimentoClient({
       {/* Relatório Diário */}
       {aba === "relatorio" && (
         <div>
-          <div className="flex gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-3">
             {locaisDescarga.map((l) => (
               <button key={l} onClick={() => setFiltroLocal(l)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
@@ -180,6 +208,47 @@ export default function RecebimentoClient({
                 {l}
               </button>
             ))}
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <input
+              type="text"
+              placeholder="Filtrar por produto..."
+              value={filtroProduto}
+              onChange={(e) => setFiltroProduto(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-44"
+            />
+            <input
+              type="text"
+              placeholder="Filtrar por cliente..."
+              value={filtroCliente}
+              onChange={(e) => setFiltroCliente(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-44"
+            />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500">De</span>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-xs text-gray-500">até</span>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {(filtroProduto || filtroCliente || dataInicio || dataFim) && (
+              <button
+                onClick={() => { setFiltroProduto(""); setFiltroCliente(""); setDataInicio(""); setDataFim("") }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-red-600 transition"
+              >
+                Limpar filtros
+              </button>
+            )}
+            {carregandoPeriodo && <span className="text-xs text-gray-400 self-center">Carregando período…</span>}
           </div>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">

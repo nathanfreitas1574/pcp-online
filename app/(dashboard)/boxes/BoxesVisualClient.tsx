@@ -1,10 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, Warehouse, PackageCheck, PackageX, Gauge } from "lucide-react"
+import { Plus, Search, Warehouse, PackageCheck, PackageX, Gauge, ClipboardCheck } from "lucide-react"
 import BoxVisual, { BoxData } from "@/components/BoxVisual"
+import VistoriaDiariaModal from "@/components/VistoriaDiariaModal"
 
-type BoxItem = BoxData & { alertasAbertos: number; ultimoLacre?: string | null }
+type BoxItem = BoxData & {
+  alertasAbertos: number
+  ultimoLacre?: string | null
+  codigoLacre?: string | null
+  movimentadoHoje?: boolean
+}
 
 export default function BoxesVisualClient({
   boxes,
@@ -22,10 +28,28 @@ export default function BoxesVisualClient({
   const [search, setSearch] = useState("")
   const [filtro, setFiltro] = useState<"TODOS" | "LIVRE" | "OCUPADO" | "CRITICO">("TODOS")
   const [showModal, setShowModal] = useState(false)
+  const [showVistoria, setShowVistoria] = useState(false)
+  const [visao, setVisao] = useState<"GRADE" | "LINHA">("GRADE")
   const [form, setForm] = useState({ codigo: "", descricao: "", localizacao: "", capacidade: "" })
   const [saving, setSaving] = useState(false)
 
   const pctTotal = totalCapacidade > 0 ? (totalVolume / totalCapacidade) * 100 : 0
+
+  // Agrupa por linha de armazenagem a partir do código (ex: "AZ01A" -> "AZ01", "B01" -> "NAVE")
+  function linhaDoBox(codigo: string) {
+    if (/^B\d+/.test(codigo)) return "NAVE (B01–B12)"
+    const az = codigo.match(/^AZ0?(\d+)/)
+    if (az) return `AZ${az[1].padStart(2, "0")}`
+    return "Outros"
+  }
+
+  const linhas = boxes.reduce<Record<string, BoxItem[]>>((acc, b) => {
+    const linha = linhaDoBox(b.codigo)
+    acc[linha] = acc[linha] ?? []
+    acc[linha].push(b)
+    return acc
+  }, {})
+  const linhasOrdenadas = Object.keys(linhas).sort()
 
   const filtered = boxes.filter((b) => {
     const pct = b.capacidade > 0 ? (b.volumeAtual / b.capacidade) * 100 : 0
@@ -62,12 +86,20 @@ export default function BoxesVisualClient({
           <h2 className="text-2xl font-bold text-gray-800">Gestão de Box</h2>
           <p className="text-gray-500 text-sm mt-0.5">{boxes.length} boxes · ocupação visual em tempo real</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-        >
-          <Plus size={16} /> Novo Box
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowVistoria(true)}
+            className="flex items-center gap-2 bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            <ClipboardCheck size={16} /> Realizar Vistoria
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            <Plus size={16} /> Novo Box
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -139,6 +171,21 @@ export default function BoxesVisualClient({
         </div>
       </div>
 
+      {/* Alternar visão */}
+      <div className="flex gap-2 mb-4">
+        {(["GRADE", "LINHA"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setVisao(v)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+              visao === v ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {v === "GRADE" ? "Visão em Grade" : "Visão por Linha de Armazenagem"}
+          </button>
+        ))}
+      </div>
+
       {/* Filtros e busca */}
       <div className="flex flex-wrap gap-2 mb-4">
         <div className="relative flex-1 min-w-48">
@@ -192,29 +239,77 @@ export default function BoxesVisualClient({
         ))}
       </div>
 
-      {/* Grid de boxes visuais */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {filtered.map((box) => (
-          <div key={box.id} className="relative">
-            {box.alertasAbertos > 0 && (
-              <div className="absolute -top-1 -left-1 z-10 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
-                {box.alertasAbertos}
+      {/* Visão em grade */}
+      {visao === "GRADE" && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {filtered.map((box) => (
+            <div key={box.id} className="relative">
+              {box.alertasAbertos > 0 && (
+                <div className="absolute -top-1 -left-1 z-10 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
+                  {box.alertasAbertos}
+                </div>
+              )}
+              {box.ultimoLacre === "NAO_CONFORME" && (
+                <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">
+                  ⚠ Lacre
+                </div>
+              )}
+              <BoxVisual box={box} />
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="col-span-full py-16 text-center text-gray-400">
+              Nenhum box encontrado com os filtros selecionados.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Visão por linha de armazenagem */}
+      {visao === "LINHA" && (
+        <div className="space-y-6">
+          {linhasOrdenadas.map((linha) => {
+            const boxesLinha = linhas[linha].filter((b) => filtered.some((f) => f.id === b.id))
+            if (boxesLinha.length === 0) return null
+            return (
+              <div key={linha} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-blue-400 inline-block" />
+                  {linha} <span className="text-gray-400 font-normal text-sm">({boxesLinha.length} boxes)</span>
+                  {linha === "AZ02" && (
+                    <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">com compactador</span>
+                  )}
+                  {["AZ03", "AZ04", "AZ05", "AZ06", "AZ07", "AZ08"].includes(linha) && (
+                    <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">lados A e B</span>
+                  )}
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {boxesLinha.map((box) => (
+                    <div key={box.id} className="relative">
+                      {box.alertasAbertos > 0 && (
+                        <div className="absolute -top-1 -left-1 z-10 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
+                          {box.alertasAbertos}
+                        </div>
+                      )}
+                      {box.ultimoLacre === "NAO_CONFORME" && (
+                        <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">
+                          ⚠ Lacre
+                        </div>
+                      )}
+                      <BoxVisual box={box} />
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
-            {box.ultimoLacre === "NAO_CONFORME" && (
-              <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">
-                ⚠ Lacre
-              </div>
-            )}
-            <BoxVisual box={box} />
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-full py-16 text-center text-gray-400">
-            Nenhum box encontrado com os filtros selecionados.
-          </div>
-        )}
-      </div>
+            )
+          })}
+          {filtered.length === 0 && (
+            <div className="py-16 text-center text-gray-400">
+              Nenhum box encontrado com os filtros selecionados.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal novo box */}
       {showModal && (
@@ -258,6 +353,26 @@ export default function BoxesVisualClient({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal vistoria do dia */}
+      {showVistoria && (
+        <VistoriaDiariaModal
+          boxes={boxes.map((b) => ({
+            id: b.id,
+            codigo: b.codigo,
+            descricao: b.descricao,
+            capacidade: b.capacidade,
+            volumeAtual: b.volumeAtual,
+            produto: b.produto,
+            cliente: b.cliente,
+            navio: b.navio,
+            dataRecebimento: b.dataRecebimento,
+            codigoLacre: b.codigoLacre,
+            movimentadoHoje: b.movimentadoHoje,
+          }))}
+          onClose={() => setShowVistoria(false)}
+        />
       )}
     </div>
   )

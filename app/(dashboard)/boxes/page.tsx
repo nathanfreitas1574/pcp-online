@@ -38,8 +38,14 @@ export default async function BoxesPage() {
     capacidade: b.capacidade,
     volumeAtual: b.estoques[0]?.quantidade ?? 0,
     produto: b.estoques[0]?.produto?.descricao ?? null,
-    cliente: null as string | null,
+    cliente: b.estoques[0]?.clienteNome ?? null,
+    navio: b.estoques[0]?.navio ?? null,
+    dataRecebimento: b.estoques[0]?.dataRecebimento ?? null,
     ultimoLacre: b.lacres[0]?.status ?? null,
+    codigoLacre: b.lacres[0]?.codigoLacre ?? null,
+    movimentadoHoje: b.estoques[0]
+      ? new Date(b.estoques[0].updatedAt).toDateString() === new Date().toDateString()
+      : false,
     alertasAbertos: alertasPorBox.get(b.id) ?? 0,
   }))
 
