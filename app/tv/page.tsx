@@ -118,6 +118,7 @@ export default async function PainelTVPage() {
       <div style={{textAlign:"center",padding:"12px",color:"#8b949e",fontSize:11,borderTop:"1px solid #21262d"}}>
         PCP ONLINE — Fertalvo • {format(agora,"dd/MM/yyyy HH:mm",{locale:ptBR})} • Atualiza a cada 30 segundos
       </div>
+      <script dangerouslySetInnerHTML={{ __html: "setTimeout(function(){ location.reload(); }, 30000);" }} />
     </div>
   )
 }
