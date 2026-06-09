@@ -53,6 +53,7 @@ model User {
   twoFactor         TwoFactorConfig?
   planosAcao        PlanoAcao[]
   comentariosPlano  PlanoAcaoComentario[] @relation("comentariosPlano")
+  ocorrencias       Ocorrencia[]          @relation("ocorrencias")
 }
 
 model Box {
@@ -73,6 +74,7 @@ model Box {
   historico      HistoricoBox[]
   programacoes   ProgramacaoSemanal[]
   qualidades     QualidadeRegistro[]
+  ocorrencias    Ocorrencia[]
 }
 
 model Produto {
@@ -799,4 +801,92 @@ model PlanoAcaoTarefa {
   ordem      Int       @default(0)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+// ─── CRONOGRAMA DE NAVIOS ─────────────────────────────────────────────────────
+enum NaveStatus {
+  AGUARDANDO
+  ATRACADA
+  DESCARREGANDO
+  CONCLUIDA
+  CANCELADA
+}
+
+model NaveAgendada {
+  id          String     @id @default(cuid())
+  nome        String
+  eta         DateTime
+  produto     String?
+  volumePrev  Float?
+  clienteNome String?
+  origem      String?
+  berco       String?
+  status      NaveStatus @default(AGUARDANDO)
+  observacao  String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ─── METAS OPERACIONAIS ───────────────────────────────────────────────────────
+enum MetaTipo {
+  OCUPACAO_BOXES
+  VOLUME_RECEBIDO
+  TMP_MEDIO
+  VISTORIAS_DIA
+  CAMINHOES_DIA
+}
+
+model Meta {
+  id        String   @id @default(cuid())
+  tipo      MetaTipo
+  valor     Float
+  mes       Int
+  ano       Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tipo, mes, ano])
+}
+
+// ─── CONTROLE DE OCORRÊNCIAS ──────────────────────────────────────────────────
+enum OcorrenciaTipo {
+  DERRAMAMENTO
+  AVARIA
+  ACIDENTE
+  QUALIDADE
+  SEGURANCA
+  OUTRO
+}
+
+enum OcorrenciaStatus {
+  ABERTA
+  EM_ANALISE
+  ENCERRADA
+}
+
+enum OcorrenciaGravidade {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+model Ocorrencia {
+  id             String              @id @default(cuid())
+  tipo           OcorrenciaTipo
+  descricao      String
+  local          String?
+  boxId          String?
+  box            Box?                @relation(fields: [boxId], references: [id])
+  foto           String?
+  status         OcorrenciaStatus    @default(ABERTA)
+  gravidade      OcorrenciaGravidade @default(MEDIA)
+  responsavel    String?
+  planoAcaoId    String?
+  resolucao      String?
+  dataFechamento DateTime?
+  criadoPorId    String
+  criadoPor      User                @relation("ocorrencias", fields: [criadoPorId], references: [id])
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 }

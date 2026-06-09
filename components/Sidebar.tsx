@@ -9,6 +9,7 @@ import {
   FileText, Users, LogOut, Download, Upload, BarChart2,
   Warehouse, Bell, Database, Calendar, Clock, Activity,
   FlaskConical, TrendingUp, Tv, ListOrdered, DollarSign, QrCode, Target,
+  Ship, Crosshair, ShieldAlert,
 } from "lucide-react"
 
 type NavItem =
@@ -30,6 +31,8 @@ const nav: NavItem[] = [
   { href: "/consignacao", label: "Consignação NF", icon: FileText },
   { section: "Planejamento" },
   { href: "/programacao", label: "Programação Semanal", icon: Calendar },
+  { href: "/navios", label: "Cronograma de Navios", icon: Ship },
+  { href: "/metas", label: "Metas Operacionais", icon: Crosshair },
   { section: "Estoque & BI" },
   { href: "/bi-estoques", label: "BI Estoques", icon: BarChart2 },
   { href: "/vistoria", label: "Vistoria Estoque", icon: Warehouse },
@@ -39,6 +42,8 @@ const nav: NavItem[] = [
   { section: "Operação" },
   { href: "/inventario", label: "Inventário", icon: ClipboardList },
   { href: "/movimentacao", label: "Movimentação", icon: Truck },
+  { href: "/dashboard-turno", label: "Dashboard de Turno", icon: Clock },
+  { href: "/ocorrencias", label: "Controle de Ocorrências", icon: ShieldAlert },
   { section: "Sistema" },
   { href: "/alertas", label: "Alertas", icon: Bell, badge: true },
   { href: "/logs", label: "Log Atividades", icon: Activity },
