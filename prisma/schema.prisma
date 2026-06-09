@@ -52,6 +52,7 @@ model User {
   logs              LogAtividade[]
   twoFactor         TwoFactorConfig?
   planosAcao        PlanoAcao[]
+  comentariosPlano  PlanoAcaoComentario[] @relation("comentariosPlano")
 }
 
 model Box {
@@ -769,6 +770,33 @@ model PlanoAcao {
   dataConclusao  DateTime?
   criadoPorId    String
   criadoPor      User                 @relation(fields: [criadoPorId], references: [id])
+  comentarios    PlanoAcaoComentario[]
+  tarefas        PlanoAcaoTarefa[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
+}
+
+// ─── PLANO DE AÇÃO — comentários ──────────────────────────────────────────────
+model PlanoAcaoComentario {
+  id        String    @id @default(cuid())
+  planoId   String
+  plano     PlanoAcao @relation(fields: [planoId], references: [id], onDelete: Cascade)
+  autorId   String
+  autor     User      @relation("comentariosPlano", fields: [autorId], references: [id])
+  texto     String
+  createdAt DateTime  @default(now())
+}
+
+// ─── PLANO DE AÇÃO — sub-tarefas ──────────────────────────────────────────────
+model PlanoAcaoTarefa {
+  id         String    @id @default(cuid())
+  planoId    String
+  plano      PlanoAcao @relation(fields: [planoId], references: [id], onDelete: Cascade)
+  descricao  String
+  responsavel String?
+  prazo      DateTime?
+  concluida  Boolean   @default(false)
+  ordem      Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }

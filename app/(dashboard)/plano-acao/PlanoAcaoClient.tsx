@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
-import { Target, Plus, ChevronDown, ChevronUp, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, BarChart2, List } from "lucide-react"
-import { format } from "date-fns"
+import { useState, useEffect } from "react"
+import { Target, Plus, ChevronDown, ChevronUp, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, BarChart2, List, Download, Bell } from "lucide-react"
+import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import PlanoAcaoIndicadores from "./PlanoAcaoIndicadores"
+import PlanoAcaoDetalhe from "./PlanoAcaoDetalhe"
 
 export type PlanoAcaoItem = {
   id: string
@@ -47,6 +48,39 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
   const [planos, setPlanos] = useState<PlanoAcaoItem[]>(initialPlanos)
   const [aba, setAba] = useState<"acoes" | "indicadores">("acoes")
   const [showForm, setShowForm] = useState(false)
+  const [alertaVenc, setAlertaVenc] = useState<PlanoAcaoItem[]>([])
+  const [alertaDismissed, setAlertaDismissed] = useState(false)
+  const [exportando, setExportando] = useState(false)
+
+  // Alertas de vencimento: ações ativas que vencem em até 3 dias
+  useEffect(() => {
+    const hoje = new Date()
+    const prestes = planos.filter(p =>
+      p.status !== "CONCLUIDO" && p.status !== "CANCELADO" &&
+      differenceInDays(new Date(p.quando), hoje) <= 3 &&
+      new Date(p.quando) >= hoje
+    )
+    const vencidas = planos.filter(p =>
+      p.status !== "CONCLUIDO" && p.status !== "CANCELADO" &&
+      new Date(p.quando) < hoje
+    )
+    setAlertaVenc([...vencidas, ...prestes])
+  }, [planos])
+
+  async function handleExportar() {
+    setExportando(true)
+    const res = await fetch("/api/plano-acao/exportar")
+    if (res.ok) {
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `plano-acao-${format(new Date(), "yyyy-MM-dd")}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    setExportando(false)
+  }
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -184,6 +218,15 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
             </button>
           </div>
           <button
+            onClick={handleExportar}
+            disabled={exportando}
+            className="flex items-center gap-2 border border-gray-200 text-gray-600 px-3 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+            title="Exportar para Excel"
+          >
+            {exportando ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            Excel
+          </button>
+          <button
             onClick={openNew}
             className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-800 transition shadow-sm"
           >
@@ -212,6 +255,41 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
           </div>
         ))}
       </div>
+
+      {/* Banner alertas de vencimento */}
+      {!alertaDismissed && alertaVenc.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+          <Bell size={16} className="text-orange-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-orange-800">
+              {alertaVenc.filter(p => new Date(p.quando) < new Date()).length > 0
+                ? `${alertaVenc.filter(p => new Date(p.quando) < new Date()).length} ação(ões) vencida(s)`
+                : "Ações próximas do prazo"}
+              {alertaVenc.filter(p => new Date(p.quando) >= new Date()).length > 0 &&
+                ` · ${alertaVenc.filter(p => new Date(p.quando) >= new Date()).length} vencem em até 3 dias`}
+            </p>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {alertaVenc.slice(0, 4).map(p => {
+                const dias = differenceInDays(new Date(p.quando), new Date())
+                const vencido = dias < 0
+                return (
+                  <span key={p.id} className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    vencido ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"
+                  }`}>
+                    {p.oQue.substring(0, 28)}{p.oQue.length > 28 ? "…" : ""} · {
+                      vencido ? `${Math.abs(dias)}d atraso` : dias === 0 ? "hoje!" : `${dias}d`
+                    }
+                  </span>
+                )
+              })}
+              {alertaVenc.length > 4 && (
+                <span className="text-xs text-orange-600">+{alertaVenc.length - 4} mais</span>
+              )}
+            </div>
+          </div>
+          <button onClick={() => setAlertaDismissed(true)} className="text-orange-400 hover:text-orange-600 shrink-0 text-lg leading-none">×</button>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2">
@@ -351,8 +429,9 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
 
                   {/* Detalhe expandido */}
                   {isExpanded && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="mt-4 space-y-3">
+                      {/* Grade 5W2H */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-gray-100">
                         {[
                           { label: "❓ Por quê", val: p.porQue },
                           { label: "📍 Onde", val: p.onde },
@@ -380,37 +459,39 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
 
                       {/* Ações de status */}
                       {p.status !== "CONCLUIDO" && p.status !== "CANCELADO" && (
-                        <div className="flex flex-wrap gap-2 pt-1">
+                        <div className="flex flex-wrap gap-2">
                           {p.status === "PENDENTE" && (
-                            <button
-                              onClick={() => handleStatus(p.id, "EM_ANDAMENTO")}
-                              className="text-xs px-3 py-1.5 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition font-medium"
-                            >
+                            <button onClick={() => handleStatus(p.id, "EM_ANDAMENTO")}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition font-medium">
                               ▶ Iniciar
                             </button>
                           )}
                           {p.status === "EM_ANDAMENTO" && (
-                            <button
-                              onClick={() => handleStatus(p.id, "PENDENTE")}
-                              className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
-                            >
+                            <button onClick={() => handleStatus(p.id, "PENDENTE")}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
                               ⏸ Pausar
                             </button>
                           )}
-                          <button
-                            onClick={() => handleStatus(p.id, "CONCLUIDO")}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition font-medium"
-                          >
+                          <button onClick={() => handleStatus(p.id, "CONCLUIDO")}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition font-medium">
                             ✓ Concluir
                           </button>
-                          <button
-                            onClick={() => handleStatus(p.id, "CANCELADO")}
-                            className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition"
-                          >
+                          <button onClick={() => handleStatus(p.id, "CANCELADO")}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition">
                             ✕ Cancelar
                           </button>
                         </div>
                       )}
+
+                      {/* Checklist + Comentários */}
+                      <PlanoAcaoDetalhe
+                        planoId={p.id}
+                        onProgressoChange={(novoProgresso, planoAtualizado) => {
+                          setPlanos(prev => prev.map(x =>
+                            x.id === p.id ? { ...x, progresso: novoProgresso, ...(planoAtualizado as object) } : x
+                          ))
+                        }}
+                      />
                     </div>
                   )}
                 </div>
