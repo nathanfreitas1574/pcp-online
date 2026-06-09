@@ -44,7 +44,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lacres            Lacre[]
+  lacres            Lacre[]  @relation("lacresCriados")
+  lacresInativados  Lacre[]  @relation("lacresInativados")
   movimentacoes     Movimentacao[]
   inventariosFeitos InventarioItem[]
   auditorias        AuditoriaBox[]
@@ -108,20 +109,25 @@ model ProdutoBox {
 }
 
 model Lacre {
-  id           String      @id @default(cuid())
-  boxId        String
-  usuarioId    String?
-  data         DateTime    @default(now())
-  status       StatusLacre @default(FECHADO)
-  codigoLacre  String?
-  observacao   String?
-  foto         String?
-  nomeLacrador String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  boxId           String
+  usuarioId       String?
+  data            DateTime    @default(now())
+  status          StatusLacre @default(FECHADO)
+  codigoLacre     String?
+  observacao      String?
+  foto            String?
+  nomeLacrador    String?
+  inativado       Boolean     @default(false)
+  inativadoEm     DateTime?
+  inativadoPorId  String?
+  inativadoPorNome String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  box     Box   @relation(fields: [boxId], references: [id])
-  usuario User? @relation(fields: [usuarioId], references: [id])
+  box          Box   @relation(fields: [boxId], references: [id])
+  usuario      User? @relation("lacresCriados",   fields: [usuarioId],    references: [id])
+  inativadoPor User? @relation("lacresInativados", fields: [inativadoPorId], references: [id])
 }
 
 model AuditoriaBox {
@@ -502,15 +508,18 @@ model Alerta {
 // ─── LOG DE ATIVIDADES ────────────────────────────────────────────────────────
 
 model LogAtividade {
-  id         String   @id @default(cuid())
-  usuarioId  String?
+  id          String   @id @default(cuid())
+  usuarioId   String?
   usuarioNome String?
-  acao       String
-  modulo     String
-  descricao  String
-  ip         String?
-  referencia String?
-  createdAt  DateTime @default(now())
+  acao        String
+  modulo      String
+  descricao   String
+  ip          String?
+  userAgent   String?
+  dispositivo String?
+  navegador   String?
+  referencia  String?
+  createdAt   DateTime @default(now())
 
   usuario User? @relation(fields: [usuarioId], references: [id])
 }

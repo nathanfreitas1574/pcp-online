@@ -1,7 +1,8 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
-import { logAtividade, alertarLacreNaoConforme } from "@/lib/actions"
+import { logReq } from "@/lib/log"
+import { alertarLacreNaoConforme } from "@/lib/actions"
 
 export async function GET() {
   const session = await auth()
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
   })
 
   // Log de atividade
-  await logAtividade("LACRES", "REGISTRAR", `Lacre registrado: ${lacre.status} — Box ${lacre.box.codigo}`, lacre.box.codigo)
+  await logReq(req, "LACRES", "REGISTRAR", `Lacre registrado: ${lacre.status} — Box ${lacre.box.codigo}`, lacre.box.codigo)
 
   // Alerta automático se não conforme
   if (body.status === "NAO_CONFORME") {

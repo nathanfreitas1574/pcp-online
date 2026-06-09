@@ -3,18 +3,20 @@
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
 
-/** Registra log de atividade */
+/** Registra log de atividade (Server Actions — sem req, sem IP/UA) */
 export async function logAtividade(modulo: string, acao: string, descricao: string, referencia?: string) {
   try {
     const session = await auth()
     await prisma.logAtividade.create({
       data: {
-        usuarioId: session?.user?.id ?? null,
+        usuarioId:   session?.user?.id   ?? null,
         usuarioNome: session?.user?.name ?? "Sistema",
-        acao, modulo, descricao, referencia,
+        acao, modulo, descricao,
+        referencia: referencia ?? null,
+        ip: null, userAgent: null, dispositivo: null, navegador: null,
       },
     })
-  } catch { /* não bloqueia a operação principal */ }
+  } catch { /* não bloqueia */ }
 }
 
 /** Registra histórico de um box */

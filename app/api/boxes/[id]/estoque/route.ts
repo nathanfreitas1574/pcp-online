@@ -1,7 +1,8 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
-import { logAtividade, registrarHistoricoBox } from "@/lib/actions"
+import { logReq } from "@/lib/log"
+import { registrarHistoricoBox } from "@/lib/actions"
 
 export async function PATCH(
   req: NextRequest,
@@ -96,7 +97,7 @@ export async function PATCH(
   await registrarHistoricoBox(id, box.codigo, volumeAtual > 0 ? "ATUALIZAR" : "ESVAZIAR", {
     produto: produtoDesc, clienteNome: cliente, volume: volumeAtual, pctOcupacao: pct,
   })
-  await logAtividade("BOXES", "ATUALIZAR_ESTOQUE", `Box ${box.codigo}: ${volumeAtual} ton (${pct.toFixed(1)}%) — ${produtoDesc ?? "sem produto"}`, box.codigo)
+  await logReq(req, "BOXES", "ATUALIZAR_ESTOQUE", `Box ${box.codigo}: ${volumeAtual} ton (${pct.toFixed(1)}%) — ${produtoDesc ?? "sem produto"}`, box.codigo)
 
   return NextResponse.json({ ok: true, pct: pct.toFixed(1) })
 }
