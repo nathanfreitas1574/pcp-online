@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Plus, Lock, AlertTriangle, CheckCircle, ExternalLink, Pencil, Trash2, X, Calendar } from "lucide-react"
-import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns"
+import { Plus, Lock, AlertTriangle, CheckCircle, ExternalLink, Pencil, Ban, X, Calendar, Eye, EyeOff } from "lucide-react"
+import { format, startOfDay, endOfDay, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 type Lacre = {
@@ -11,6 +11,10 @@ type Lacre = {
   codigoLacre: string | null
   observacao: string | null
   nomeLacrador?: string | null
+  inativado: boolean
+  inativadoEm?: string | Date | null
+  inativadoPorNome?: string | null
+  inativadoPor?: { name: string } | null
   createdAt: string | Date
   box: { codigo: string; descricao: string }
   usuario: { name: string } | null
@@ -27,25 +31,25 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
   const [showModal, setShowModal]     = useState(false)
   const [editId, setEditId]           = useState<string | null>(null)
   const [form, setForm]               = useState(EMPTY_FORM)
-  const [loading, setLoading]         = useState(false)
+  const [loading, setLoading]           = useState(false)
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
-  const [dataInicio, setDataInicio]   = useState("")
-  const [dataFim, setDataFim]         = useState("")
+  const [dataInicio, setDataInicio]     = useState("")
+  const [dataFim, setDataFim]           = useState("")
+  const [mostrarInativos, setMostrarInativos] = useState(false)
 
   // ── Filtros aplicados ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return lacres.filter((l) => {
-      if (filtroStatus !== "TODOS" && l.status !== filtroStatus) return false
+      // Filtro de ativos/inativos
+      if (!mostrarInativos && l.inativado) return false
+      if (filtroStatus === "INATIVOS" && !l.inativado) return false
+      if (filtroStatus !== "TODOS" && filtroStatus !== "INATIVOS" && l.status !== filtroStatus) return false
       const dt = new Date(l.createdAt)
-      if (dataInicio) {
-        if (dt < startOfDay(parseISO(dataInicio))) return false
-      }
-      if (dataFim) {
-        if (dt > endOfDay(parseISO(dataFim))) return false
-      }
+      if (dataInicio && dt < startOfDay(parseISO(dataInicio))) return false
+      if (dataFim   && dt > endOfDay(parseISO(dataFim)))    return false
       return true
     })
-  }, [lacres, filtroStatus, dataInicio, dataFim])
+  }, [lacres, filtroStatus, dataInicio, dataFim, mostrarInativos])
 
   // ── Abrir modal novo ───────────────────────────────────────────────────────
   function openNovo() {
@@ -95,11 +99,18 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
     setShowModal(false)
   }
 
-  // ── Excluir ────────────────────────────────────────────────────────────────
-  async function handleExcluir(id: string) {
-    if (!confirm("Excluir este lacre?")) return
-    const res = await fetch(`/api/lacres/${id}`, { method: "DELETE" })
-    if (res.ok) setLacres(prev => prev.filter(l => l.id !== id))
+  // ── Inativar ───────────────────────────────────────────────────────────────
+  async function handleInativar(id: string) {
+    if (!confirm("Inativar este lacre? O registro ficará salvo com data, hora e usuário responsável.")) return
+    const res = await fetch(`/api/lacres/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inativar: true }),
+    })
+    if (res.ok) {
+      const d = await res.json()
+      setLacres(prev => prev.map(l => l.id === id ? { ...l, ...d.lacre } : l))
+    }
   }
 
   // ── Helpers visuais ────────────────────────────────────────────────────────
@@ -178,6 +189,20 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
           )}
         </div>
 
+        <button
+          onClick={() => {
+            setMostrarInativos(v => !v)
+            setFiltroStatus("TODOS")
+          }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+            mostrarInativos
+              ? "bg-gray-700 text-white border-gray-600"
+              : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+          }`}
+        >
+          {mostrarInativos ? <EyeOff size={13} /> : <Eye size={13} />}
+          {mostrarInativos ? "Ocultar inativos" : "Ver inativos"}
+        </button>
         <span className="ml-auto text-xs text-gray-400">{filtered.length} registro(s)</span>
       </div>
 
@@ -197,10 +222,13 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
           </thead>
           <tbody className="divide-y divide-gray-50">
             {filtered.map((lacre) => (
-              <tr key={lacre.id} className="hover:bg-gray-50 group">
+              <tr key={lacre.id} className={`hover:bg-gray-50 ${lacre.inativado ? "opacity-55" : ""}`}>
                 <td className="px-4 py-3 font-medium text-gray-800">
                   {lacre.box.codigo}
                   <span className="text-gray-400 font-normal ml-1">— {lacre.box.descricao}</span>
+                  {lacre.inativado && (
+                    <span className="ml-2 text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-normal">Inativo</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-gray-600">{lacre.codigoLacre ?? "—"}</td>
                 <td className="px-4 py-3">
@@ -211,9 +239,23 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
                 </td>
                 <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">{lacre.observacao ?? "—"}</td>
                 <td className="px-4 py-3 text-gray-600">
-                  {lacre.usuario?.name ?? lacre.nomeLacrador ?? "—"}
-                  {!lacre.usuario && lacre.nomeLacrador && (
-                    <span className="ml-1 text-xs text-gray-400">(externo)</span>
+                  <div>
+                    {lacre.usuario?.name ?? lacre.nomeLacrador ?? "—"}
+                    {!lacre.usuario && lacre.nomeLacrador && (
+                      <span className="ml-1 text-xs text-gray-400">(externo)</span>
+                    )}
+                  </div>
+                  {/* Linha de inativação */}
+                  {lacre.inativado && lacre.inativadoEm && (
+                    <div className="mt-0.5 flex items-center gap-1 text-xs text-orange-600">
+                      <Ban size={10} />
+                      <span>
+                        Inativado por{" "}
+                        <strong>{lacre.inativadoPor?.name ?? lacre.inativadoPorNome ?? "—"}</strong>
+                        {" em "}
+                        {format(new Date(lacre.inativadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
@@ -221,20 +263,24 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => openEditar(lacre)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
-                      title="Editar"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleExcluir(lacre.id)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
-                      title="Excluir"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!lacre.inativado && (
+                      <>
+                        <button
+                          onClick={() => openEditar(lacre)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                          title="Editar"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleInativar(lacre.id)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition"
+                          title="Inativar"
+                        >
+                          <Ban size={14} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
