@@ -14,6 +14,9 @@ type BoxItem = BoxData & {
   ultimoLacre?: string | null
   codigoLacre?: string | null
   movimentadoHoje?: boolean
+  armazemId?: string | null
+  armazemCodigo?: string | null
+  armazemNome?: string | null
 }
 
 // ── Configuração das estruturas do armazém ─────────────────────────────────────
@@ -673,6 +676,7 @@ export default function BoxesVisualClient({
             produto: b.produto, cliente: b.cliente, navio: b.navio,
             dataRecebimento: b.dataRecebimento, codigoLacre: b.codigoLacre,
             movimentadoHoje: b.movimentadoHoje,
+            armazemId: b.armazemId, armazemNome: b.armazemNome, armazemCodigo: b.armazemCodigo,
           }))}
           onClose={() => setShowVistoria(false)}
         />

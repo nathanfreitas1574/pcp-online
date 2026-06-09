@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Camera, ClipboardCheck, Lock, Unlock, Pencil, ExternalLink } from "lucide-react"
+import ArmazemBoxSelect from "@/components/ArmazemBoxSelect"
 
 export type VistoriaBoxOption = {
   id: string
@@ -15,6 +16,9 @@ export type VistoriaBoxOption = {
   dataRecebimento?: string | Date | null
   codigoLacre?: string | null
   movimentadoHoje?: boolean
+  armazemId?: string | null
+  armazemNome?: string | null
+  armazemCodigo?: string | null
 }
 
 const inp = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -26,6 +30,7 @@ export default function VistoriaDiariaModal({
   boxes: VistoriaBoxOption[]
   onClose: () => void
 }) {
+  const [armazemSel, setArmazemSel] = useState("")
   const [boxId, setBoxId] = useState("")
   const [lacreConforme, setLacreConforme] = useState(true)
   const [observacao, setObservacao] = useState("")
@@ -127,20 +132,17 @@ export default function VistoriaDiariaModal({
         <p className="text-sm text-gray-500 mb-4">Lançamento referente a {hoje}</p>
 
         <div className="space-y-4">
-          {/* Seleção de box */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Selecione o box</label>
-            <select
-              value={boxId}
-              onChange={(e) => selectBox(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Selecione…</option>
-              {boxes.map((b) => (
-                <option key={b.id} value={b.id}>{b.codigo} — {b.descricao}</option>
-              ))}
-            </select>
-          </div>
+          {/* Seleção em cascata: Armazém → Box */}
+          <ArmazemBoxSelect
+            boxes={boxes}
+            armazemSel={armazemSel}
+            boxSel={boxId}
+            onArmazem={setArmazemSel}
+            onBox={id => selectBox(id)}
+            obrigatorio
+            labelArmazem="1. Selecione o armazém"
+            labelBox="2. Selecione o box"
+          />
 
           {box && (
             <>

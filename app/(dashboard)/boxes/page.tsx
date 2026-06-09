@@ -15,6 +15,7 @@ export default async function BoxesPage() {
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        armazem: { select: { id: true, codigo: true, nome: true } },
       },
       orderBy: { codigo: "asc" },
     }),
@@ -47,6 +48,9 @@ export default async function BoxesPage() {
       ? new Date(b.estoques[0].updatedAt).toDateString() === new Date().toDateString()
       : false,
     alertasAbertos: alertasPorBox.get(b.id) ?? 0,
+    armazemId: b.armazem?.id ?? null,
+    armazemCodigo: b.armazem?.codigo ?? null,
+    armazemNome: b.armazem?.nome ?? null,
   }))
 
   const totalCapacidade = boxesData.reduce((s, b) => s + b.capacidade, 0)

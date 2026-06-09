@@ -22,6 +22,7 @@ const nav: NavItem[] = [
   { section: "Recebimento" },
   { href: "/recebimento", label: "Dashboard Recebimento", icon: Download },
   { href: "/boxes", label: "Gestão de Box", icon: Box },
+  { href: "/armazens", label: "Gestão de Armazéns", icon: Warehouse },
   { href: "/lacres", label: "Lacres", icon: Lock },
   { href: "/tmp", label: "TMP Caminhões", icon: Clock },
   { href: "/fila", label: "Fila de Caminhões", icon: ListOrdered },

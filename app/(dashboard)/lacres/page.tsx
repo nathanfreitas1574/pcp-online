@@ -11,7 +11,11 @@ export default async function LacresPage() {
         usuario: { select: { name: true } },
       },
     }),
-    prisma.box.findMany({ where: { ativo: true }, select: { id: true, codigo: true, descricao: true } }),
+    prisma.box.findMany({
+      where: { ativo: true },
+      select: { id: true, codigo: true, descricao: true, armazemId: true, armazem: { select: { codigo: true, nome: true } } },
+      orderBy: { codigo: "asc" },
+    }),
   ])
 
   return <LacresClient lacres={lacres} boxes={boxes} />

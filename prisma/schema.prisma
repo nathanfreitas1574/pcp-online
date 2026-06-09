@@ -57,6 +57,20 @@ model User {
   ocorrencias       Ocorrencia[]          @relation("ocorrencias")
 }
 
+// ─── ARMAZÉM ─────────────────────────────────────────────────────────────────
+model Armazem {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  nome      String
+  descricao String?
+  ordem     Int      @default(0)
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  boxes     Box[]
+}
+
 model Box {
   id          String   @id @default(cuid())
   codigo      String   @unique
@@ -64,9 +78,11 @@ model Box {
   localizacao String
   capacidade  Int
   ativo       Boolean  @default(true)
+  armazemId   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  armazem        Armazem?         @relation(fields: [armazemId], references: [id])
   produtos       ProdutoBox[]
   lacres         Lacre[]
   auditorias     AuditoriaBox[]

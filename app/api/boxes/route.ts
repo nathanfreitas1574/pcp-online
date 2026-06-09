@@ -19,8 +19,9 @@ export async function POST(req: NextRequest) {
     data: {
       codigo: body.codigo,
       descricao: body.descricao,
-      localizacao: body.localizacao,
-      capacidade: body.capacidade,
+      localizacao: body.localizacao ?? "",
+      capacidade: body.capacidade ?? 0,
+      ...(body.armazemId ? { armazemId: body.armazemId } : {}),
     },
   })
   return NextResponse.json(box, { status: 201 })

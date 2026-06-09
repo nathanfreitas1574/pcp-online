@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { Plus, Lock, AlertTriangle, CheckCircle, ExternalLink, Pencil, Ban, X, Calendar, Eye, EyeOff } from "lucide-react"
 import { format, startOfDay, endOfDay, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import ArmazemBoxSelect from "@/components/ArmazemBoxSelect"
 
 type Lacre = {
   id: string
@@ -20,7 +21,11 @@ type Lacre = {
   usuario: { name: string } | null
 }
 
-type Box = { id: string; codigo: string; descricao: string }
+type Box = {
+  id: string; codigo: string; descricao: string
+  armazemId?: string | null
+  armazem?: { codigo: string; nome: string } | null
+}
 
 const EMPTY_FORM = { boxId: "", status: "FECHADO", codigoLacre: "", observacao: "" }
 
@@ -31,6 +36,7 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
   const [showModal, setShowModal]     = useState(false)
   const [editId, setEditId]           = useState<string | null>(null)
   const [form, setForm]               = useState(EMPTY_FORM)
+  const [armazemSel, setArmazemSel]   = useState("")
   const [loading, setLoading]           = useState(false)
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
   const [dataInicio, setDataInicio]     = useState("")
@@ -55,6 +61,7 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
   function openNovo() {
     setEditId(null)
     setForm(EMPTY_FORM)
+    setArmazemSel("")
     setShowModal(true)
   }
 
@@ -310,17 +317,23 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
             </div>
 
             <form onSubmit={handleSalvar} className="space-y-3">
-              {/* Box — só no criar */}
+              {/* Box — cascata armazém → box (só no criar) */}
               {!editId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Box <span className="text-red-500">*</span></label>
-                  <select value={form.boxId} onChange={(e) => setForm(f => ({ ...f, boxId: e.target.value }))} required className={inp}>
-                    <option value="">Selecione…</option>
-                    {boxes.map((b) => (
-                      <option key={b.id} value={b.id}>{b.codigo} — {b.descricao}</option>
-                    ))}
-                  </select>
-                </div>
+                <ArmazemBoxSelect
+                  boxes={boxes.map(b => ({
+                    id: b.id, codigo: b.codigo, descricao: b.descricao,
+                    armazemId: b.armazemId,
+                    armazemNome: b.armazem?.nome,
+                    armazemCodigo: b.armazem?.codigo,
+                  }))}
+                  armazemSel={armazemSel}
+                  boxSel={form.boxId}
+                  onArmazem={id => { setArmazemSel(id); setForm(f => ({ ...f, boxId: "" })) }}
+                  onBox={id => setForm(f => ({ ...f, boxId: id }))}
+                  obrigatorio
+                  labelArmazem="Armazém"
+                  labelBox="Box"
+                />
               )}
 
               {/* Status */}
