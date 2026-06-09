@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Target, Plus, ChevronDown, ChevronUp, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle } from "lucide-react"
+import { Target, Plus, ChevronDown, ChevronUp, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, AlertTriangle, BarChart2, List } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import PlanoAcaoIndicadores from "./PlanoAcaoIndicadores"
 
 export type PlanoAcaoItem = {
   id: string
@@ -44,6 +45,7 @@ const EMPTY_FORM = {
 
 export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: PlanoAcaoItem[] }) {
   const [planos, setPlanos] = useState<PlanoAcaoItem[]>(initialPlanos)
+  const [aba, setAba] = useState<"acoes" | "indicadores">("acoes")
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -165,13 +167,36 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
             <p className="text-xs text-gray-500">Metodologia 5W2H — controle de ações e responsáveis</p>
           </div>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-800 transition shadow-sm"
-        >
-          <Plus size={15} /> Nova Ação
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Abas */}
+          <div className="flex bg-gray-100 rounded-xl p-0.5 text-xs">
+            <button
+              onClick={() => setAba("acoes")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${aba === "acoes" ? "bg-white shadow text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              <List size={13} /> Ações
+            </button>
+            <button
+              onClick={() => setAba("indicadores")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${aba === "indicadores" ? "bg-white shadow text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              <BarChart2 size={13} /> Indicadores
+            </button>
+          </div>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-800 transition shadow-sm"
+          >
+            <Plus size={15} /> Nova Ação
+          </button>
+        </div>
       </div>
+
+      {/* Aba Indicadores */}
+      {aba === "indicadores" && <PlanoAcaoIndicadores planos={planos} />}
+
+      {/* ── Aba Ações ────────────────────────────────────────────────────── */}
+      {aba === "acoes" && <>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -395,7 +420,9 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
         </div>
       )}
 
-      {/* Modal de criação/edição */}
+      </> /* fim aba acoes */}
+
+      {/* Modal de criação/edição — sempre visível independente da aba */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
