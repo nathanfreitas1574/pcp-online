@@ -220,20 +220,20 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
                   {format(new Date(lacre.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => openEditar(lacre)}
                       className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition"
                       title="Editar"
                     >
-                      <Pencil size={13} />
+                      <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => handleExcluir(lacre.id)}
                       className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
                       title="Excluir"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </td>
