@@ -245,7 +245,7 @@ export default function PlanoAcaoIndicadores({ planos }: { planos: PlanoAcaoItem
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: unknown, name: string) => [`${v} ações`, name]} />
+                <Tooltip formatter={(v: unknown, name: unknown) => [`${v} ações`, `${name}`]} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -273,7 +273,7 @@ export default function PlanoAcaoIndicadores({ planos }: { planos: PlanoAcaoItem
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: unknown, name: string) => [`${v} ações`, name]} />
+                <Tooltip formatter={(v: unknown, name: unknown) => [`${v} ações`, `${name}`]} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -339,7 +339,7 @@ export default function PlanoAcaoIndicadores({ planos }: { planos: PlanoAcaoItem
               <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{ borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 12 }}
-                formatter={(v: unknown, name: string) => [v, name]}
+                formatter={(v: unknown, name: unknown) => [`${v}`, `${name}`]}
               />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="Concluídos"    stackId="a" fill="#22c55e" radius={[0,0,0,0]} />
