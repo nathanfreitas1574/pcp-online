@@ -108,19 +108,20 @@ model ProdutoBox {
 }
 
 model Lacre {
-  id          String      @id @default(cuid())
-  boxId       String
-  usuarioId   String
-  data        DateTime    @default(now())
-  status      StatusLacre @default(FECHADO)
-  codigoLacre String?
-  observacao  String?
-  foto        String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id           String      @id @default(cuid())
+  boxId        String
+  usuarioId    String?
+  data         DateTime    @default(now())
+  status       StatusLacre @default(FECHADO)
+  codigoLacre  String?
+  observacao   String?
+  foto         String?
+  nomeLacrador String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  box     Box  @relation(fields: [boxId], references: [id])
-  usuario User @relation(fields: [usuarioId], references: [id])
+  box     Box   @relation(fields: [boxId], references: [id])
+  usuario User? @relation(fields: [usuarioId], references: [id])
 }
 
 model AuditoriaBox {

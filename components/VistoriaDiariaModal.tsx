@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Camera, ClipboardCheck, Lock, Unlock, Pencil } from "lucide-react"
+import { Camera, ClipboardCheck, Lock, Unlock, Pencil, ExternalLink } from "lucide-react"
 
 export type VistoriaBoxOption = {
   id: string
@@ -108,9 +108,21 @@ export default function VistoriaDiariaModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center gap-2 mb-1">
-          <ClipboardCheck size={20} className="text-blue-700" />
-          <h3 className="font-bold text-gray-800 text-lg">Vistoria do Dia</h3>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck size={20} className="text-blue-700" />
+            <h3 className="font-bold text-gray-800 text-lg">Vistoria do Dia</h3>
+          </div>
+          <a
+            href="/registrar-lacre"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-2.5 py-1.5 hover:bg-blue-50 transition font-medium"
+          >
+            <Lock size={12} />
+            Reg. Lacre
+            <ExternalLink size={11} />
+          </a>
         </div>
         <p className="text-sm text-gray-500 mb-4">Lançamento referente a {hoje}</p>
 

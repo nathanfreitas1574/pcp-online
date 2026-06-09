@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Lock, AlertTriangle, CheckCircle } from "lucide-react"
+import { Plus, Lock, AlertTriangle, CheckCircle, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -10,9 +10,10 @@ type Lacre = {
   status: string
   codigoLacre: string | null
   observacao: string | null
+  nomeLacrador: string | null
   createdAt: string | Date
   box: { codigo: string; descricao: string }
-  usuario: { name: string }
+  usuario: { name: string } | null
 }
 
 type Box = { id: string; codigo: string; descricao: string }
@@ -63,13 +64,24 @@ export default function LacresClient({ lacres, boxes }: { lacres: Lacre[]; boxes
           <h2 className="text-2xl font-bold text-gray-800">Lacres</h2>
           <p className="text-gray-500 text-sm mt-1">Abertura e fechamento diário</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-        >
-          <Plus size={16} />
-          Registrar Lacre
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <a
+            href="/registrar-lacre"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 border border-blue-300 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 transition"
+          >
+            <ExternalLink size={14} />
+            Link público
+          </a>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            <Plus size={16} />
+            Registrar Lacre
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -115,7 +127,12 @@ export default function LacresClient({ lacres, boxes }: { lacres: Lacre[]; boxes
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-500">{lacre.observacao ?? "—"}</td>
-                <td className="px-4 py-3 text-gray-600">{lacre.usuario.name}</td>
+                <td className="px-4 py-3 text-gray-600">
+                  {lacre.usuario?.name ?? lacre.nomeLacrador ?? "—"}
+                  {!lacre.usuario && lacre.nomeLacrador && (
+                    <span className="ml-1 text-xs text-gray-400">(externo)</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-500">
                   {format(new Date(lacre.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                 </td>

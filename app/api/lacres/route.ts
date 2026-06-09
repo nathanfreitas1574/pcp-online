@@ -12,6 +12,7 @@ export async function GET() {
       box: { select: { codigo: true, descricao: true } },
       usuario: { select: { name: true } },
     },
+    // nomeLacrador é scalar, incluído automaticamente
   })
   return NextResponse.json(lacres)
 }
