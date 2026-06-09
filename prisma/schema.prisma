@@ -93,6 +93,19 @@ model Produto {
   consignacaoItems  ConsignacaoItem[]
   movimentacaoItems MovimentacaoItem[]
   qualidades        QualidadeRegistro[]
+  aliases           ProdutoDePara[]
+}
+
+// ─── MAPEAMENTO DE/PARA ───────────────────────────────────────────────────────
+model ProdutoDePara {
+  id              String   @id @default(cuid())
+  descricaoOrigem String
+  produtoId       String
+  produto         Produto  @relation(fields: [produtoId], references: [id])
+  criadoPorNome   String?
+  createdAt       DateTime @default(now())
+
+  @@unique([descricaoOrigem])
 }
 
 model ProdutoBox {
