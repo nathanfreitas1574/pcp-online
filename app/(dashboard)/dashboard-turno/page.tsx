@@ -17,8 +17,8 @@ type TurnoDados = {
   detalhes: {
     tmpAtivos: { id:string; placa:string; clienteNome:string; dtEntrada:string }[]
     tmpEncerrados: { id:string; placa:string; clienteNome:string; produto:string|null; dtEntrada:string; dtSaida:string|null }[]
-    registrosRecebimento: { id:string; clienteNome:string|null; produto:string|null; pesoBruto:number|null; createdAt:string }[]
-    alertasGerados: { id:string; tipo:string; mensagem:string; severidade:string; createdAt:string }[]
+    registrosRecebimento: { id:string; clienteNome:string|null; produto:string|null; pesoSaida:number|null; createdAt:string }[]
+    alertasGerados: { id:string; tipo:string; descricao:string|null; severidade:string; createdAt:string }[]
     vistorias: { id:string; conforme:boolean; box:{codigo:string}; createdAt:string }[]
     ocorrencias: { id:string; tipo:string; gravidade:string; descricao:string; status:string; createdAt:string }[]
   }
@@ -156,7 +156,7 @@ export default function DashboardTurnoPage() {
                   <Package size={14} className="text-blue-400 shrink-0"/>
                   <span className="font-medium text-gray-700 text-sm flex-1">{r.produto??"—"}</span>
                   <span className="text-xs text-gray-500">{r.clienteNome??"—"}</span>
-                  <span className="text-xs font-semibold text-blue-700">{r.pesoBruto?.toLocaleString("pt-BR")} ton</span>
+                  <span className="text-xs font-semibold text-blue-700">{r.pesoSaida?.toLocaleString("pt-BR") ?? "—"} ton</span>
                   <span className="text-xs text-gray-400">{fmt(r.createdAt)}</span>
                 </div>
               ))}
@@ -185,7 +185,7 @@ export default function DashboardTurnoPage() {
               {d?.alertasGerados.map(a=>(
                 <div key={a.id} className="flex items-start gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
                   <AlertTriangle size={14} className={`shrink-0 mt-0.5 ${a.severidade==="CRITICA"?"text-red-600":a.severidade==="ALTA"?"text-orange-500":"text-yellow-500"}`}/>
-                  <div className="flex-1"><p className="text-sm text-gray-700">{a.mensagem}</p><p className="text-xs text-gray-400 mt-0.5">{a.tipo} · {fmt(a.createdAt)}</p></div>
+                  <div className="flex-1"><p className="text-sm text-gray-700">{a.descricao ?? "—"}</p><p className="text-xs text-gray-400 mt-0.5">{a.tipo} · {fmt(a.createdAt)}</p></div>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${GRAVIDADE_COLOR[a.severidade]??""}`}>{a.severidade}</span>
                 </div>
               ))}

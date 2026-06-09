@@ -10,7 +10,7 @@ type Lacre = {
   status: string
   codigoLacre: string | null
   observacao: string | null
-  nomeLacrador: string | null
+  nomeLacrador?: string | null
   createdAt: string | Date
   box: { codigo: string; descricao: string }
   usuario: { name: string } | null

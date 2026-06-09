@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
       <td>${l.box?.codigo ?? "—"}</td>
       <td>${l.codigoLacre ?? "—"}</td>
       <td>${l.observacao ?? "—"}</td>
-      <td>${l.usuario.name}</td>
+      <td>${l.usuario?.name ?? l.nomeLacrador ?? "—"}</td>
     </tr>`).join("")}
   </table>`}
 

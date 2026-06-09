@@ -31,7 +31,7 @@ export async function GET() {
     }),
     prisma.descargaRegistro.findMany({
       where: { createdAt: { gte: h8atras } },
-      select: { id: true, clienteNome: true, produto: true, pesoBruto: true, createdAt: true },
+      select: { id: true, clienteNome: true, produto: true, pesoSaida: true, createdAt: true },
     }),
     prisma.lacre.findMany({
       where: { createdAt: { gte: h8atras } },
@@ -40,7 +40,7 @@ export async function GET() {
     prisma.alerta.count({ where: { status: "ABERTO" } }),
     prisma.alerta.findMany({
       where: { createdAt: { gte: h8atras } },
-      select: { id: true, tipo: true, mensagem: true, severidade: true, createdAt: true },
+      select: { id: true, tipo: true, descricao: true, severidade: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
@@ -63,7 +63,7 @@ export async function GET() {
     : null
 
   // Volume total recebido no turno
-  const volumeTurno = registrosRecebimento.reduce((s, r) => s + (r.pesoBruto ?? 0), 0)
+  const volumeTurno = registrosRecebimento.reduce((s, r) => s + (r.pesoSaida ?? 0), 0)
 
   return NextResponse.json({
     geradoEm: agora.toISOString(),

@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.descargaRegistro.findMany({
       where: { createdAt: { gte: inicio, lte: fim } },
-      select: { pesoBruto: true },
+      select: { pesoSaida: true },
     }),
     prisma.auditoriaBox.findMany({
       where: { createdAt: { gte: inicio, lte: fim } },
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const ocupacao = totalCap > 0 ? (totalVol / totalCap) * 100 : 0
 
   // Volume recebido no mês
-  const volumeRecebido = registrosMes.reduce((s, r) => s + (r.pesoBruto ?? 0), 0)
+  const volumeRecebido = registrosMes.reduce((s, r) => s + (r.pesoSaida ?? 0), 0)
 
   // TMP médio no mês
   const tmpsValidos = tmpMes.filter(t => t.dtSaida)

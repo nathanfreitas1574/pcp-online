@@ -76,7 +76,7 @@ export default async function BoxInfoPage({ params }: { params: Promise<{ id: st
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontSize: 11, color: "#9ca3af" }}>Código: {lacre.codigoLacre ?? "—"}</div>
-              <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Por: {lacre.usuario.name}</div>
+              <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Por: {lacre.usuario?.name ?? lacre.nomeLacrador ?? "—"}</div>
               <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{format(new Date(lacre.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</div>
             </div>
             <div style={{
