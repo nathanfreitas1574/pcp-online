@@ -30,6 +30,57 @@ body {
 .dark .text-gray-500 { color: #9ca3af !important; }
 .dark .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.4) !important; }
 
+/* ── Dark mode: elementos de formulário ─────────────────────────────────── */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.dark select,
+.dark textarea {
+  background-color: #374151 !important;
+  color: #f9fafb !important;
+  border-color: #4b5563 !important;
+  color-scheme: dark;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Foco em dark mode */
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  outline: none;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.35) !important;
+}
+
+/* Seções coloridas dos modais em dark mode */
+.dark .bg-blue-50  { background-color: #1e3a5f !important; }
+.dark .bg-green-50 { background-color: #14532d30 !important; }
+.dark .bg-orange-50, .dark .bg-yellow-50 { background-color: #422006 !important; }
+.dark .bg-red-50   { background-color: #450a0a !important; }
+.dark .bg-purple-50 { background-color: #3b0764 !important; }
+
+/* Texto colorido nos cabeçalhos de seção dos modais */
+.dark .text-blue-700  { color: #93c5fd !important; }
+.dark .text-green-700 { color: #86efac !important; }
+.dark .text-red-700   { color: #fca5a5 !important; }
+.dark .text-orange-700 { color: #fdba74 !important; }
+.dark .text-yellow-700 { color: #fde68a !important; }
+
+/* Bordas de seção */
+.dark .border-blue-100 { border-color: #1e40af !important; }
+.dark .border-green-100 { border-color: #166534 !important; }
+
+/* Badges coloridos mantêm legibilidade */
+.dark .bg-green-100 { background-color: #14532d !important; }
+.dark .bg-red-100   { background-color: #450a0a !important; }
+.dark .bg-yellow-100 { background-color: #422006 !important; }
+.dark .bg-blue-100  { background-color: #1e3a5f !important; }
+.dark .text-green-600, .dark .text-green-700 { color: #86efac !important; }
+.dark .text-red-600,   .dark .text-red-700   { color: #fca5a5 !important; }
+.dark .text-blue-600,  .dark .text-blue-700  { color: #93c5fd !important; }
+
 /* Mobile responsivo */
 @media (max-width: 640px) {
   .grid-cols-2 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
