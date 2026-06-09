@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Camera, ClipboardCheck, Lock, Unlock } from "lucide-react"
+import { Camera, ClipboardCheck, Lock, Unlock, Pencil } from "lucide-react"
 
 export type VistoriaBoxOption = {
   id: string
@@ -17,6 +17,8 @@ export type VistoriaBoxOption = {
   movimentadoHoje?: boolean
 }
 
+const inp = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+
 export default function VistoriaDiariaModal({
   boxes,
   onClose,
@@ -31,8 +33,29 @@ export default function VistoriaDiariaModal({
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState("")
 
+  // Campos editáveis
+  const [editProduto, setEditProduto] = useState("")
+  const [editCliente, setEditCliente] = useState("")
+  const [editNavio, setEditNavio] = useState("")
+  const [editVolume, setEditVolume] = useState("")
+  const [editLacre, setEditLacre] = useState("")
+
   const box = boxes.find((b) => b.id === boxId) ?? null
   const hoje = new Date().toLocaleDateString("pt-BR")
+
+  function selectBox(id: string) {
+    setBoxId(id)
+    setLacreConforme(true)
+    setMsg("")
+    const b = boxes.find((x) => x.id === id)
+    if (b) {
+      setEditProduto(b.produto ?? "")
+      setEditCliente(b.cliente ?? "")
+      setEditNavio(b.navio ?? "")
+      setEditVolume(String(b.volumeAtual))
+      setEditLacre(b.codigoLacre ?? "")
+    }
+  }
 
   function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -46,17 +69,33 @@ export default function VistoriaDiariaModal({
     if (!box) return
     setSaving(true)
     setMsg("")
+
+    // 1. Atualizar estoque do box com os valores editados
+    await fetch(`/api/boxes/${box.id}/estoque`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        volumeAtual: parseFloat(editVolume) || 0,
+        produto: editProduto || null,
+        cliente: editCliente || null,
+        navio: editNavio || null,
+        capacidade: box.capacidade,
+      }),
+    })
+
+    // 2. Registrar vistoria do dia
     const res = await fetch("/api/vistoria-diaria", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         boxId: box.id,
         lacreConforme,
-        codigoLacre: box.codigoLacre,
+        codigoLacre: editLacre || null,
         observacao,
         foto,
       }),
     })
+
     setSaving(false)
     if (res.ok) {
       setMsg("Vistoria registrada com sucesso!")
@@ -76,11 +115,12 @@ export default function VistoriaDiariaModal({
         <p className="text-sm text-gray-500 mb-4">Lançamento referente a {hoje}</p>
 
         <div className="space-y-4">
+          {/* Seleção de box */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Selecione o box</label>
             <select
               value={boxId}
-              onChange={(e) => { setBoxId(e.target.value); setLacreConforme(true); setMsg("") }}
+              onChange={(e) => selectBox(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Selecione…</option>
@@ -92,49 +132,97 @@ export default function VistoriaDiariaModal({
 
           {box && (
             <>
-              {/* Dados auto-preenchidos */}
-              <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-2 gap-3 text-sm">
+              {/* Cabeçalho: data + capacidade (somente leitura) */}
+              <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-xl px-4 py-3 text-sm">
                 <div>
-                  <p className="text-gray-400 text-xs">Data</p>
-                  <p className="font-medium text-gray-800">{hoje}</p>
+                  <p className="text-gray-400 text-xs mb-0.5">Data</p>
+                  <p className="font-semibold text-gray-800">{hoje}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400 text-xs">Volume</p>
-                  <p className="font-medium text-gray-800">
-                    {box.volumeAtual.toLocaleString("pt-BR")} / {box.capacidade.toLocaleString("pt-BR")} ton
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-xs">Produto</p>
-                  <p className="font-medium text-gray-800">{box.produto ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-xs">Cliente</p>
-                  <p className="font-medium text-gray-800">{box.cliente ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-xs">Navio</p>
-                  <p className="font-medium text-gray-800">{box.navio ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-xs">Data recebimento</p>
-                  <p className="font-medium text-gray-800">
-                    {box.dataRecebimento ? new Date(box.dataRecebimento).toLocaleDateString("pt-BR") : "—"}
-                  </p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-gray-400 text-xs">Número do lacre</p>
-                  <p className="font-medium text-gray-800">{box.codigoLacre ?? "Sem lacre registrado"}</p>
+                  <p className="text-gray-400 text-xs mb-0.5">Capacidade</p>
+                  <p className="font-semibold text-gray-800">{box.capacidade.toLocaleString("pt-BR")} ton</p>
                 </div>
               </div>
 
-              {/* Confirmação de lacre */}
+              {/* Campos editáveis */}
+              <div className="border border-blue-100 rounded-xl p-4 space-y-3 bg-blue-50/40">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Pencil size={13} className="text-blue-600" />
+                  <p className="text-xs font-semibold text-blue-700">Dados do box — edite se necessário</p>
+                </div>
+
+                {/* Volume */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Volume atual (ton)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={box.capacidade}
+                    step="0.1"
+                    value={editVolume}
+                    onChange={(e) => setEditVolume(e.target.value)}
+                    className={inp}
+                  />
+                </div>
+
+                {/* Produto + Cliente */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Produto</label>
+                    <input
+                      type="text"
+                      value={editProduto}
+                      onChange={(e) => setEditProduto(e.target.value)}
+                      placeholder="Ex: UREIA 46%"
+                      className={inp}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Cliente</label>
+                    <input
+                      type="text"
+                      value={editCliente}
+                      onChange={(e) => setEditCliente(e.target.value)}
+                      placeholder="Ex: FTO"
+                      className={inp}
+                    />
+                  </div>
+                </div>
+
+                {/* Navio + Número do lacre */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Navio</label>
+                    <input
+                      type="text"
+                      value={editNavio}
+                      onChange={(e) => setEditNavio(e.target.value)}
+                      placeholder="Ex: MSC Lucinda"
+                      className={inp}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Número do lacre</label>
+                    <input
+                      type="text"
+                      value={editLacre}
+                      onChange={(e) => setEditLacre(e.target.value)}
+                      placeholder="Ex: L-00123"
+                      className={inp}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Confirmação do lacre */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Confirmação do lacre</label>
                 {!box.movimentadoHoje && (
                   <p className="text-xs text-gray-500 mb-2">
-                    Este box não foi movimentado hoje — deve permanecer lacrado com o número{" "}
-                    <strong>{box.codigoLacre ?? "registrado"}</strong>. Confirme se está conforme.
+                    Este box não foi movimentado hoje — deve permanecer lacrado.
+                    {editLacre && <> Número registrado: <strong>{editLacre}</strong>.</>} Confirme se está conforme.
                   </p>
                 )}
                 <div className="grid grid-cols-2 gap-2">
@@ -180,6 +268,7 @@ export default function VistoriaDiariaModal({
                 )}
               </div>
 
+              {/* Observação */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Observação</label>
                 <textarea
