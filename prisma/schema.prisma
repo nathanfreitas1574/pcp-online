@@ -82,7 +82,7 @@ model Box {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  armazem        Armazem?         @relation(fields: [armazemId], references: [id])
+  armazem        Armazem?             @relation(fields: [armazemId], references: [id])
   produtos       ProdutoBox[]
   lacres         Lacre[]
   auditorias     AuditoriaBox[]
@@ -92,6 +92,7 @@ model Box {
   programacoes   ProgramacaoSemanal[]
   qualidades     QualidadeRegistro[]
   ocorrencias    Ocorrencia[]
+  previsoes      PrevisaoRecebimento[]
 }
 
 model Produto {
@@ -864,6 +865,35 @@ model NaveAgendada {
   observacao  String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  previsoes   PrevisaoRecebimento[]
+}
+
+// ─── PREVISÃO DE RECEBIMENTO POR BOX ─────────────────────────────────────────
+enum PrevisaoStatus {
+  AGUARDANDO
+  RECEBENDO
+  RECEBIDO
+  CANCELADO
+}
+
+model PrevisaoRecebimento {
+  id            String          @id @default(cuid())
+  boxId         String
+  naveId        String?
+  naveNome      String?
+  produto       String
+  cliente       String
+  volumePrev    Float?
+  dataPrevisao  DateTime
+  status        PrevisaoStatus  @default(AGUARDANDO)
+  observacao    String?
+  criadoPorNome String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  box  Box           @relation(fields: [boxId], references: [id])
+  nave NaveAgendada? @relation(fields: [naveId], references: [id])
 }
 
 // ─── METAS OPERACIONAIS ───────────────────────────────────────────────────────

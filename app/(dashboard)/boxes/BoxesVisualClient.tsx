@@ -4,10 +4,16 @@ import { useState } from "react"
 import {
   Plus, Search, Warehouse, PackageCheck, PackageX, Gauge,
   ClipboardCheck, ChevronRight, LayoutGrid, Rows3, Map,
-  AlertTriangle, X,
+  AlertTriangle, X, Ship, CalendarDays, List,
 } from "lucide-react"
 import BoxVisual, { BoxData } from "@/components/BoxVisual"
 import VistoriaDiariaModal from "@/components/VistoriaDiariaModal"
+import NovoRecebimentoModal from "@/components/NovoRecebimentoModal"
+
+type Previsao = {
+  id: string; naveNome: string | null; produto: string; cliente: string
+  volumePrev: number | null; dataPrevisao: string; status: string
+}
 
 type BoxItem = BoxData & {
   alertasAbertos: number
@@ -17,6 +23,35 @@ type BoxItem = BoxData & {
   armazemId?: string | null
   armazemCodigo?: string | null
   armazemNome?: string | null
+  previsao?: Previsao | null
+}
+
+// ── Helper: cor do sinal de recebimento ──────────────────────────────────────
+function corPrevisao(dataPrevisao: string, status: string): {
+  bg: string; text: string; ring: string; label: string; pulse: boolean
+} {
+  if (status === "RECEBENDO") return { bg: "bg-green-500", text: "text-white", ring: "ring-green-300", label: "RECEBENDO", pulse: true }
+  const dias = Math.ceil((new Date(dataPrevisao).getTime() - Date.now()) / 86_400_000)
+  if (dias < 0)  return { bg: "bg-gray-400",   text: "text-white", ring: "ring-gray-200",  label: "ATRASADO",  pulse: false }
+  if (dias <= 2) return { bg: "bg-red-500",    text: "text-white", ring: "ring-red-300",   label: "IMINENTE",  pulse: true  }
+  if (dias <= 7) return { bg: "bg-yellow-500", text: "text-white", ring: "ring-yellow-300",label: `${dias}d`,  pulse: false }
+  return              { bg: "bg-green-600",  text: "text-white", ring: "ring-green-200", label: `${dias}d`,  pulse: false }
+}
+
+// ── Badge/sinal de recebimento no card de box ─────────────────────────────────
+function PrevisaoSinal({ previsao }: { previsao: Previsao }) {
+  const { bg, text, label, pulse } = corPrevisao(previsao.dataPrevisao, previsao.status)
+  return (
+    <div className="absolute -top-1 -right-1 z-20">
+      <div className={`
+        ${bg} ${text} text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-md
+        ${pulse ? "animate-pulse" : ""}
+      `}>
+        <Ship size={9} />
+        {label}
+      </div>
+    </div>
+  )
 }
 
 // ── Configuração das estruturas do armazém ─────────────────────────────────────
@@ -204,12 +239,16 @@ export default function BoxesVisualClient({
   totalVolume,
   boxesCheios,
   boxesLivres,
+  todasPrevisoes = [],
+  naviosDisponiveis = [],
 }: {
   boxes: BoxItem[]
   totalCapacidade: number
   totalVolume: number
   boxesCheios: number
   boxesLivres: number
+  todasPrevisoes?: (Previsao & { boxId: string })[]
+  naviosDisponiveis?: { id: string; nome: string; eta: string; produto?: string | null; clienteNome?: string | null }[]
 }) {
   const [visao, setVisao] = useState<"MAPA" | "GRADE" | "LINHA">("MAPA")
   const [estruturaSel, setEstruturaSel] = useState<string | null>(null)
@@ -217,8 +256,13 @@ export default function BoxesVisualClient({
   const [filtro, setFiltro] = useState<"TODOS" | "LIVRE" | "OCUPADO" | "CRITICO">("TODOS")
   const [showModal, setShowModal] = useState(false)
   const [showVistoria, setShowVistoria] = useState(false)
+  const [showNovoRecebimento, setShowNovoRecebimento] = useState(false)
+  const [showPrevisoes, setShowPrevisoes] = useState(false)
   const [form, setForm] = useState({ codigo: "", descricao: "", localizacao: "", capacidade: "" })
   const [saving, setSaving] = useState(false)
+  const [previsoes, setPrevisoes] = useState(todasPrevisoes)
+
+  const totalPrevisoes = previsoes.length
 
   const pctTotal = totalCapacidade > 0 ? (totalVolume / totalCapacidade) * 100 : 0
 
@@ -298,6 +342,7 @@ export default function BoxesVisualClient({
               {box.ultimoLacre === "NAO_CONFORME" && (
                 <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">⚠ Lacre</div>
               )}
+              {box.previsao && <PrevisaoSinal previsao={box.previsao} />}
               <BoxVisual box={box} />
             </div>
           ))}
@@ -319,6 +364,23 @@ export default function BoxesVisualClient({
           <p className="text-gray-500 text-sm mt-0.5">{boxes.length} boxes · ocupação visual em tempo real</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {/* Painel de previsões */}
+          <button onClick={() => setShowPrevisoes(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition border ${
+              showPrevisoes ? "bg-blue-700 text-white border-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}>
+            <List size={15} />
+            Previsões
+            {totalPrevisoes > 0 && (
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${showPrevisoes ? "bg-white text-blue-700" : "bg-blue-600 text-white"}`}>
+                {totalPrevisoes}
+              </span>
+            )}
+          </button>
+          <button onClick={() => setShowNovoRecebimento(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+            <Ship size={15} /> Prog. Recebimento
+          </button>
           <button onClick={() => setShowVistoria(true)}
             className="flex items-center gap-2 bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
             <ClipboardCheck size={16} /> Realizar Vistoria
@@ -350,6 +412,93 @@ export default function BoxesVisualClient({
           </div>
         ))}
       </div>
+
+      {/* ── Painel de previsões de recebimento ── */}
+      {showPrevisoes && (
+        <div className="bg-white rounded-xl border border-indigo-100 shadow-sm p-4 mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-800 flex items-center gap-2 text-sm">
+              <Ship size={15} className="text-indigo-600" />
+              Previsões de Recebimento Ativas
+            </h3>
+            <button onClick={() => setShowNovoRecebimento(true)}
+              className="flex items-center gap-1.5 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700">
+              <Plus size={12} /> Nova
+            </button>
+          </div>
+          {previsoes.length === 0 ? (
+            <p className="text-sm text-gray-400 italic text-center py-4">Nenhuma previsão agendada.</p>
+          ) : (
+            <div className="space-y-2">
+              {previsoes.map(p => {
+                const box = boxes.find(b => b.id === p.boxId)
+                const { bg, text, label, pulse } = corPrevisao(p.dataPrevisao, p.status)
+                const dataFmt = new Date(p.dataPrevisao).toLocaleDateString("pt-BR")
+                return (
+                  <div key={p.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2.5 text-sm">
+                    {/* Status badge */}
+                    <span className={`${bg} ${text} text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${pulse ? "animate-pulse" : ""}`}>
+                      {label}
+                    </span>
+                    {/* Ship icon + date */}
+                    <div className="flex items-center gap-1.5 text-gray-500 text-xs shrink-0">
+                      <CalendarDays size={12} />
+                      <span className="font-medium">{dataFmt}</span>
+                    </div>
+                    {/* Box */}
+                    <span className="font-mono text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold shrink-0">
+                      {box?.codigo ?? p.boxId.slice(0, 6)}
+                    </span>
+                    {/* Produto / Cliente */}
+                    <div className="flex-1 min-w-0 text-xs text-gray-700 truncate">
+                      <strong>{p.produto}</strong>
+                      <span className="text-gray-400 mx-1">·</span>
+                      {p.cliente}
+                      {p.naveNome && <span className="text-gray-400 ml-1">· 🚢 {p.naveNome}</span>}
+                    </div>
+                    {/* Volume */}
+                    {p.volumePrev != null && (
+                      <span className="text-xs text-gray-500 shrink-0">{p.volumePrev.toLocaleString("pt-BR")} ton</span>
+                    )}
+                    {/* Ações rápidas */}
+                    <div className="flex gap-1 shrink-0">
+                      {p.status === "AGUARDANDO" && (
+                        <button onClick={async () => {
+                          await fetch(`/api/previsao-recebimento/${p.id}`, {
+                            method: "PATCH", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: "RECEBENDO" }),
+                          })
+                          setPrevisoes(prev => prev.map(x => x.id === p.id ? { ...x, status: "RECEBENDO" } : x))
+                        }} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded hover:bg-green-200 font-medium">
+                          Iniciar
+                        </button>
+                      )}
+                      {p.status === "RECEBENDO" && (
+                        <button onClick={async () => {
+                          await fetch(`/api/previsao-recebimento/${p.id}`, {
+                            method: "PATCH", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: "RECEBIDO" }),
+                          })
+                          setPrevisoes(prev => prev.filter(x => x.id !== p.id))
+                        }} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-200 font-medium">
+                          Concluir
+                        </button>
+                      )}
+                      <button onClick={async () => {
+                        if (!confirm("Cancelar esta previsão?")) return
+                        await fetch(`/api/previsao-recebimento/${p.id}`, { method: "DELETE" })
+                        setPrevisoes(prev => prev.filter(x => x.id !== p.id))
+                      }} className="text-xs text-gray-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50">
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Barra global ── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5">
@@ -665,6 +814,19 @@ export default function BoxesVisualClient({
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── Modal novo recebimento ── */}
+      {showNovoRecebimento && (
+        <NovoRecebimentoModal
+          boxes={boxes.map(b => ({
+            id: b.id, codigo: b.codigo, descricao: b.descricao,
+            armazemId: b.armazemId, armazemNome: b.armazemNome, armazemCodigo: b.armazemCodigo,
+          }))}
+          navios={naviosDisponiveis}
+          onClose={() => setShowNovoRecebimento(false)}
+          onSaved={() => { setShowNovoRecebimento(false); window.location.reload() }}
+        />
       )}
 
       {/* ── Modal vistoria ── */}
