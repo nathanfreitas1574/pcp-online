@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Box, Lock, ClipboardList, Truck,
   FileText, Users, LogOut, Download, Upload, BarChart2,
   Warehouse, Bell, Database, Calendar, Clock, Activity,
-  FlaskConical, TrendingUp, Tv, ListOrdered, DollarSign, QrCode,
+  FlaskConical, TrendingUp, Tv, ListOrdered, DollarSign, QrCode, Target,
 } from "lucide-react"
 
 type NavItem =
@@ -17,6 +17,7 @@ type NavItem =
 
 const nav: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/plano-acao", label: "Plano de Ação", icon: Target },
   { section: "Recebimento" },
   { href: "/recebimento", label: "Dashboard Recebimento", icon: Download },
   { href: "/boxes", label: "Gestão de Box", icon: Box },

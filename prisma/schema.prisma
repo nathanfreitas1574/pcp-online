@@ -51,6 +51,7 @@ model User {
   alertas           Alerta[]
   logs              LogAtividade[]
   twoFactor         TwoFactorConfig?
+  planosAcao        PlanoAcao[]
 }
 
 model Box {
@@ -733,4 +734,41 @@ model BackupLog {
   caminho   String?
   erro      String?
   createdAt DateTime @default(now())
+}
+
+// ─── PLANO DE AÇÃO 5W2H ───────────────────────────────────────────────────────
+enum PlanoAcaoPrioridade {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+enum PlanoAcaoStatus {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDO
+  CANCELADO
+}
+
+model PlanoAcao {
+  id             String               @id @default(cuid())
+  // 5W
+  oQue           String               // What  — o que será feito
+  porQue         String               // Why   — justificativa
+  quem           String               // Who   — responsável
+  onde           String               // Where — local
+  quando         DateTime             // When  — prazo
+  // 2H
+  como           String               // How   — como será feito
+  quantoCusta    Float?               // How much — custo estimado (R$)
+  // Gestão
+  prioridade     PlanoAcaoPrioridade  @default(MEDIA)
+  status         PlanoAcaoStatus      @default(PENDENTE)
+  progresso      Int                  @default(0)   // 0-100 %
+  observacao     String?
+  dataConclusao  DateTime?
+  criadoPorId    String
+  criadoPor      User                 @relation(fields: [criadoPorId], references: [id])
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 }
