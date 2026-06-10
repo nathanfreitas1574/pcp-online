@@ -1044,6 +1044,34 @@ model CustoOperacional {
   updatedAt     DateTime  @updatedAt
 }
 
+// ─── CONTRATOS DE ARMAZENAGEM (TOTVS) ────────────────────────────────────────
+model ContratoArmazenagem {
+  id            String    @id @default(cuid())
+  numero        String    @unique          // "000001"
+  ultAlt        String?
+  descricao     String
+  tipoMercado   String?
+  dataCtr       DateTime?
+  ctrExterno    String?
+  codEntidade   String?
+  lojEntidade   String?
+  clienteNome   String
+  codProduto    String?
+  desProduto    String
+  descTabela    String?   // GENERICA | EMBALAGEM | LACRE | PRODUTO ACABADO
+  qtdContratada Float     @default(0)
+  safra         String?
+  stsAssinatura String    @default("Aberto")
+  stsFiscal     String    @default("Aberto")
+  stsFinanceiro String    @default("Aberto")
+  stsEstoque    String    @default("Aberto")
+  modalidade    String?
+  centroCusto   String?
+  ativo         Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 // ─── CONTROLE DE OCORRÊNCIAS ──────────────────────────────────────────────────
 enum OcorrenciaTipo {
   DERRAMAMENTO
