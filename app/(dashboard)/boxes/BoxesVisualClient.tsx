@@ -24,6 +24,7 @@ type BoxItem = BoxData & {
   armazemCodigo?: string | null
   armazemNome?: string | null
   previsao?: Previsao | null
+  statusLiberacao?: "BLOQUEADO" | "AGUARDANDO_VISTORIA" | "LIBERADO" | null
 }
 
 // ── Helper: cor do sinal de recebimento ──────────────────────────────────────
@@ -36,6 +37,22 @@ function corPrevisao(dataPrevisao: string, status: string): {
   if (dias <= 2) return { bg: "bg-red-500",    text: "text-white", ring: "ring-red-300",   label: "IMINENTE",  pulse: true  }
   if (dias <= 7) return { bg: "bg-yellow-500", text: "text-white", ring: "ring-yellow-300",label: `${dias}d`,  pulse: false }
   return              { bg: "bg-green-600",  text: "text-white", ring: "ring-green-200", label: `${dias}d`,  pulse: false }
+}
+
+// ── Badge de liberação de box ─────────────────────────────────────────────────
+function LiberacaoSinal({ status }: { status: "BLOQUEADO" | "AGUARDANDO_VISTORIA" | "LIBERADO" }) {
+  if (status === "LIBERADO") return null
+  const cfg = {
+    BLOQUEADO:          { bg: "bg-red-600",    icon: "🔒", label: "BLOQ." },
+    AGUARDANDO_VISTORIA:{ bg: "bg-orange-500", icon: "⏳", label: "VISTORIA" },
+  }[status]
+  return (
+    <div className="absolute top-0 left-0 right-0 z-20">
+      <div className={`${cfg.bg} text-white text-[10px] font-bold py-0.5 text-center flex items-center justify-center gap-1 rounded-t-lg`}>
+        {cfg.icon} {cfg.label}
+      </div>
+    </div>
+  )
 }
 
 // ── Badge/sinal de recebimento no card de box ─────────────────────────────────
@@ -338,6 +355,9 @@ export default function BoxesVisualClient({
                 <div className="absolute -top-1 -left-1 z-10 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow">
                   {box.alertasAbertos}
                 </div>
+              )}
+              {box.statusLiberacao && box.statusLiberacao !== "LIBERADO" && (
+                <LiberacaoSinal status={box.statusLiberacao} />
               )}
               {box.ultimoLacre === "NAO_CONFORME" && (
                 <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">⚠ Lacre</div>

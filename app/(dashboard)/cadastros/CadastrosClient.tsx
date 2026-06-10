@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Pencil, Trash2, Search, Package, Users, BoxIcon, Check, X, ArrowRightLeft, ChevronDown, ChevronRight, Pencil as PencilIcon } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, Package, Users, BoxIcon, Check, X, ArrowRightLeft, ChevronDown, ChevronRight, Pencil as PencilIcon, ListChecks, GripVertical, Shield, Type, Hash } from "lucide-react"
 
 type Produto  = { id: string; codigo: string; descricao: string; unidade: string; ativo: boolean }
 type Cliente  = { id: string; codigo: string; nome: string; cnpj: string | null; ativo: boolean }
@@ -15,7 +15,171 @@ type DePara   = {
   produto: { id: string; codigo: string; descricao: string; unidade: string }
 }
 
-type Tab = "produtos" | "clientes" | "boxes" | "depara"
+type Tab = "produtos" | "clientes" | "boxes" | "depara" | "checklist"
+
+type ChecklistItemType = { id: string; pergunta: string; tipo: string; obrigatorio: boolean; bloqueante: boolean; ordem: number }
+type ChecklistTemplateType = { id: string; nome: string; descricao: string | null; ativo: boolean; itens: ChecklistItemType[] }
+
+// ─── ChecklistTab ─────────────────────────────────────────────────────────────
+function ChecklistTab({ templates: inicial }: { templates: ChecklistTemplateType[] }) {
+  const [templates, setTemplates] = useState(inicial)
+  const [expandido, setExpandido] = useState<string | null>(null)
+  const [showNovo, setShowNovo]   = useState(false)
+  const [novoNome, setNovoNome]   = useState("")
+  const [novoDesc, setNovoDesc]   = useState("")
+  const [novaP, setNovaP]         = useState("")
+  const [novoTipo, setNovoTipo]   = useState("SIM_NAO")
+  const [novoBloq, setNovoBloq]   = useState(false)
+  const inp = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+
+  async function criarTemplate(e: React.FormEvent) {
+    e.preventDefault()
+    const res = await fetch("/api/checklist", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: novoNome, descricao: novoDesc }),
+    })
+    if (res.ok) {
+      const t = await res.json(); setTemplates(prev => [...prev, t])
+      setNovoNome(""); setNovoDesc(""); setShowNovo(false)
+    }
+  }
+
+  async function adicionarItem(templateId: string) {
+    if (!novaP.trim()) return
+    const res = await fetch(`/api/checklist/${templateId}/itens`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pergunta: novaP, tipo: novoTipo, bloqueante: novoBloq }),
+    })
+    if (res.ok) {
+      const item = await res.json()
+      setTemplates(prev => prev.map(t => t.id === templateId ? { ...t, itens: [...t.itens, item] } : t))
+      setNovaP(""); setNovoTipo("SIM_NAO"); setNovoBloq(false)
+    }
+  }
+
+  async function removerItem(templateId: string, itemId: string) {
+    if (!confirm("Remover esta pergunta?")) return
+    await fetch(`/api/checklist/${templateId}/itens/${itemId}`, { method: "DELETE" })
+    setTemplates(prev => prev.map(t => t.id === templateId ? { ...t, itens: t.itens.filter(i => i.id !== itemId) } : t))
+  }
+
+  async function inativarTemplate(id: string) {
+    if (!confirm("Inativar este checklist?")) return
+    await fetch(`/api/checklist/${id}`, { method: "DELETE" })
+    setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  const tipoIcon = (tipo: string) => tipo === "SIM_NAO" ? <Check size={11} /> : tipo === "NUMERO" ? <Hash size={11} /> : <Type size={11} />
+  const tipoCor  = (tipo: string) => tipo === "SIM_NAO" ? "bg-green-100 text-green-700" : tipo === "NUMERO" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{templates.length} templates cadastrados</p>
+        <button onClick={() => setShowNovo(v => !v)}
+          className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">
+          <Plus size={14} /> Novo Checklist
+        </button>
+      </div>
+
+      {showNovo && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <form onSubmit={criarTemplate} className="flex gap-3 flex-wrap items-end">
+            <div className="flex-1 min-w-40">
+              <label className="text-xs font-medium text-gray-600 block mb-1">Nome *</label>
+              <input value={novoNome} onChange={e => setNovoNome(e.target.value)} required placeholder="Ex: Vistoria Pré-Recebimento" className={`${inp} w-full`} />
+            </div>
+            <div className="flex-1 min-w-40">
+              <label className="text-xs font-medium text-gray-600 block mb-1">Descrição</label>
+              <input value={novoDesc} onChange={e => setNovoDesc(e.target.value)} placeholder="Opcional" className={`${inp} w-full`} />
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowNovo(false)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+              <button type="submit" className="px-4 py-2 bg-blue-700 text-white rounded-lg text-sm font-medium hover:bg-blue-800">Criar</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {templates.map(t => (
+        <div key={t.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Header do template */}
+          <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
+            <button onClick={() => setExpandido(expandido === t.id ? null : t.id)} className="text-gray-400">
+              {expandido === t.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
+            <ListChecks size={15} className="text-blue-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-800 text-sm">{t.nome}</p>
+              {t.descricao && <p className="text-xs text-gray-500">{t.descricao}</p>}
+            </div>
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{t.itens.length} perguntas</span>
+            <button onClick={() => inativarTemplate(t.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"><Trash2 size={13} /></button>
+          </div>
+
+          {/* Perguntas */}
+          {expandido === t.id && (
+            <div>
+              {t.itens.map((item, idx) => (
+                <div key={item.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50/50 text-sm group">
+                  <GripVertical size={13} className="text-gray-300 shrink-0" />
+                  <span className="w-6 text-xs text-gray-400 font-mono">{idx + 1}.</span>
+                  <p className="flex-1 text-gray-700">{item.pergunta}</p>
+                  <span className={`text-[11px] flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${tipoCor(item.tipo)}`}>
+                    {tipoIcon(item.tipo)} {item.tipo === "SIM_NAO" ? "Sim/Não" : item.tipo === "NUMERO" ? "Número" : "Texto"}
+                  </span>
+                  {item.bloqueante && (
+                    <span className="text-[11px] flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                      <Shield size={10} /> Bloqueante
+                    </span>
+                  )}
+                  {item.obrigatorio && <span className="text-[11px] text-gray-400">*</span>}
+                  <button onClick={() => removerItem(t.id, item.id)} className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 rounded"><Trash2 size={12} /></button>
+                </div>
+              ))}
+
+              {/* Adicionar pergunta */}
+              <div className="px-4 py-3 bg-gray-50/50 border-t border-gray-100">
+                <div className="flex gap-2 flex-wrap items-end">
+                  <div className="flex-1 min-w-48">
+                    <label className="text-xs text-gray-500 block mb-1">Nova pergunta</label>
+                    <input value={novaP} onChange={e => setNovaP(e.target.value)}
+                      placeholder="Ex: O box está limpo e seco?" className={`${inp} text-xs py-1.5 w-full`}
+                      onKeyDown={e => e.key === "Enter" && (e.preventDefault(), adicionarItem(t.id))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Tipo</label>
+                    <select value={novoTipo} onChange={e => setNovoTipo(e.target.value)} className={`${inp} text-xs py-1.5`}>
+                      <option value="SIM_NAO">Sim/Não</option>
+                      <option value="TEXTO">Texto livre</option>
+                      <option value="NUMERO">Número</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer pb-1.5">
+                    <input type="checkbox" checked={novoBloq} onChange={e => setNovoBloq(e.target.checked)} className="rounded" />
+                    Bloqueante
+                  </label>
+                  <button onClick={() => adicionarItem(t.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 font-medium">
+                    <Plus size={12} /> Adicionar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {templates.length === 0 && (
+        <div className="text-center py-16 text-gray-400">
+          <ListChecks size={40} className="mx-auto mb-2 opacity-30" />
+          <p>Nenhum checklist criado.</p>
+          <p className="text-sm">Crie templates de vistoria e vincule perguntas a cada um.</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Badge({ ativo }: { ativo: boolean }) {
   return (
@@ -764,26 +928,28 @@ function AddAliasInline({ produtoId, onAdd }: { produtoId: string; onAdd: (d: De
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
-export default function CadastrosClient({ produtos, clientes, boxes, depara }: {
+export default function CadastrosClient({ produtos, clientes, boxes, depara, checklists }: {
   produtos: Produto[]
   clientes: Cliente[]
   boxes: Box[]
   depara: DePara[]
+  checklists: ChecklistTemplateType[]
 }) {
   const [tab, setTab] = useState<Tab>("produtos")
 
   const tabs = [
-    { id: "produtos" as Tab, label: "Produtos",  icon: Package,         count: produtos.filter((p) => p.ativo).length },
-    { id: "clientes" as Tab, label: "Clientes",  icon: Users,           count: clientes.filter((c) => c.ativo).length },
-    { id: "boxes"    as Tab, label: "Boxes",     icon: BoxIcon,         count: boxes.length },
-    { id: "depara"   as Tab, label: "De/Para",   icon: ArrowRightLeft,  count: depara.length },
+    { id: "produtos"   as Tab, label: "Produtos",    icon: Package,        count: produtos.filter((p) => p.ativo).length },
+    { id: "clientes"   as Tab, label: "Clientes",    icon: Users,          count: clientes.filter((c) => c.ativo).length },
+    { id: "boxes"      as Tab, label: "Boxes",       icon: BoxIcon,        count: boxes.length },
+    { id: "depara"     as Tab, label: "De/Para",     icon: ArrowRightLeft, count: depara.length },
+    { id: "checklist"  as Tab, label: "Checklists",  icon: ListChecks,     count: checklists.length },
   ]
 
   return (
     <div>
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Cadastros</h2>
-        <p className="text-gray-500 text-sm mt-0.5">Gerencie produtos, clientes, boxes e mapeamentos De/Para</p>
+        <p className="text-gray-500 text-sm mt-0.5">Gerencie produtos, clientes, boxes, mapeamentos De/Para e checklists de vistoria</p>
       </div>
 
       {/* Tab nav */}
@@ -803,10 +969,11 @@ export default function CadastrosClient({ produtos, clientes, boxes, depara }: {
         ))}
       </div>
 
-      {tab === "produtos" && <ProdutosTab produtos={produtos} />}
-      {tab === "clientes" && <ClientesTab clientes={clientes} />}
-      {tab === "boxes"    && <BoxesTab boxes={boxes} />}
-      {tab === "depara"   && <DeParaTab depara={depara} produtos={produtos} />}
+      {tab === "produtos"  && <ProdutosTab produtos={produtos} />}
+      {tab === "clientes"  && <ClientesTab clientes={clientes} />}
+      {tab === "boxes"     && <BoxesTab boxes={boxes} />}
+      {tab === "depara"    && <DeParaTab depara={depara} produtos={produtos} />}
+      {tab === "checklist" && <ChecklistTab templates={checklists} />}
     </div>
   )
 }

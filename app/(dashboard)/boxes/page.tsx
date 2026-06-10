@@ -77,6 +77,7 @@ export default async function BoxesPage() {
       armazemId: b.armazem?.id ?? null,
       armazemCodigo: b.armazem?.codigo ?? null,
       armazemNome: b.armazem?.nome ?? null,
+      statusLiberacao: b.statusLiberacao ?? "LIBERADO",
       // previsão de recebimento
       previsao: prev
         ? {

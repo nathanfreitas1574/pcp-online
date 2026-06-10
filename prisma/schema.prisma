@@ -21,6 +21,20 @@ enum StatusLacre {
   NAO_CONFORME
 }
 
+enum StatusLiberacao {
+  BLOQUEADO
+  AGUARDANDO_VISTORIA
+  LIBERADO
+}
+
+enum CustoTipo {
+  MAO_OBRA
+  EQUIPAMENTO
+  INSUMO
+  MANUTENCAO
+  OUTROS
+}
+
 enum TipoMovimentacao {
   ENTRADA
   SAIDA
@@ -69,18 +83,21 @@ model Armazem {
   updatedAt DateTime @updatedAt
 
   boxes     Box[]
+  custos    CustoOperacional[]
 }
 
 model Box {
-  id          String   @id @default(cuid())
-  codigo      String   @unique
-  descricao   String
-  localizacao String
-  capacidade  Int
-  ativo       Boolean  @default(true)
-  armazemId   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String          @id @default(cuid())
+  codigo           String          @unique
+  descricao        String
+  localizacao      String
+  capacidade       Int
+  ativo            Boolean         @default(true)
+  armazemId        String?
+  statusLiberacao  StatusLiberacao @default(LIBERADO)
+  motivoBloqueio   String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   armazem        Armazem?             @relation(fields: [armazemId], references: [id])
   produtos       ProdutoBox[]
@@ -93,6 +110,20 @@ model Box {
   qualidades     QualidadeRegistro[]
   ocorrencias    Ocorrencia[]
   previsoes      PrevisaoRecebimento[]
+  liberacoes     LiberacaoBox[]
+  checklistResp  VistoriaChecklist[]
+}
+
+// ─── LIBERAÇÃO DE BOX ─────────────────────────────────────────────────────────
+model LiberacaoBox {
+  id             String          @id @default(cuid())
+  boxId          String
+  box            Box             @relation(fields: [boxId], references: [id])
+  statusAnterior StatusLiberacao
+  statusNovo     StatusLiberacao
+  motivo         String?
+  usuarioNome    String?
+  createdAt      DateTime        @default(now())
 }
 
 model Produto {
@@ -915,6 +946,75 @@ model Meta {
   updatedAt DateTime @updatedAt
 
   @@unique([tipo, mes, ano])
+}
+
+// ─── CHECKLIST DE VISTORIA ────────────────────────────────────────────────────
+model ChecklistTemplate {
+  id        String   @id @default(cuid())
+  nome      String
+  descricao String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens     ChecklistItem[]
+  vistorias VistoriaChecklist[]
+}
+
+model ChecklistItem {
+  id          String   @id @default(cuid())
+  templateId  String
+  template    ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  pergunta    String
+  tipo        String   @default("SIM_NAO")  // SIM_NAO | TEXTO | NUMERO
+  obrigatorio Boolean  @default(true)
+  bloqueante  Boolean  @default(false)      // resposta NAO bloqueia aprovação
+  ordem       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  respostas   VistoriaResposta[]
+}
+
+model VistoriaChecklist {
+  id           String   @id @default(cuid())
+  boxId        String
+  box          Box      @relation(fields: [boxId], references: [id])
+  templateId   String
+  template     ChecklistTemplate @relation(fields: [templateId], references: [id])
+  data         DateTime @default(now())
+  aprovado     Boolean  @default(true)
+  usuarioNome  String?
+  observacao   String?
+  createdAt    DateTime @default(now())
+
+  respostas    VistoriaResposta[]
+}
+
+model VistoriaResposta {
+  id           String   @id @default(cuid())
+  checklistId  String
+  checklist    VistoriaChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  itemId       String
+  item         ChecklistItem     @relation(fields: [itemId], references: [id])
+  resposta     String            // "SIM" | "NAO" | valor livre
+  conforme     Boolean  @default(true)
+  observacao   String?
+  createdAt    DateTime @default(now())
+}
+
+// ─── CUSTO OPERACIONAL ────────────────────────────────────────────────────────
+model CustoOperacional {
+  id            String    @id @default(cuid())
+  data          DateTime
+  mes           String    // "2025-06"
+  tipo          CustoTipo
+  descricao     String
+  valor         Float
+  armazemId     String?
+  armazem       Armazem?  @relation(fields: [armazemId], references: [id])
+  criadoPorNome String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 // ─── CONTROLE DE OCORRÊNCIAS ──────────────────────────────────────────────────
