@@ -52,7 +52,7 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
-  password  String
+  password  String?
   role      Role     @default(VIEWER)
   ativo     Boolean  @default(true)
   createdAt DateTime @default(now())
