@@ -1072,6 +1072,47 @@ model ContratoArmazenagem {
   updatedAt     DateTime  @updatedAt
 }
 
+// ─── MARCAÇÃO DE VEÍCULOS (CARGA/DESCARGA — TOTVS) ───────────────────────────
+// As colunas do Excel exportado podem mudar de posição; a importação casa
+// por NOME do cabeçalho (normalizado), não por índice. Linka com contrato
+// via clienteDestino ←→ ContratoArmazenagem.clienteNome.
+model MarcacaoVeiculo {
+  id               String    @id @default(cuid())
+  numero           String    @unique          // coluna "#" (id da marcação)
+  operacao         String?                     // CARGA | DESCARGA
+  check            String?
+  ordem            String?
+  status           String?                     // CHECKOUT, etc.
+  dataCheckin      DateTime?
+  dataMarcacao     DateTime?
+  dataCarregamento DateTime?
+  produto          String?
+  motorista        String?
+  tipoServico      String?
+  obsMarcacao      String?
+  pedidoCliente    String?
+  clienteDestino   String?                     // ← chave de ligação com contrato
+  placa            String?
+  transportadora   String?
+  tipoVeiculo      String?
+  cliente          String?                     // nome curto (CIBRA, etc.)
+  local            String?
+  pesoPrevisto     Float     @default(0)
+  pesoFinal        Float     @default(0)
+  pesoInicial      Float     @default(0)
+  pesoLiquido      Float     @default(0)
+  turno            String?
+  romaneio         String?
+  lote             String?
+  ativo            Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([clienteDestino])
+  @@index([operacao])
+  @@index([dataCarregamento])
+}
+
 // ─── CONTROLE DE OCORRÊNCIAS ──────────────────────────────────────────────────
 enum OcorrenciaTipo {
   DERRAMAMENTO

@@ -9,7 +9,7 @@ import {
   FileText, Users, LogOut, Download, Upload, BarChart2,
   Warehouse, Bell, Database, Calendar, Clock, Activity,
   FlaskConical, TrendingUp, Tv, ListOrdered, DollarSign, QrCode, Target,
-  Ship, Crosshair, ShieldAlert, PieChart, Receipt, History,
+  Ship, Crosshair, ShieldAlert, PieChart, Receipt, History, Scale,
 } from "lucide-react"
 
 type NavItem =
@@ -25,6 +25,7 @@ const nav: NavItem[] = [
   { href: "/boxes", label: "Gestão de Box", icon: Box },
   { href: "/historico-boxes", label: "Histórico de Boxes", icon: History },
   { href: "/contratos", label: "Contratos TOTVS", icon: FileText },
+  { href: "/marcacoes", label: "Marcação de Veículos", icon: Scale },
   { href: "/armazens", label: "Gestão de Armazéns", icon: Warehouse },
   { href: "/lacres", label: "Lacres", icon: Lock },
   { href: "/tmp", label: "TMP Caminhões", icon: Clock },
