@@ -26,9 +26,11 @@ const inp = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focu
 export default function VistoriaDiariaModal({
   boxes,
   onClose,
+  onSaved,
 }: {
   boxes: VistoriaBoxOption[]
   onClose: () => void
+  onSaved?: (boxId: string, updates: Pick<VistoriaBoxOption, "volumeAtual" | "produto" | "cliente" | "navio">) => void
 }) {
   const [armazemSel, setArmazemSel] = useState("")
   const [boxId, setBoxId] = useState("")
@@ -103,8 +105,27 @@ export default function VistoriaDiariaModal({
 
     setSaving(false)
     if (res.ok) {
-      setMsg("Vistoria registrada com sucesso!")
-      setTimeout(() => window.location.reload(), 1200)
+      // Notifica o pai com os novos valores — SEM recarregar a página
+      onSaved?.(box.id, {
+        volumeAtual: parseFloat(editVolume) || 0,
+        produto:     editProduto || null,
+        cliente:     editCliente || null,
+        navio:       editNavio  || null,
+      })
+      setMsg("✅ Vistoria registrada com sucesso!")
+      // Após 2 s, limpa o formulário mas MANTÉM o armazém selecionado
+      setTimeout(() => {
+        setMsg("")
+        setBoxId("")
+        setObservacao("")
+        setFoto(null)
+        setLacreConforme(true)
+        setEditProduto("")
+        setEditCliente("")
+        setEditNavio("")
+        setEditVolume("")
+        setEditLacre("")
+      }, 2000)
     } else {
       setMsg("Erro ao registrar vistoria.")
     }

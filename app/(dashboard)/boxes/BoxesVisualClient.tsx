@@ -253,9 +253,9 @@ function MiniBar({ pct, cor }: { pct: number; cor: string }) {
 export default function BoxesVisualClient({
   boxes,
   totalCapacidade,
-  totalVolume,
-  boxesCheios,
-  boxesLivres,
+  totalVolume: _totalVolume,
+  boxesCheios: _boxesCheios,
+  boxesLivres: _boxesLivres,
   todasPrevisoes = [],
   naviosDisponiveis = [],
 }: {
@@ -279,15 +279,32 @@ export default function BoxesVisualClient({
   const [saving, setSaving] = useState(false)
   const [previsoes, setPrevisoes] = useState(todasPrevisoes)
 
+  // Estado local de boxes — permite atualizar campos sem recarregar a página
+  const [boxesState, setBoxesState] = useState<BoxItem[]>(boxes)
+
+  // Callback chamado pela VistoriaDiariaModal após salvar
+  function handleVistoriaSaved(
+    boxId: string,
+    updates: { volumeAtual: number; produto: string | null; cliente: string | null; navio?: string | null }
+  ) {
+    setBoxesState(prev =>
+      prev.map(b => (b.id === boxId ? { ...b, ...updates } : b))
+    )
+  }
+
   const totalPrevisoes = previsoes.length
 
-  const pctTotal = totalCapacidade > 0 ? (totalVolume / totalCapacidade) * 100 : 0
+  // KPIs calculados a partir do estado local (refletem edições sem reload)
+  const localTotalVolume  = boxesState.reduce((s, b) => s + b.volumeAtual, 0)
+  const localBoxesCheios  = boxesState.filter(b => b.capacidade > 0 && b.volumeAtual / b.capacidade >= 0.9).length
+  const localBoxesLivres  = boxesState.filter(b => b.volumeAtual === 0).length
+  const pctTotal          = totalCapacidade > 0 ? (localTotalVolume / totalCapacidade) * 100 : 0
 
   // boxes por estrutura
   function boxesDa(id: string) {
     const est = ESTRUTURAS.find(e => e.id === id)
     if (!est || est.semBoxes) return []
-    return boxes.filter(b => est.match(b.codigo))
+    return boxesState.filter(b => est.match(b.codigo))
   }
 
   // stats por estrutura
@@ -302,7 +319,7 @@ export default function BoxesVisualClient({
   }
 
   // boxe filtrada para visão grade/linha/drill-down
-  const filtered = boxes.filter(b => {
+  const filtered = boxesState.filter(b => {
     const pct = b.capacidade > 0 ? (b.volumeAtual / b.capacidade) * 100 : 0
     const matchS =
       b.codigo.toLowerCase().includes(search.toLowerCase()) ||
@@ -329,7 +346,7 @@ export default function BoxesVisualClient({
     if (az) return `AZ${az[1].padStart(2, "0")}`
     return "Outros"
   }
-  const linhas = boxes.reduce<Record<string, BoxItem[]>>((acc, b) => {
+  const linhas = boxesState.reduce<Record<string, BoxItem[]>>((acc, b) => {
     const l = linhaDoBox(b.codigo); acc[l] = acc[l] ?? []; acc[l].push(b); return acc
   }, {})
   const linhasOrdenadas = Object.keys(linhas).sort()
@@ -381,7 +398,7 @@ export default function BoxesVisualClient({
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Gestão de Boxes</h2>
-          <p className="text-gray-500 text-sm mt-0.5">{boxes.length} boxes · ocupação visual em tempo real</p>
+          <p className="text-gray-500 text-sm mt-0.5">{boxesState.length} boxes · ocupação visual em tempo real</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {/* Painel de previsões */}
@@ -415,10 +432,10 @@ export default function BoxesVisualClient({
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         {[
-          { label: "Ocupação Geral", value: `${pctTotal.toFixed(1)}%`, sub: `${totalVolume.toLocaleString("pt-BR")} / ${totalCapacidade.toLocaleString("pt-BR")} ton`, icon: Gauge, color: pctTotal >= 90 ? "red" : pctTotal >= 70 ? "orange" : "green" },
-          { label: "Boxes Livres",   value: boxesLivres,  sub: "sem produto",        icon: PackageX,    color: "blue" },
-          { label: "Boxes Cheios",  value: boxesCheios,  sub: "≥ 90% capacidade",   icon: PackageCheck, color: "red" },
-          { label: "Total Boxes",   value: boxes.length, sub: "ativos",             icon: Warehouse,    color: "gray" },
+          { label: "Ocupação Geral", value: `${pctTotal.toFixed(1)}%`, sub: `${localTotalVolume.toLocaleString("pt-BR")} / ${totalCapacidade.toLocaleString("pt-BR")} ton`, icon: Gauge, color: pctTotal >= 90 ? "red" : pctTotal >= 70 ? "orange" : "green" },
+          { label: "Boxes Livres",   value: localBoxesLivres,  sub: "sem produto",        icon: PackageX,    color: "blue" },
+          { label: "Boxes Cheios",  value: localBoxesCheios,  sub: "≥ 90% capacidade",   icon: PackageCheck, color: "red" },
+          { label: "Total Boxes",   value: boxesState.length, sub: "ativos",             icon: Warehouse,    color: "gray" },
         ].map(({ label, value, sub, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
             <div className={`p-2.5 rounded-xl bg-${color}-100 text-${color}-600 shrink-0`}>
@@ -451,7 +468,7 @@ export default function BoxesVisualClient({
           ) : (
             <div className="space-y-2">
               {previsoes.map(p => {
-                const box = boxes.find(b => b.id === p.boxId)
+                const box = boxesState.find(b => b.id === p.boxId)
                 const { bg, text, label, pulse } = corPrevisao(p.dataPrevisao, p.status)
                 const dataFmt = new Date(p.dataPrevisao).toLocaleDateString("pt-BR")
                 return (
@@ -761,9 +778,9 @@ export default function BoxesVisualClient({
                 {f === "CRITICO" ? "⚠ Crítico" : f}
                 {f !== "TODOS" && (
                   <span className="ml-1.5 text-xs opacity-70">
-                    ({f === "LIVRE" ? boxes.filter(b => b.volumeAtual === 0).length
-                      : f === "OCUPADO" ? boxes.filter(b => b.volumeAtual > 0 && b.volumeAtual / b.capacidade < 0.9).length
-                      : boxes.filter(b => b.capacidade > 0 && b.volumeAtual / b.capacidade >= 0.9).length})
+                    ({f === "LIVRE" ? boxesState.filter(b => b.volumeAtual === 0).length
+                      : f === "OCUPADO" ? boxesState.filter(b => b.volumeAtual > 0 && b.volumeAtual / b.capacidade < 0.9).length
+                      : boxesState.filter(b => b.capacidade > 0 && b.volumeAtual / b.capacidade >= 0.9).length})
                   </span>
                 )}
               </button>
@@ -839,20 +856,20 @@ export default function BoxesVisualClient({
       {/* ── Modal novo recebimento ── */}
       {showNovoRecebimento && (
         <NovoRecebimentoModal
-          boxes={boxes.map(b => ({
+          boxes={boxesState.map(b => ({
             id: b.id, codigo: b.codigo, descricao: b.descricao,
             armazemId: b.armazemId, armazemNome: b.armazemNome, armazemCodigo: b.armazemCodigo,
           }))}
           navios={naviosDisponiveis}
           onClose={() => setShowNovoRecebimento(false)}
-          onSaved={() => { setShowNovoRecebimento(false); window.location.reload() }}
+          onSaved={() => setShowNovoRecebimento(false)}
         />
       )}
 
       {/* ── Modal vistoria ── */}
       {showVistoria && (
         <VistoriaDiariaModal
-          boxes={boxes.map(b => ({
+          boxes={boxesState.map(b => ({
             id: b.id, codigo: b.codigo, descricao: b.descricao,
             capacidade: b.capacidade, volumeAtual: b.volumeAtual,
             produto: b.produto, cliente: b.cliente, navio: b.navio,
@@ -861,6 +878,7 @@ export default function BoxesVisualClient({
             armazemId: b.armazemId, armazemNome: b.armazemNome, armazemCodigo: b.armazemCodigo,
           }))}
           onClose={() => setShowVistoria(false)}
+          onSaved={handleVistoriaSaved}
         />
       )}
     </div>
