@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 
@@ -16,7 +16,8 @@ function MicrosoftIcon() {
   )
 }
 
-export default function LoginPage() {
+// Componente interno que usa useSearchParams — deve estar dentro de Suspense
+function LoginForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const errorParam   = searchParams.get("error")
@@ -141,5 +142,14 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrapper com Suspense — obrigatório para useSearchParams no Next.js App Router
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }
