@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Camera, ClipboardCheck, Lock, Unlock, Pencil, ExternalLink } from "lucide-react"
+import { Camera, ClipboardCheck, Lock, Unlock, Pencil, ExternalLink, Ruler, History } from "lucide-react"
 import ArmazemBoxSelect from "@/components/ArmazemBoxSelect"
+import { STATUS_USO_CFG, type StatusUsoBox } from "@/components/BoxVisual"
 
 export type VistoriaBoxOption = {
   id: string
@@ -19,6 +20,8 @@ export type VistoriaBoxOption = {
   armazemId?: string | null
   armazemNome?: string | null
   armazemCodigo?: string | null
+  statusUso?: StatusUsoBox | null
+  obsBox?: string | null
 }
 
 const inp = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -30,7 +33,7 @@ export default function VistoriaDiariaModal({
 }: {
   boxes: VistoriaBoxOption[]
   onClose: () => void
-  onSaved?: (boxId: string, updates: Pick<VistoriaBoxOption, "volumeAtual" | "produto" | "cliente" | "navio">) => void
+  onSaved?: (boxId: string, updates: Pick<VistoriaBoxOption, "volumeAtual" | "produto" | "cliente" | "navio" | "statusUso" | "obsBox">) => void
 }) {
   const [armazemSel, setArmazemSel] = useState("")
   const [boxId, setBoxId] = useState("")
@@ -47,6 +50,17 @@ export default function VistoriaDiariaModal({
   const [editVolume, setEditVolume] = useState("")
   const [editLacre, setEditLacre] = useState("")
 
+  // Semáforo de uso + OBS
+  const [editStatusUso, setEditStatusUso] = useState<StatusUsoBox>("LIVRE")
+  const [editObsBox, setEditObsBox] = useState("")
+
+  // Medição física
+  const [showMedicao, setShowMedicao] = useState(false)
+  const [volMedido, setVolMedido] = useState("")
+  const [obsMedicao, setObsMedicao] = useState("")
+  const [savingMedicao, setSavingMedicao] = useState(false)
+  const [msgMedicao, setMsgMedicao] = useState("")
+
   const box = boxes.find((b) => b.id === boxId) ?? null
   const hoje = new Date().toLocaleDateString("pt-BR")
 
@@ -54,6 +68,8 @@ export default function VistoriaDiariaModal({
     setBoxId(id)
     setLacreConforme(true)
     setMsg("")
+    setShowMedicao(false)
+    setMsgMedicao("")
     const b = boxes.find((x) => x.id === id)
     if (b) {
       setEditProduto(b.produto ?? "")
@@ -61,6 +77,28 @@ export default function VistoriaDiariaModal({
       setEditNavio(b.navio ?? "")
       setEditVolume(String(b.volumeAtual))
       setEditLacre(b.codigoLacre ?? "")
+      setEditStatusUso((b.statusUso as StatusUsoBox) ?? "LIVRE")
+      setEditObsBox(b.obsBox ?? "")
+      setVolMedido(String(b.volumeAtual))
+    }
+  }
+
+  async function handleMedicao() {
+    if (!box) return
+    setSavingMedicao(true)
+    setMsgMedicao("")
+    const res = await fetch(`/api/boxes/${box.id}/medicao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ volumeMedido: parseFloat(volMedido) || 0, observacao: obsMedicao }),
+    })
+    setSavingMedicao(false)
+    if (res.ok) {
+      const dif = (parseFloat(volMedido) || 0) - (parseFloat(editVolume) || 0)
+      setMsgMedicao(`✅ Medição registrada! Diferença: ${dif >= 0 ? "+" : ""}${dif.toLocaleString("pt-BR")} ton`)
+      setObsMedicao("")
+    } else {
+      setMsgMedicao("Erro ao registrar medição.")
     }
   }
 
@@ -77,16 +115,18 @@ export default function VistoriaDiariaModal({
     setSaving(true)
     setMsg("")
 
-    // 1. Atualizar estoque do box com os valores editados
+    // 1. Atualizar estoque + semáforo + observação do box
     await fetch(`/api/boxes/${box.id}/estoque`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         volumeAtual: parseFloat(editVolume) || 0,
-        produto: editProduto || null,
-        cliente: editCliente || null,
-        navio: editNavio || null,
+        produto:    editProduto || null,
+        cliente:    editCliente || null,
+        navio:      editNavio  || null,
         capacidade: box.capacidade,
+        statusUso:  editStatusUso,
+        obsBox:     editObsBox || null,
       }),
     })
 
@@ -111,6 +151,8 @@ export default function VistoriaDiariaModal({
         produto:     editProduto || null,
         cliente:     editCliente || null,
         navio:       editNavio  || null,
+        statusUso:   editStatusUso,
+        obsBox:      editObsBox || null,
       })
       setMsg("✅ Vistoria registrada com sucesso!")
       // Após 2 s, limpa o formulário mas MANTÉM o armazém selecionado
@@ -125,6 +167,11 @@ export default function VistoriaDiariaModal({
         setEditNavio("")
         setEditVolume("")
         setEditLacre("")
+        setEditObsBox("")
+        setEditStatusUso("LIVRE")
+        setShowMedicao(false)
+        setMsgMedicao("")
+        setVolMedido("")
       }, 2000)
     } else {
       setMsg("Erro ao registrar vistoria.")
@@ -249,6 +296,96 @@ export default function VistoriaDiariaModal({
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Semáforo de uso do box */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  Status de uso do box
+                </label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {(Object.entries(STATUS_USO_CFG) as [StatusUsoBox, typeof STATUS_USO_CFG[StatusUsoBox]][]).map(([key, cfg]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setEditStatusUso(key)}
+                      className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-lg border-2 text-xs font-semibold transition ${
+                        editStatusUso === key
+                          ? `${cfg.bg} ${cfg.cor} border-current`
+                          : "border-gray-200 text-gray-400 hover:border-gray-300"
+                      }`}
+                    >
+                      <span className="text-base">{cfg.emoji}</span>
+                      <span className="leading-tight text-center">{cfg.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Observação livre do box */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Observação do box (opcional)</label>
+                <input
+                  type="text"
+                  value={editObsBox}
+                  onChange={e => setEditObsBox(e.target.value)}
+                  placeholder="Ex: Aguardando limpeza, Reservado cliente X…"
+                  className={inp}
+                />
+              </div>
+
+              {/* ── Medição Física ── */}
+              <div className="border border-purple-100 rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowMedicao(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 bg-purple-50 hover:bg-purple-100 transition text-sm font-semibold text-purple-700"
+                >
+                  <div className="flex items-center gap-2">
+                    <Ruler size={14} />
+                    Medição Física / Inventário
+                  </div>
+                  <span className="text-xs font-normal text-purple-500">{showMedicao ? "▲ fechar" : "▼ abrir"}</span>
+                </button>
+                {showMedicao && (
+                  <div className="p-4 space-y-3 bg-purple-50/30">
+                    <p className="text-xs text-gray-500">
+                      Registra a contagem física do box. Calculamos automaticamente a diferença em relação ao sistema ({parseFloat(editVolume) || 0} ton).
+                    </p>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Volume medido fisicamente (ton)</label>
+                      <input
+                        type="number" min="0" step="0.1"
+                        value={volMedido}
+                        onChange={e => setVolMedido(e.target.value)}
+                        className={inp}
+                      />
+                      {volMedido && (
+                        <p className={`text-xs mt-1 font-semibold ${
+                          (parseFloat(volMedido)||0) - (parseFloat(editVolume)||0) >= 0 ? "text-green-600" : "text-red-600"
+                        }`}>
+                          Diferença: {((parseFloat(volMedido)||0)-(parseFloat(editVolume)||0))>=0?"+":""}
+                          {((parseFloat(volMedido)||0)-(parseFloat(editVolume)||0)).toLocaleString("pt-BR")} ton
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Observação da medição</label>
+                      <input type="text" value={obsMedicao} onChange={e => setObsMedicao(e.target.value)}
+                        placeholder="Ex: Contagem presencial com trena" className={inp} />
+                    </div>
+                    {msgMedicao && (
+                      <p className={`text-xs font-medium ${msgMedicao.includes("✅") ? "text-green-700" : "text-red-600"}`}>{msgMedicao}</p>
+                    )}
+                    <button
+                      type="button" onClick={handleMedicao} disabled={savingMedicao || !volMedido}
+                      className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 rounded-lg transition disabled:opacity-50"
+                    >
+                      <History size={14} />
+                      {savingMedicao ? "Registrando…" : "Registrar Medição"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Confirmação do lacre */}

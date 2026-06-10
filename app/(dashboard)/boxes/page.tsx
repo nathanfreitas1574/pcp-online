@@ -78,6 +78,8 @@ export default async function BoxesPage() {
       armazemCodigo: b.armazem?.codigo ?? null,
       armazemNome: b.armazem?.nome ?? null,
       statusLiberacao: b.statusLiberacao ?? "LIBERADO",
+      statusUso: b.statusUso ?? "LIVRE",
+      obsBox: b.obsBox ?? null,
       // previsão de recebimento
       previsao: prev
         ? {

@@ -13,16 +13,23 @@ export async function PATCH(
 
   const { id } = await params
   const body = await req.json()
-  const { volumeAtual, produto: produtoDesc, cliente, capacidade, navio, dataRecebimento } = body
+  const { volumeAtual, produto: produtoDesc, cliente, capacidade, navio, dataRecebimento, statusUso, obsBox } = body
 
   // Verifica se box existe
   let box = await prisma.box.findUnique({ where: { id } })
   if (!box) return NextResponse.json({ error: "Box não encontrado" }, { status: 404 })
 
-  // Atualiza capacidade do box, se informada e diferente da atual
-  if (capacidade !== undefined && capacidade !== null && Number(capacidade) > 0 && Number(capacidade) !== box.capacidade) {
-    box = await prisma.box.update({ where: { id }, data: { capacidade: Number(capacidade) } })
-  }
+  // Atualiza campos do box (capacidade, semáforo e observação)
+  const boxUpdates: Record<string, unknown> = {}
+  if (capacidade !== undefined && capacidade !== null && Number(capacidade) > 0 && Number(capacidade) !== box.capacidade)
+    boxUpdates.capacidade = Number(capacidade)
+  if (statusUso !== undefined && statusUso !== null)
+    boxUpdates.statusUso = statusUso
+  if (obsBox !== undefined)
+    boxUpdates.obsBox = obsBox || null
+
+  if (Object.keys(boxUpdates).length > 0)
+    box = await prisma.box.update({ where: { id }, data: boxUpdates })
 
   // Encontra ou cria produto
   let produtoId: string | null = null

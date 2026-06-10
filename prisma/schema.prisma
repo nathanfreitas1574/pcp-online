@@ -27,6 +27,14 @@ enum StatusLiberacao {
   LIBERADO
 }
 
+// Semáforo de reutilização / uso do box
+enum StatusUsoBox {
+  LIVRE        // disponível para novo produto
+  CONSUMO      // produto saindo — sendo expedido
+  PROGRAMADO   // programado para receber produto em breve
+  BLOQUEADO    // indisponível por manutenção / problema
+}
+
 enum CustoTipo {
   MAO_OBRA
   EQUIPAMENTO
@@ -99,6 +107,10 @@ model Box {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
+  // Semáforo de uso + observação livre
+  statusUso      StatusUsoBox    @default(LIVRE)
+  obsBox         String?
+
   armazem        Armazem?             @relation(fields: [armazemId], references: [id])
   produtos       ProdutoBox[]
   lacres         Lacre[]
@@ -112,6 +124,21 @@ model Box {
   previsoes      PrevisaoRecebimento[]
   liberacoes     LiberacaoBox[]
   checklistResp  VistoriaChecklist[]
+  medicoes       MedicaoBox[]
+}
+
+// ─── MEDIÇÃO FÍSICA DE BOX (INVENTÁRIO) ──────────────────────────────────────
+model MedicaoBox {
+  id           String   @id @default(cuid())
+  boxId        String
+  box          Box      @relation(fields: [boxId], references: [id], onDelete: Cascade)
+  data         DateTime @default(now())
+  volumeAntes  Float    // volume no sistema antes da medição
+  volumeMedido Float    // volume constatado fisicamente
+  diferenca    Float    @default(0)  // volumeMedido - volumeAntes
+  observacao   String?
+  usuarioNome  String?
+  createdAt    DateTime @default(now())
 }
 
 // ─── LIBERAÇÃO DE BOX ─────────────────────────────────────────────────────────

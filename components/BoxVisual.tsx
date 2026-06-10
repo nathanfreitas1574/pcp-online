@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 
+export type StatusUsoBox = "LIVRE" | "CONSUMO" | "PROGRAMADO" | "BLOQUEADO"
+
 export type BoxData = {
   id: string
   codigo: string
@@ -15,6 +17,16 @@ export type BoxData = {
   dataRecebimento?: string | Date | null
   diasEstocado?: number | null
   ultimoLacre?: string | null
+  statusUso?: StatusUsoBox | null
+  obsBox?: string | null
+}
+
+// Configuração visual do semáforo de uso
+export const STATUS_USO_CFG: Record<StatusUsoBox, { cor: string; bg: string; label: string; emoji: string }> = {
+  LIVRE:      { cor: "text-green-700",  bg: "bg-green-100",  label: "Livre",      emoji: "🟢" },
+  CONSUMO:    { cor: "text-amber-700",  bg: "bg-amber-100",  label: "Em Consumo", emoji: "🟡" },
+  PROGRAMADO: { cor: "text-blue-700",   bg: "bg-blue-100",   label: "Programado", emoji: "🔵" },
+  BLOQUEADO:  { cor: "text-red-700",    bg: "bg-red-100",    label: "Bloqueado",  emoji: "🔴" },
 }
 
 function getLiquidColor(pct: number) {
@@ -150,7 +162,7 @@ export default function BoxVisual({
   onUpdate,
 }: {
   box: BoxData
-  onUpdate?: (id: string, volume: number, produto: string, cliente: string) => void
+  onUpdate?: (id: string, updates: Partial<BoxData>) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [novoVol, setNovoVol] = useState(String(box.volumeAtual))
@@ -162,8 +174,12 @@ export default function BoxVisual({
   )
   const [novaCapacidade, setNovaCapacidade] = useState(String(box.capacidade))
   const [saving, setSaving] = useState(false)
+  // Estado local derivado do box para refletir edições sem reload
+  const [localVol,  setLocalVol]  = useState(box.volumeAtual)
+  const [localProd, setLocalProd] = useState(box.produto)
+  const [localCli,  setLocalCli]  = useState(box.cliente)
 
-  const pct = box.capacidade > 0 ? (box.volumeAtual / box.capacidade) * 100 : 0
+  const pct = box.capacidade > 0 ? (localVol / box.capacidade) * 100 : 0
   const { bg } = getLiquidColor(pct)
 
   async function handleSave() {
@@ -180,9 +196,14 @@ export default function BoxVisual({
     })
     setSaving(false)
     setEditing(false)
-    onUpdate?.(box.id, vol, novoProduto, novoCliente)
-    window.location.reload()
+    // Atualiza estado local IMEDIATAMENTE — sem recarregar a página
+    setLocalVol(vol)
+    setLocalProd(novoProduto || null)
+    setLocalCli(novoCliente || null)
+    onUpdate?.(box.id, { volumeAtual: vol, produto: novoProduto || null, cliente: novoCliente || null, navio: novoNavio || null })
   }
+
+  const statusCfg = box.statusUso ? STATUS_USO_CFG[box.statusUso] : STATUS_USO_CFG.LIVRE
 
   return (
     <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-4 flex flex-col gap-3 hover:shadow-lg transition-shadow">
@@ -200,14 +221,21 @@ export default function BoxVisual({
         </button>
       </div>
 
+      {/* Semáforo de uso */}
+      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${statusCfg.bg} ${statusCfg.cor}`}>
+        <span>{statusCfg.emoji}</span>
+        <span>{statusCfg.label}</span>
+        {box.obsBox && <span className="ml-1 font-normal opacity-80 truncate">— {box.obsBox}</span>}
+      </div>
+
       {/* Tank visual */}
       <div className="pl-6">
         <BoxTank
           pct={pct}
           capacidade={box.capacidade}
-          volumeAtual={box.volumeAtual}
-          produto={box.produto}
-          cliente={box.cliente}
+          volumeAtual={localVol}
+          produto={localProd}
+          cliente={localCli}
           diasEstocado={box.diasEstocado}
         />
       </div>
@@ -217,24 +245,24 @@ export default function BoxVisual({
         <div className="bg-gray-50 rounded-lg p-2">
           <p className="text-gray-400">Volume atual</p>
           <p className="font-bold text-gray-800">
-            {box.volumeAtual.toLocaleString("pt-BR")}
+            {localVol.toLocaleString("pt-BR")}
             <span className="font-normal text-gray-400"> / {box.capacidade.toLocaleString("pt-BR")} ton</span>
           </p>
         </div>
         <div className="bg-gray-50 rounded-lg p-2">
           <p className="text-gray-400">Capacidade livre</p>
           <p className="font-bold" style={{ color: bg }}>
-            {(box.capacidade - box.volumeAtual).toLocaleString("pt-BR")} ton
+            {(box.capacidade - localVol).toLocaleString("pt-BR")} ton
           </p>
         </div>
       </div>
 
-      {(box.cliente || box.navio || box.dataRecebimento) && (
+      {(localCli || box.navio || box.dataRecebimento) && (
         <div className="grid grid-cols-3 gap-2 text-xs text-center">
-          {box.cliente && (
+          {localCli && (
             <div className="bg-gray-50 rounded-lg p-1.5">
               <p className="text-gray-400">Cliente</p>
-              <p className="font-medium text-gray-700 truncate">{box.cliente}</p>
+              <p className="font-medium text-gray-700 truncate">{localCli}</p>
             </div>
           )}
           {box.navio && (

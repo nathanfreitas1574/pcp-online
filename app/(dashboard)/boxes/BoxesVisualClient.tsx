@@ -25,6 +25,7 @@ type BoxItem = BoxData & {
   armazemNome?: string | null
   previsao?: Previsao | null
   statusLiberacao?: "BLOQUEADO" | "AGUARDANDO_VISTORIA" | "LIBERADO" | null
+  // já herdados de BoxData: statusUso, obsBox
 }
 
 // ── Helper: cor do sinal de recebimento ──────────────────────────────────────
@@ -282,15 +283,14 @@ export default function BoxesVisualClient({
   // Estado local de boxes — permite atualizar campos sem recarregar a página
   const [boxesState, setBoxesState] = useState<BoxItem[]>(boxes)
 
-  // Callback chamado pela VistoriaDiariaModal após salvar
-  function handleVistoriaSaved(
-    boxId: string,
-    updates: { volumeAtual: number; produto: string | null; cliente: string | null; navio?: string | null }
-  ) {
+  // Callback universal para atualizar um box específico sem reload
+  function handleBoxUpdate(boxId: string, updates: Partial<BoxItem>) {
     setBoxesState(prev =>
       prev.map(b => (b.id === boxId ? { ...b, ...updates } : b))
     )
   }
+  // Alias para VistoriaDiariaModal (aceita o mesmo tipo)
+  const handleVistoriaSaved = handleBoxUpdate
 
   const totalPrevisoes = previsoes.length
 
@@ -380,7 +380,10 @@ export default function BoxesVisualClient({
                 <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">⚠ Lacre</div>
               )}
               {box.previsao && <PrevisaoSinal previsao={box.previsao} />}
-              <BoxVisual box={box} />
+              <BoxVisual
+                box={box}
+                onUpdate={(id, upd) => handleBoxUpdate(id, upd as Partial<BoxItem>)}
+              />
             </div>
           ))}
         </div>
