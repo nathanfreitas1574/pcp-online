@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { Search, FileText, Upload, X, Package, Users, BarChart3, RefreshCw, Plus, Pencil, Save, Trash2 } from "lucide-react"
+import DrillBarChart from "@/components/DrillBarChart"
 
 const VAZIO: Partial<Contrato> = {
   filial: "", numero: "", descricao: "", clienteNome: "", desProduto: "", codProduto: "",
@@ -274,6 +275,20 @@ export default function ContratosClient({
           )}
         </div>
       </div>
+
+      {/* Gráfico drill-down: Tipo → Cliente → Produto */}
+      {buscado && contratos.length > 0 && (
+        <DrillBarChart
+          titulo="Quantidade contratada — clique para detalhar"
+          dados={contratos}
+          niveis={[
+            { campo: "descTabela", titulo: "Tipo" },
+            { campo: "clienteNome", titulo: "Cliente" },
+            { campo: "desProduto", titulo: "Produto" },
+          ]}
+          medidas={[{ campo: "qtdContratada", nome: "Qtd. contratada", cor: "#3b82f6" }]}
+        />
+      )}
 
       {/* Resultados */}
       {buscado && (

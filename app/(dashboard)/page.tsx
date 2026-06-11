@@ -20,10 +20,13 @@ async function getStats() {
     prisma.alerta.count({ where: { status: "ABERTO" } }),
     prisma.cliente.count({ where: { ativo: true } }),
     prisma.produto.count({ where: { ativo: true } }),
-    // Ocupação por box (top 10)
+    // Estoque por box (com armazém e produto, para o gráfico drill-down)
     prisma.estoque.findMany({
-      take: 10,
-      include: { box: { select: { codigo: true, capacidade: true } } },
+      where: { quantidade: { gt: 0 } },
+      include: {
+        box: { select: { codigo: true, capacidade: true, armazem: { select: { nome: true } } } },
+        produto: { select: { descricao: true } },
+      },
       orderBy: { quantidade: "desc" },
     }),
     // Lacres dos últimos 30 dias
@@ -40,11 +43,13 @@ async function getStats() {
     }),
   ])
 
-  // Ocupação dos boxes para o gráfico
-  const ocupacaoBoxes = estoques.map((e) => ({
-    label: e.box.codigo,
-    ocupacao: e.box.capacidade > 0 ? Math.round((e.quantidade / e.box.capacidade) * 100) : 0,
-    volume: Math.round(e.quantidade),
+  // Detalhe do estoque para o gráfico drill-down (Armazém → Box → Produto)
+  const estoqueDetalhe = estoques.map((e) => ({
+    armazem: e.box.armazem?.nome ?? "Sem armazém",
+    box: e.box.codigo,
+    produto: e.produto.descricao,
+    cliente: e.clienteNome ?? "—",
+    quantidade: Math.round(e.quantidade),
   }))
 
   // Lacres por status
@@ -57,7 +62,7 @@ async function getStats() {
   return {
     totalBoxes, lacresNaoConformes, movProgramadas, inventarioAberto,
     alertasAbertos, totalClientes, totalProdutos,
-    ocupacaoBoxes, lacresPorStatus, movUltimas,
+    estoqueDetalhe, lacresPorStatus, movUltimas,
   }
 }
 
@@ -104,7 +109,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Gráficos */}
-      <DashboardCharts ocupacaoBoxes={stats.ocupacaoBoxes} lacresPorStatus={stats.lacresPorStatus} />
+      <DashboardCharts estoqueDetalhe={stats.estoqueDetalhe} lacresPorStatus={stats.lacresPorStatus} />
 
       {/* Movimentações recentes */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mt-4">

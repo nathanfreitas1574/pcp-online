@@ -1,25 +1,34 @@
 "use client"
 
-import { GraficoBarra, GraficoPizza } from "@/components/GraficoLinha"
+import { GraficoPizza } from "@/components/GraficoLinha"
+import DrillBarChart from "@/components/DrillBarChart"
 
-type OcupacaoBox = { label: string; ocupacao: number; volume: number }
+type EstoqueDetalhe = { armazem: string; box: string; produto: string; cliente: string; quantidade: number }
 type LacreStatus = { nome: string; valor: number; cor: string }
 
 export default function DashboardCharts({
-  ocupacaoBoxes,
+  estoqueDetalhe,
   lacresPorStatus,
 }: {
-  ocupacaoBoxes: OcupacaoBox[]
+  estoqueDetalhe: EstoqueDetalhe[]
   lacresPorStatus: LacreStatus[]
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {/* Ocupação dos boxes */}
+      {/* Estoque por armazém → box → produto (drill-down) */}
       <div className="lg:col-span-2">
-        <GraficoBarra
-          titulo="Ocupação dos Boxes (%)"
-          data={ocupacaoBoxes.map((b) => ({ label: b.label, "Ocupação %": b.ocupacao }))}
-          barras={[{ key: "Ocupação %", label: "Ocupação %", cor: "#3b82f6" }]}
+        <DrillBarChart
+          titulo="Estoque por armazém — clique para detalhar"
+          dados={estoqueDetalhe}
+          niveis={[
+            { campo: "armazem", titulo: "Armazém" },
+            { campo: "box", titulo: "Box" },
+            { campo: "produto", titulo: "Produto" },
+            { campo: "cliente", titulo: "Cliente" },
+          ]}
+          medidas={[{ campo: "quantidade", nome: "Volume", cor: "#3b82f6" }]}
+          unidade="t"
+          semDados="Sem estoque para exibir."
         />
       </div>
 

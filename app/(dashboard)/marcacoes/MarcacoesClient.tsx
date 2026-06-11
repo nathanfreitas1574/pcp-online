@@ -5,6 +5,7 @@ import {
   Truck, Upload, Search, Filter, ArrowDownToLine, ArrowUpFromLine,
   Scale, CheckCircle2, AlertTriangle, X, Link2, Package,
 } from "lucide-react"
+import DrillBarChart from "@/components/DrillBarChart"
 
 type Marcacao = {
   id: string
@@ -256,6 +257,24 @@ export default function MarcacoesClient({ clientes, produtos, transportadoras, a
               </div>
             </div>
           </div>
+
+          {/* Gráfico drill-down: Operação → Cliente → Produto */}
+          {marcacoes.length > 0 && (
+            <div className="mb-4">
+              <DrillBarChart
+                titulo="Peso líquido movimentado — clique para detalhar"
+                dados={marcacoes}
+                niveis={[
+                  { campo: "operacao", titulo: "Operação" },
+                  { campo: "clienteDestino", titulo: "Cliente" },
+                  { campo: "produto", titulo: "Produto" },
+                  { campo: "placa", titulo: "Placa" },
+                ]}
+                medidas={[{ campo: "pesoLiquido", nome: "Peso líquido", cor: "#16a34a" }]}
+                unidade="t"
+              />
+            </div>
+          )}
 
           {/* Tabela */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
