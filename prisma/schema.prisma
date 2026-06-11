@@ -620,10 +620,11 @@ model ProgramacaoSemanal {
   semana      Int
   dataInicio  DateTime
   dataFim     DateTime
-  boxId       String?
-  boxCodigo   String?
-  clienteNome String
-  produto     String
+  boxId         String?
+  boxCodigo     String?
+  numeroContrato String?
+  clienteNome   String
+  produto       String
   dom         Float    @default(0)
   seg         Float    @default(0)
   ter         Float    @default(0)

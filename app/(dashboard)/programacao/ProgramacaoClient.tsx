@@ -9,7 +9,7 @@ const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
 
 type Prog = {
-  id: string; clienteNome: string; produto: string; boxCodigo: string | null
+  id: string; clienteNome: string; produto: string; boxCodigo: string | null; numeroContrato: string | null
   dom: number; seg: number; ter: number; qua: number; qui: number; sex: number; sab: number
   total: number; realizado: number; tipo: string
 }
@@ -18,20 +18,46 @@ type Cliente = { id: string; nome: string; codigo: string }
 type Produto = { id: string; descricao: string; codigo: string }
 
 export default function ProgramacaoClient({
-  programacoes: inicial, boxes, clientes, produtos, semana, ano, diasSemana
+  programacoes: inicial, boxes, clientes, produtos, semana, ano, diasSemana, realizadoPorDia
 }: {
   programacoes: Prog[]; boxes: Box[]; clientes: Cliente[]; produtos: Produto[]
-  semana: number; ano: number; diasSemana: string[]
+  semana: number; ano: number; diasSemana: string[]; realizadoPorDia: Record<string, number[]>
 }) {
   const [rows, setRows] = useState<Prog[]>(inicial)
   const [saving, setSaving] = useState<string | null>(null)
   const [tipo, setTipo] = useState("RECEBIMENTO")
-  const [novaLinha, setNovaLinha] = useState({ clienteNome: "", produto: "", boxId: "" })
+  const [novaLinha, setNovaLinha] = useState({ numeroContrato: "", clienteNome: "", produto: "", boxId: "" })
   const [addMode, setAddMode] = useState(false)
+  const [buscandoCtr, setBuscandoCtr] = useState(false)
+  const [ctrInfo, setCtrInfo] = useState<string>("")
+
+  const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
+
+  async function buscarContrato(numero: string) {
+    if (!numero.trim()) { setCtrInfo(""); return }
+    setBuscandoCtr(true); setCtrInfo("")
+    try {
+      const res = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(numero.trim())}`)
+      const d = await res.json()
+      const m = d.matches?.[0]
+      if (m) {
+        setNovaLinha(p => ({ ...p, clienteNome: m.clienteNome, produto: m.desProduto }))
+        setCtrInfo(`✓ ${m.clienteNome} — ${m.desProduto}${d.matches.length > 1 ? ` (+${d.matches.length - 1} filial)` : ""}`)
+      } else {
+        setCtrInfo("Contrato não encontrado — preencha cliente/produto manualmente.")
+      }
+    } catch {
+      setCtrInfo("Erro ao buscar contrato.")
+    }
+    setBuscandoCtr(false)
+  }
 
   const filtradas = rows.filter((r) => r.tipo === tipo)
   const totaisDia = DIAS_KEYS.map((d) => filtradas.reduce((s, r) => s + (r[d] ?? 0), 0))
   const totalGeral = totaisDia.reduce((s, v) => s + v, 0)
+  const realizadoDia = DIAS_KEYS.map((_, i) => filtradas.reduce((s, r) => s + (realDe(r.id)[i] ?? 0), 0))
+  const realizadoGeral = realizadoDia.reduce((s, v) => s + v, 0)
+  const fmt1 = (n: number) => n ? n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : ""
 
   async function salvarLinha(row: Prog, campo: typeof DIAS_KEYS[number], valor: string) {
     const num = parseFloat(valor) || 0
@@ -56,7 +82,8 @@ export default function ProgramacaoClient({
     })
     const nova = await res.json()
     setRows((prev) => [...prev, nova])
-    setNovaLinha({ clienteNome: "", produto: "", boxId: "" })
+    setNovaLinha({ numeroContrato: "", clienteNome: "", produto: "", boxId: "" })
+    setCtrInfo("")
     setAddMode(false)
     setSaving(null)
   }
@@ -92,29 +119,37 @@ export default function ProgramacaoClient({
           <table className="w-full text-sm">
             <thead className="bg-gray-800 text-white">
               <tr>
-                <th className="px-3 py-3 text-left font-medium min-w-28">Box</th>
+                <th className="px-3 py-3 text-left font-medium min-w-20">Contrato</th>
+                <th className="px-3 py-3 text-left font-medium min-w-24">Box</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Cliente</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Produto</th>
                 {diasSemana.map((d, i) => (
                   <th key={i} className="px-2 py-3 text-center font-medium min-w-20">
                     <div>{DIAS[i]}</div>
                     <div className="text-xs opacity-70 font-normal">{format(new Date(d), "dd/MM", { locale: ptBR })}</div>
+                    <div className="text-[9px] opacity-60 font-normal mt-0.5">prog / real</div>
                   </th>
                 ))}
                 <th className="px-3 py-3 text-center font-medium">Total</th>
-                <th className="px-3 py-3 text-center font-medium">Realizado</th>
+                <th className="px-3 py-3 text-center font-medium">Realiz.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtradas.map((row) => (
+              {filtradas.map((row) => {
+                const real = realDe(row.id)
+                const realTotal = real.reduce((s, v) => s + v, 0)
+                return (
                 <tr key={row.id} className="hover:bg-blue-50/30">
+                  <td className="px-3 py-2">
+                    <span className="font-mono text-xs text-gray-600">{row.numeroContrato ?? "—"}</span>
+                  </td>
                   <td className="px-3 py-2">
                     <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">{row.boxCodigo ?? "—"}</span>
                   </td>
                   <td className="px-3 py-2 font-medium text-gray-800 text-xs">{row.clienteNome}</td>
                   <td className="px-3 py-2 text-gray-600 text-xs">{row.produto}</td>
-                  {DIAS_KEYS.map((d) => (
-                    <td key={d} className="px-1 py-1">
+                  {DIAS_KEYS.map((d, i) => (
+                    <td key={d} className="px-1 py-1 align-top">
                       <input
                         type="number"
                         min="0"
@@ -125,22 +160,37 @@ export default function ProgramacaoClient({
                         }`}
                         placeholder="0"
                       />
+                      <div className={`text-center text-[10px] mt-0.5 font-medium ${real[i] > 0 ? "text-green-600" : "text-gray-300"}`}
+                        title="Realizado (marcação)">
+                        {real[i] > 0 ? fmt1(real[i]) : "·"}
+                      </div>
                     </td>
                   ))}
-                  <td className="px-3 py-2 text-center font-bold text-gray-800">
+                  <td className="px-3 py-2 text-center font-bold text-gray-800 align-top">
                     {row.total.toLocaleString("pt-BR")}
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={`text-xs font-medium ${row.realizado >= row.total && row.total > 0 ? "text-green-600" : "text-gray-500"}`}>
-                      {row.realizado.toLocaleString("pt-BR")}
+                  <td className="px-3 py-2 text-center align-top">
+                    <span className={`text-xs font-bold ${realTotal >= row.total && row.total > 0 ? "text-green-600" : realTotal > 0 ? "text-amber-600" : "text-gray-400"}`}>
+                      {realTotal > 0 ? fmt1(realTotal) : "—"}
                     </span>
+                    {row.total > 0 && (
+                      <div className="text-[10px] text-gray-400">{Math.round((realTotal / row.total) * 100)}%</div>
+                    )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
 
               {/* Linha de nova entrada */}
               {addMode && (
                 <tr className="bg-blue-50">
+                  <td className="px-2 py-2">
+                    <input value={novaLinha.numeroContrato} placeholder="Nº contr."
+                      onChange={(e) => setNovaLinha((p) => ({ ...p, numeroContrato: e.target.value }))}
+                      onBlur={(e) => buscarContrato(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && buscarContrato((e.target as HTMLInputElement).value)}
+                      className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none font-mono" />
+                  </td>
                   <td className="px-2 py-2">
                     <select value={novaLinha.boxId} onChange={(e) => setNovaLinha((p) => ({ ...p, boxId: e.target.value }))}
                       className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none">
@@ -149,18 +199,16 @@ export default function ProgramacaoClient({
                     </select>
                   </td>
                   <td className="px-2 py-2">
-                    <select value={novaLinha.clienteNome} onChange={(e) => setNovaLinha((p) => ({ ...p, clienteNome: e.target.value }))}
-                      className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none">
-                      <option value="">Cliente *</option>
-                      {clientes.map((c) => <option key={c.id} value={c.nome}>{c.codigo}</option>)}
-                    </select>
+                    <input list="clientes-list" value={novaLinha.clienteNome} placeholder={buscandoCtr ? "buscando…" : "Cliente *"}
+                      onChange={(e) => setNovaLinha((p) => ({ ...p, clienteNome: e.target.value }))}
+                      className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none" />
+                    <datalist id="clientes-list">{clientes.map((c) => <option key={c.id} value={c.nome}>{c.codigo}</option>)}</datalist>
                   </td>
                   <td className="px-2 py-2">
-                    <select value={novaLinha.produto} onChange={(e) => setNovaLinha((p) => ({ ...p, produto: e.target.value }))}
-                      className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none">
-                      <option value="">Produto *</option>
-                      {produtos.map((p) => <option key={p.id} value={p.descricao}>{p.codigo}</option>)}
-                    </select>
+                    <input list="produtos-list" value={novaLinha.produto} placeholder="Produto *"
+                      onChange={(e) => setNovaLinha((p) => ({ ...p, produto: e.target.value }))}
+                      className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none" />
+                    <datalist id="produtos-list">{produtos.map((p) => <option key={p.id} value={p.descricao}>{p.codigo}</option>)}</datalist>
                   </td>
                   {DIAS_KEYS.map((d) => <td key={d} className="px-1 py-2"><div className="w-full h-7 bg-gray-100 rounded" /></td>)}
                   <td className="px-2 py-2">
@@ -174,23 +222,29 @@ export default function ProgramacaoClient({
                   </td>
                 </tr>
               )}
+              {addMode && ctrInfo && (
+                <tr className="bg-blue-50">
+                  <td colSpan={13} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td>
+                </tr>
+              )}
 
               {/* Linha de totais */}
               {filtradas.length > 0 && (
                 <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
-                  <td colSpan={3} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
+                  <td colSpan={4} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
                   {totaisDia.map((t, i) => (
-                    <td key={i} className="px-2 py-2.5 text-center text-xs text-blue-700">
-                      {t > 0 ? t.toLocaleString("pt-BR") : "—"}
+                    <td key={i} className="px-2 py-2.5 text-center text-xs align-top">
+                      <div className="text-blue-700">{t > 0 ? t.toLocaleString("pt-BR") : "—"}</div>
+                      <div className="text-[10px] text-green-600 font-medium">{realizadoDia[i] > 0 ? fmt1(realizadoDia[i]) : ""}</div>
                     </td>
                   ))}
-                  <td className="px-3 py-2.5 text-center text-blue-800">{totalGeral.toLocaleString("pt-BR")}</td>
-                  <td />
+                  <td className="px-3 py-2.5 text-center text-blue-800 align-top">{totalGeral.toLocaleString("pt-BR")}</td>
+                  <td className="px-3 py-2.5 text-center text-green-700 align-top">{realizadoGeral > 0 ? fmt1(realizadoGeral) : "—"}</td>
                 </tr>
               )}
 
               {filtradas.length === 0 && !addMode && (
-                <tr><td colSpan={11} className="py-12 text-center text-gray-400">
+                <tr><td colSpan={13} className="py-12 text-center text-gray-400">
                   Nenhuma programação para a semana {semana}. Clique em "Adicionar linha" para começar.
                 </td></tr>
               )}
