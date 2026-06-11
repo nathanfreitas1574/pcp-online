@@ -1,7 +1,14 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { Search, FileText, Upload, X, Download, Package, Users, BarChart3, RefreshCw } from "lucide-react"
+import { Search, FileText, Upload, X, Package, Users, BarChart3, RefreshCw, Plus, Pencil, Save, Trash2 } from "lucide-react"
+
+const VAZIO: Partial<Contrato> = {
+  filial: "", numero: "", descricao: "", clienteNome: "", desProduto: "", codProduto: "",
+  descTabela: "", tipoMercado: "", qtdContratada: 0, safra: "", dataCtr: null,
+  stsAssinatura: "Aberto", stsFiscal: "Aberto", stsFinanceiro: "Aberto", stsEstoque: "Aberto",
+  modalidade: "", centroCusto: "",
+}
 
 type Contrato = {
   id: string
@@ -52,11 +59,17 @@ export default function ContratosClient({
   const [clienteSel, setClienteSel] = useState("")
   const [safraSel,   setSafraSel]   = useState(safras[0] ?? "")
   const [tabelaSel,  setTabelaSel]  = useState("")
+  const [dataIni,    setDataIni]    = useState("")
+  const [dataFim,    setDataFim]    = useState("")
   const [contratos,  setContratos]  = useState<Contrato[]>([])
   const [loading,    setLoading]    = useState(false)
   const [buscado,    setBuscado]    = useState(false)
   const [importing,  setImporting]  = useState(false)
   const [importMsg,  setImportMsg]  = useState("")
+  // modal criar/editar
+  const [editando,   setEditando]   = useState<Partial<Contrato> | null>(null)
+  const [salvando,   setSalvando]   = useState(false)
+  const [erroForm,   setErroForm]   = useState("")
 
   // KPIs globais com base nos totaisGeral
   const totalContratos = totaisGeral.reduce((s, t) => s + t.count, 0)
@@ -71,13 +84,43 @@ export default function ContratosClient({
     if (clienteSel) p.set("cliente", clienteSel)
     if (safraSel)   p.set("safra",   safraSel)
     if (tabelaSel)  p.set("tabela",  tabelaSel)
+    if (dataIni)    p.set("dataInicio", dataIni)
+    if (dataFim)    p.set("dataFim",    dataFim)
 
     const res  = await fetch(`/api/contratos?${p}`)
     const data = await res.json()
     setContratos(data.contratos ?? [])
     setBuscado(true)
     setLoading(false)
-  }, [busca, clienteSel, safraSel, tabelaSel])
+  }, [busca, clienteSel, safraSel, tabelaSel, dataIni, dataFim])
+
+  // criar/editar
+  async function salvarContrato() {
+    if (!editando) return
+    if (!editando.numero?.toString().trim()) { setErroForm("Informe o número do contrato."); return }
+    setSalvando(true); setErroForm("")
+    const isEdit = !!editando.id
+    const url = isEdit ? `/api/contratos/${editando.id}` : "/api/contratos"
+    const res = await fetch(url, {
+      method: isEdit ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editando),
+    })
+    setSalvando(false)
+    if (res.ok) {
+      setEditando(null)
+      if (buscado) await buscar()
+    } else {
+      const d = await res.json().catch(() => ({}))
+      setErroForm(d.error ?? "Erro ao salvar.")
+    }
+  }
+
+  async function excluirContrato(c: Contrato) {
+    if (!confirm(`Desativar o contrato ${c.numero} (${c.clienteNome})?`)) return
+    const res = await fetch(`/api/contratos/${c.id}`, { method: "DELETE" })
+    if (res.ok) setContratos(prev => prev.filter(x => x.id !== c.id))
+  }
 
   async function importarExcel(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -131,13 +174,19 @@ export default function ContratosClient({
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">Contratos do TOTVS — armazenagem de fertilizantes, embalagens e lacres</p>
         </div>
-        <label className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition ${
-          importing ? "bg-gray-200 text-gray-500" : "bg-indigo-600 hover:bg-indigo-700 text-white"
-        }`}>
-          <Upload size={15} />
-          {importing ? "Importando…" : "Importar Excel"}
-          <input type="file" accept=".xlsx,.xls" className="hidden" onChange={importarExcel} disabled={importing} />
-        </label>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setEditando({ ...VAZIO }); setErroForm("") }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition">
+            <Plus size={15} /> Novo Contrato
+          </button>
+          <label className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition ${
+            importing ? "bg-gray-200 text-gray-500" : "bg-indigo-600 hover:bg-indigo-700 text-white"
+          }`}>
+            <Upload size={15} />
+            {importing ? "Importando…" : "Importar Excel"}
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={importarExcel} disabled={importing} />
+          </label>
+        </div>
       </div>
 
       {importMsg && (
@@ -200,6 +249,16 @@ export default function ContratosClient({
               {tabelas.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
+          <div>
+            <label className="block text-[11px] text-gray-400 mb-0.5">Data do contrato — de</label>
+            <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-400 mb-0.5">até</label>
+            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
         </div>
         <div className="flex gap-2 mt-3">
           <button onClick={buscar} disabled={loading}
@@ -208,7 +267,7 @@ export default function ContratosClient({
             {loading ? "Buscando…" : "Buscar"}
           </button>
           {buscado && (
-            <button onClick={() => { setContratos([]); setBuscado(false); setBusca(""); setClienteSel(""); setTabelaSel("") }}
+            <button onClick={() => { setContratos([]); setBuscado(false); setBusca(""); setClienteSel(""); setTabelaSel(""); setDataIni(""); setDataFim("") }}
               className="flex items-center gap-1.5 text-sm text-gray-500 border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 transition">
               <X size={14} /> Limpar
             </button>
@@ -249,6 +308,7 @@ export default function ContratosClient({
                       <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Safra</th>
                       <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Sts.Assin</th>
                       <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Sts.Estoq</th>
+                      <th className="px-3 py-2.5 text-center font-semibold text-gray-600">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -287,6 +347,18 @@ export default function ContratosClient({
                         <td className="px-3 py-2.5 text-gray-500">{c.safra ?? "—"}</td>
                         <td className="px-3 py-2.5">{sts(c.stsAssinatura)}</td>
                         <td className="px-3 py-2.5">{sts(c.stsEstoque)}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => { setEditando({ ...c, dataCtr: c.dataCtr ? c.dataCtr.slice(0,10) : null }); setErroForm("") }}
+                              className="p-1.5 rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition" title="Editar">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => excluirContrato(c)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition" title="Desativar">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -355,6 +427,69 @@ export default function ContratosClient({
           <p className="text-sm mt-1">ou importe um novo arquivo Excel com o botão <strong>Importar Excel</strong></p>
         </div>
       )}
+
+      {/* Modal criar/editar */}
+      {editando && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setEditando(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 sticky top-0 bg-white">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                {editando.id ? <><Pencil size={16} className="text-blue-600"/> Editar contrato {editando.numero}</> : <><Plus size={16} className="text-blue-600"/> Novo contrato</>}
+              </h3>
+              <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+            </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Campo label="Número *" value={editando.numero ?? ""} onChange={v => setEditando(p => ({ ...p!, numero: v }))} disabled={!!editando.id} />
+              <Campo label="Filial" value={editando.filial ?? ""} onChange={v => setEditando(p => ({ ...p!, filial: v }))} placeholder="010101-..." />
+              <Campo label="Cliente *" value={editando.clienteNome ?? ""} onChange={v => setEditando(p => ({ ...p!, clienteNome: v }))} full />
+              <Campo label="Descrição" value={editando.descricao ?? ""} onChange={v => setEditando(p => ({ ...p!, descricao: v }))} full />
+              <Campo label="Cód. Produto" value={editando.codProduto ?? ""} onChange={v => setEditando(p => ({ ...p!, codProduto: v }))} />
+              <Campo label="Descrição Produto" value={editando.desProduto ?? ""} onChange={v => setEditando(p => ({ ...p!, desProduto: v }))} />
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo (tabela)</label>
+                <input list="tabelas-list" value={editando.descTabela ?? ""} onChange={e => setEditando(p => ({ ...p!, descTabela: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <datalist id="tabelas-list">{tabelas.map(t => <option key={t} value={t} />)}</datalist>
+              </div>
+              <Campo label="Qtd. Contratada" type="number" value={String(editando.qtdContratada ?? 0)} onChange={v => setEditando(p => ({ ...p!, qtdContratada: Number(v) || 0 }))} />
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Safra</label>
+                <input list="safras-list" value={editando.safra ?? ""} onChange={e => setEditando(p => ({ ...p!, safra: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <datalist id="safras-list">{safras.map(s => <option key={s} value={s} />)}</datalist>
+              </div>
+              <Campo label="Data do contrato" type="date" value={(editando.dataCtr as string) ?? ""} onChange={v => setEditando(p => ({ ...p!, dataCtr: v }))} />
+              <Campo label="Tipo Mercado" value={editando.tipoMercado ?? ""} onChange={v => setEditando(p => ({ ...p!, tipoMercado: v }))} />
+              <Campo label="Modalidade" value={editando.modalidade ?? ""} onChange={v => setEditando(p => ({ ...p!, modalidade: v }))} />
+              <Campo label="Sts. Assinatura" value={editando.stsAssinatura ?? ""} onChange={v => setEditando(p => ({ ...p!, stsAssinatura: v }))} />
+              <Campo label="Sts. Estoque" value={editando.stsEstoque ?? ""} onChange={v => setEditando(p => ({ ...p!, stsEstoque: v }))} />
+              <Campo label="Sts. Fiscal" value={editando.stsFiscal ?? ""} onChange={v => setEditando(p => ({ ...p!, stsFiscal: v }))} />
+              <Campo label="Sts. Financeiro" value={editando.stsFinanceiro ?? ""} onChange={v => setEditando(p => ({ ...p!, stsFinanceiro: v }))} />
+            </div>
+            {erroForm && <div className="mx-5 mb-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erroForm}</div>}
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 sticky bottom-0 bg-white">
+              <button onClick={() => setEditando(null)} className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">Cancelar</button>
+              <button onClick={salvarContrato} disabled={salvando}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+                <Save size={15} /> {salvando ? "Salvando…" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Campo({ label, value, onChange, type = "text", placeholder, disabled, full }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; disabled?: boolean; full?: boolean
+}) {
+  return (
+    <div className={full ? "sm:col-span-2" : ""}>
+      <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
+      <input type={type} value={value} placeholder={placeholder} disabled={disabled}
+        onChange={e => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500" />
     </div>
   )
 }

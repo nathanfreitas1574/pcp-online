@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
   const safra      = searchParams.get("safra")      || undefined
   const tabela     = searchParams.get("tabela")     || undefined
   const busca      = searchParams.get("busca")      || undefined
+  const dataInicio = searchParams.get("dataInicio") || undefined
+  const dataFim    = searchParams.get("dataFim")    || undefined
   const ativo      = searchParams.get("ativo")
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,6 +23,11 @@ export async function GET(req: NextRequest) {
   if (produto) where.desProduto  = { contains: produto,  mode: "insensitive" }
   if (safra)   where.safra       = safra
   if (tabela)  where.descTabela  = tabela
+  if (dataInicio || dataFim) {
+    where.dataCtr = {}
+    if (dataInicio) where.dataCtr.gte = new Date(dataInicio)
+    if (dataFim)    { const d = new Date(dataFim); d.setHours(23, 59, 59, 999); where.dataCtr.lte = d }
+  }
   if (busca)   where.OR = [
     { numero:      { contains: busca, mode: "insensitive" } },
     { descricao:   { contains: busca, mode: "insensitive" } },
@@ -101,7 +108,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, criados, atualizados, total: items.length })
   }
 
-  // Criação única
-  const c = await prisma.contratoArmazenagem.create({ data: body })
+  // Criação única (manual)
+  if (!body.numero || !String(body.numero).trim())
+    return NextResponse.json({ error: "Número do contrato é obrigatório." }, { status: 400 })
+
+  const filial = (body.filial || "").toString().trim()
+  const numero = String(body.numero).trim()
+  const existe = await prisma.contratoArmazenagem.findUnique({ where: { filial_numero: { filial, numero } } })
+  if (existe)
+    return NextResponse.json({ error: `Já existe contrato ${numero} na filial "${filial || "(sem filial)"}".` }, { status: 409 })
+
+  const c = await prisma.contratoArmazenagem.create({
+    data: {
+      filial,
+      numero,
+      descricao:     (body.descricao || "").toString(),
+      clienteNome:   (body.clienteNome || "").toString(),
+      desProduto:    (body.desProduto || "").toString(),
+      codProduto:    body.codProduto    || null,
+      descTabela:    body.descTabela    || null,
+      tipoMercado:   body.tipoMercado   || null,
+      qtdContratada: Number(body.qtdContratada) || 0,
+      safra:         body.safra         || null,
+      dataCtr:       body.dataCtr ? new Date(body.dataCtr) : null,
+      stsAssinatura: body.stsAssinatura || "Aberto",
+      stsFiscal:     body.stsFiscal     || "Aberto",
+      stsFinanceiro: body.stsFinanceiro || "Aberto",
+      stsEstoque:    body.stsEstoque    || "Aberto",
+      modalidade:    body.modalidade    || null,
+      centroCusto:   body.centroCusto   || null,
+      ativo: true,
+    },
+  })
   return NextResponse.json(c)
 }
