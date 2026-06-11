@@ -1116,6 +1116,61 @@ model MarcacaoVeiculo {
   @@index([dataCarregamento])
 }
 
+// ─── CONCILIADOR (Marcação × Romaneio × Estoque Contado) ─────────────────────
+// Cada lote = uma rodada de conciliação (upload das 3 planilhas num dia).
+model ConciliacaoLote {
+  id              String   @id @default(cuid())
+  data            DateTime @default(now())
+  tolerancia      Float    @default(0)   // toneladas
+  arquivoMarcacao String?
+  arquivoRomaneio String?
+  arquivoEstoque  String?
+  usuarioNome     String?
+  total           Int      @default(0)
+  conciliados     Int      @default(0)
+  divergentes     Int      @default(0)
+  descarga        Int      @default(0)
+  carga           Int      @default(0)
+  itens           ConciliacaoItem[]
+  createdAt       DateTime @default(now())
+
+  @@index([data])
+}
+
+model ConciliacaoItem {
+  id               String   @id @default(cuid())
+  loteId           String
+  lote             ConciliacaoLote @relation(fields: [loteId], references: [id], onDelete: Cascade)
+  origem           String   // MARCACAO | ESTOQUE
+  operacao         String?  // CARGA | DESCARGA
+  ordem            String?
+  numeroNF         String?
+  placa            String?
+  cliente          String?
+  produto          String?
+  produtoRomaneio  String?
+  produtoEstoque   String?
+  pesoMarcacao     Float?
+  pesoRomaneio     Float?
+  pesoEstoque      Float?
+  difPeso          Float?
+  presencaMarcacao Boolean  @default(false)
+  presencaRomaneio Boolean  @default(false)
+  presencaEstoque  Boolean  @default(false)
+  stsRomaneio      String?
+  armazem          String?
+  status           String   // CONCILIADO | DIVERGENTE
+  divergencias     String?  // tipos separados por vírgula
+  justificativa    String?
+  justificadoPor   String?
+  justificadoEm    DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([loteId])
+  @@index([status])
+  @@index([operacao])
+}
+
 // ─── CONTROLE DE OCORRÊNCIAS ──────────────────────────────────────────────────
 enum OcorrenciaTipo {
   DERRAMAMENTO
