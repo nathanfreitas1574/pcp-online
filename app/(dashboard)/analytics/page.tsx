@@ -55,11 +55,21 @@ export default async function AnalyticsPage() {
   }
   const movMensal = [...movPorMes.entries()].map(([mes, v]) => ({ label: mes, ...v }))
 
+  // Detalhe de descargas para o gráfico drill-down (Cliente → Produto → Transportadora → Placa)
+  const descargaDetalhe = descargasRegistro.map((r) => ({
+    cliente: r.clienteNome,
+    produto: r.produto,
+    transportadora: r.transportadora ?? "—",
+    placa: r.placa ?? "—",
+    peso: Math.round(r.pesoSaida ?? 0),
+  }))
+
   return (
     <AnalyticsClient
       ranking={ranking}
       tmpMensal={tmpMensal}
       movMensal={movMensal}
+      descargaDetalhe={descargaDetalhe}
       totalDescarga={descargasRegistro.length}
       totalTMP={tmpHistorico.length}
       tmpMedioGeral={tmpHistorico.length > 0 ? Math.round(tmpHistorico.reduce((s, t) => s + (t.tmpMinutos ?? 0), 0) / tmpHistorico.length) : 0}

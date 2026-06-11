@@ -9,6 +9,12 @@ import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, Target, U
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import type { PlanoAcaoItem } from "./PlanoAcaoClient"
+import DrillBarChart from "@/components/DrillBarChart"
+
+const STATUS_LABEL: Record<string, string> = {
+  PENDENTE: "Pendente", EM_ANDAMENTO: "Em andamento", CONCLUIDO: "Concluído", CANCELADO: "Cancelado",
+}
+const PRIO_LABEL: Record<string, string> = { ALTA: "Alta", MEDIA: "Média", BAIXA: "Baixa" }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -350,6 +356,26 @@ export default function PlanoAcaoIndicadores({ planos }: { planos: PlanoAcaoItem
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* ── Explorar ações (drill-down): Responsável → Prioridade → Status → Ação ── */}
+      <DrillBarChart
+        titulo="Explorar ações — clique para detalhar"
+        dados={planos.map(p => ({
+          responsavel: p.quem || "—",
+          prioridade: PRIO_LABEL[p.prioridade] ?? p.prioridade,
+          status: STATUS_LABEL[p.status] ?? p.status,
+          acao: p.oQue,
+          qtd: 1,
+        }))}
+        niveis={[
+          { campo: "responsavel", titulo: "Responsável" },
+          { campo: "prioridade", titulo: "Prioridade" },
+          { campo: "status", titulo: "Status" },
+          { campo: "acao", titulo: "Ação" },
+        ]}
+        medidas={[{ campo: "qtd", nome: "Ações", cor: "#7c3aed" }]}
+        semDados="Sem ações cadastradas."
+      />
 
       {/* ── Linha 4: Ranking de responsáveis ──────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

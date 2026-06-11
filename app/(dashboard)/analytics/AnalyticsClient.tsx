@@ -1,15 +1,18 @@
 "use client"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts"
 import { TrendingUp, Users, Clock, Truck } from "lucide-react"
+import DrillBarChart from "@/components/DrillBarChart"
 
 type RankingItem = { nome: string; volume: number }
+type DescargaDetalhe = { cliente: string; produto: string; transportadora: string; placa: string; peso: number }
 
 export default function AnalyticsClient({
-  ranking, tmpMensal, movMensal, totalDescarga, totalTMP, tmpMedioGeral
+  ranking, tmpMensal, movMensal, descargaDetalhe, totalDescarga, totalTMP, tmpMedioGeral
 }: {
   ranking: RankingItem[]
   tmpMensal: { label: string; tmp: number }[]
   movMensal: { label: string; programadas: number; concluidas: number }[]
+  descargaDetalhe: DescargaDetalhe[]
   totalDescarga: number; totalTMP: number; tmpMedioGeral: number
 }) {
   const maxRanking = ranking[0]?.volume ?? 1
@@ -73,6 +76,24 @@ export default function AnalyticsClient({
           ) : <p className="text-gray-400 text-sm text-center py-8">Dados disponíveis após movimentações.</p>}
         </div>
       </div>
+
+      {/* Drill-down: volume descarregado por Cliente → Produto → Transportadora → Placa */}
+      {descargaDetalhe.length > 0 && (
+        <div className="mb-4">
+          <DrillBarChart
+            titulo="Volume descarregado (12 meses) — clique para detalhar"
+            dados={descargaDetalhe}
+            niveis={[
+              { campo: "cliente", titulo: "Cliente" },
+              { campo: "produto", titulo: "Produto" },
+              { campo: "transportadora", titulo: "Transportadora" },
+              { campo: "placa", titulo: "Placa" },
+            ]}
+            medidas={[{ campo: "peso", nome: "Volume", cor: "#3b82f6" }]}
+            unidade="t"
+          />
+        </div>
+      )}
 
       {/* Ranking de Clientes */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
