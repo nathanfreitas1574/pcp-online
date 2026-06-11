@@ -17,7 +17,9 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer())
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: false, defval: null }) as unknown[][]
+  // raw: true mantém números crus (evita ambiguidade de separador de milhar);
+  // cellDates: true converte datas reais em Date. Texto continua texto.
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null }) as unknown[][]
 
   if (!rows.length)
     return NextResponse.json({ error: "Planilha vazia" }, { status: 400 })

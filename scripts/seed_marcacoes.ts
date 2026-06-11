@@ -13,7 +13,7 @@ async function main() {
 
   const wb = XLSX.readFile(file, { cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: false, defval: null }) as unknown[][]
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null }) as unknown[][]
 
   const mapeadas = mapHeaders(rows[0])
   console.log("Campos reconhecidos:", Object.keys(mapeadas).join(", "))
