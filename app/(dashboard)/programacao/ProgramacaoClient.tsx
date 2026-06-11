@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Save, Calendar } from "lucide-react"
+import { Plus, Save, Calendar, Table2, BarChart3 } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import ProgramacaoGraficos from "./ProgramacaoGraficos"
 
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
@@ -39,6 +40,7 @@ export default function ProgramacaoClient({
   const [addMode, setAddMode] = useState(false)
   const [buscandoCtr, setBuscandoCtr] = useState(false)
   const [ctrInfo, setCtrInfo] = useState<string>("")
+  const [view, setView] = useState<"tabela" | "graficos">("tabela")
 
   const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
 
@@ -116,13 +118,30 @@ export default function ProgramacaoClient({
               </button>
             ))}
           </div>
-          <button onClick={() => setAddMode(true)}
-            className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">
-            <Plus size={15} /> Adicionar linha
-          </button>
+          <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
+            <button onClick={() => setView("tabela")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "tabela" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>
+              <Table2 size={13} /> Tabela
+            </button>
+            <button onClick={() => setView("graficos")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "graficos" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>
+              <BarChart3 size={13} /> Gráficos
+            </button>
+          </div>
+          {view === "tabela" && (
+            <button onClick={() => setAddMode(true)}
+              className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">
+              <Plus size={15} /> Adicionar linha
+            </button>
+          )}
         </div>
       </div>
 
+      {view === "graficos" && (
+        <ProgramacaoGraficos rows={filtradas} realizadoPorDia={realizadoPorDia} />
+      )}
+
+      {view === "tabela" && (<>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -296,6 +315,7 @@ export default function ProgramacaoClient({
         <span className="text-gray-400">|</span>
         <span><strong>Saldo</strong> = programado − realizado (▲+ = excedente)</span>
       </div>
+      </>)}
     </div>
   )
 }
