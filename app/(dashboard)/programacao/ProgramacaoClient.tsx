@@ -8,6 +8,15 @@ import { ptBR } from "date-fns/locale"
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
 
+// Estilo do realizado de um dia comparado ao programado daquele dia
+function estiloDia(prog: number, real: number): { cls: string; sym: string } {
+  if (real <= 0) return { cls: "text-gray-300", sym: "" }
+  if (prog === 0) return { cls: "text-amber-600 bg-amber-50 rounded font-semibold", sym: "▲" }  // realizado sem programação
+  if (real > prog + 0.05) return { cls: "text-amber-600 bg-amber-50 rounded font-semibold", sym: "▲" } // ultrapassou
+  if (real >= prog - 0.05) return { cls: "text-green-700 bg-green-50 rounded font-semibold", sym: "✓" } // bateu
+  return { cls: "text-blue-600", sym: "" } // parcial
+}
+
 type Prog = {
   id: string; clienteNome: string; produto: string; boxCodigo: string | null; numeroContrato: string | null
   dom: number; seg: number; ter: number; qua: number; qui: number; sex: number; sab: number
@@ -132,6 +141,7 @@ export default function ProgramacaoClient({
                 ))}
                 <th className="px-3 py-3 text-center font-medium">Total</th>
                 <th className="px-3 py-3 text-center font-medium">Realiz.</th>
+                <th className="px-3 py-3 text-center font-medium">Saldo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -148,24 +158,26 @@ export default function ProgramacaoClient({
                   </td>
                   <td className="px-3 py-2 font-medium text-gray-800 text-xs">{row.clienteNome}</td>
                   <td className="px-3 py-2 text-gray-600 text-xs">{row.produto}</td>
-                  {DIAS_KEYS.map((d, i) => (
+                  {DIAS_KEYS.map((d, i) => {
+                    const e = estiloDia(row[d] ?? 0, real[i])
+                    return (
                     <td key={d} className="px-1 py-1 align-top">
                       <input
                         type="number"
                         min="0"
                         defaultValue={row[d] || ""}
-                        onBlur={(e) => salvarLinha(row, d, e.target.value)}
+                        onBlur={(ev) => salvarLinha(row, d, ev.target.value)}
                         className={`w-full text-center text-xs border rounded px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                           saving === row.id + d ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-gray-400"
                         }`}
                         placeholder="0"
                       />
-                      <div className={`text-center text-[10px] mt-0.5 font-medium ${real[i] > 0 ? "text-green-600" : "text-gray-300"}`}
-                        title="Realizado (marcação)">
-                        {real[i] > 0 ? fmt1(real[i]) : "·"}
+                      <div className={`text-center text-[10px] mt-0.5 px-0.5 ${e.cls}`} title="Realizado (marcação)">
+                        {real[i] > 0 ? `${e.sym} ${fmt1(real[i])}`.trim() : "·"}
                       </div>
                     </td>
-                  ))}
+                    )
+                  })}
                   <td className="px-3 py-2 text-center font-bold text-gray-800 align-top">
                     {row.total.toLocaleString("pt-BR")}
                   </td>
@@ -176,6 +188,15 @@ export default function ProgramacaoClient({
                     {row.total > 0 && (
                       <div className="text-[10px] text-gray-400">{Math.round((realTotal / row.total) * 100)}%</div>
                     )}
+                  </td>
+                  <td className="px-3 py-2 text-center align-top">
+                    {(() => {
+                      const saldo = row.total - realTotal
+                      if (row.total === 0 && realTotal === 0) return <span className="text-gray-300 text-xs">—</span>
+                      if (Math.abs(saldo) < 0.05) return <span className="text-green-600 text-xs font-bold" title="Programado atingido">✓ 0</span>
+                      if (saldo > 0) return <span className="text-gray-500 text-xs font-medium" title="Falta realizar">{fmt1(saldo)}</span>
+                      return <span className="text-amber-600 text-xs font-bold" title="Ultrapassou o programado">▲ +{fmt1(-saldo)}</span>
+                    })()}
                   </td>
                 </tr>
                 )
@@ -220,11 +241,12 @@ export default function ProgramacaoClient({
                   <td className="px-2 py-2">
                     <button onClick={() => setAddMode(false)} className="text-xs text-gray-400 hover:text-red-500">✕</button>
                   </td>
+                  <td />
                 </tr>
               )}
               {addMode && ctrInfo && (
                 <tr className="bg-blue-50">
-                  <td colSpan={13} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td>
+                  <td colSpan={14} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td>
                 </tr>
               )}
 
@@ -232,25 +254,47 @@ export default function ProgramacaoClient({
               {filtradas.length > 0 && (
                 <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
                   <td colSpan={4} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
-                  {totaisDia.map((t, i) => (
+                  {totaisDia.map((t, i) => {
+                    const e = estiloDia(t, realizadoDia[i])
+                    return (
                     <td key={i} className="px-2 py-2.5 text-center text-xs align-top">
                       <div className="text-blue-700">{t > 0 ? t.toLocaleString("pt-BR") : "—"}</div>
-                      <div className="text-[10px] text-green-600 font-medium">{realizadoDia[i] > 0 ? fmt1(realizadoDia[i]) : ""}</div>
+                      <div className={`text-[10px] px-0.5 ${e.cls}`}>{realizadoDia[i] > 0 ? `${e.sym} ${fmt1(realizadoDia[i])}`.trim() : ""}</div>
                     </td>
-                  ))}
+                    )
+                  })}
                   <td className="px-3 py-2.5 text-center text-blue-800 align-top">{totalGeral.toLocaleString("pt-BR")}</td>
                   <td className="px-3 py-2.5 text-center text-green-700 align-top">{realizadoGeral > 0 ? fmt1(realizadoGeral) : "—"}</td>
+                  <td className="px-3 py-2.5 text-center align-top">
+                    {(() => {
+                      const saldo = totalGeral - realizadoGeral
+                      if (totalGeral === 0 && realizadoGeral === 0) return <span className="text-gray-300 text-xs">—</span>
+                      if (Math.abs(saldo) < 0.05) return <span className="text-green-600 text-xs">✓</span>
+                      if (saldo > 0) return <span className="text-gray-600 text-xs">{fmt1(saldo)}</span>
+                      return <span className="text-amber-600 text-xs">▲ +{fmt1(-saldo)}</span>
+                    })()}
+                  </td>
                 </tr>
               )}
 
               {filtradas.length === 0 && !addMode && (
-                <tr><td colSpan={13} className="py-12 text-center text-gray-400">
+                <tr><td colSpan={14} className="py-12 text-center text-gray-400">
                   Nenhuma programação para a semana {semana}. Clique em "Adicionar linha" para começar.
                 </td></tr>
               )}
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Legenda dos indicadores */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[11px] text-gray-500">
+        <span className="font-semibold text-gray-600">Realizado (marcação):</span>
+        <span><span className="text-green-700 font-semibold">✓ verde</span> = atingiu o programado</span>
+        <span><span className="text-amber-600 font-semibold">▲ âmbar</span> = ultrapassou / sem programação</span>
+        <span><span className="text-blue-600 font-semibold">azul</span> = parcial</span>
+        <span className="text-gray-400">|</span>
+        <span><strong>Saldo</strong> = programado − realizado (▲+ = excedente)</span>
       </div>
     </div>
   )
