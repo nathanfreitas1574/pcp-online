@@ -1,5 +1,4 @@
 "use client"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts"
 import { TrendingUp, Users, Clock, Truck } from "lucide-react"
 import DrillBarChart from "@/components/DrillBarChart"
 
@@ -7,12 +6,12 @@ type RankingItem = { nome: string; volume: number }
 type DescargaDetalhe = { cliente: string; produto: string; transportadora: string; placa: string; peso: number }
 
 export default function AnalyticsClient({
-  ranking, tmpMensal, movMensal, descargaDetalhe, totalDescarga, totalTMP, tmpMedioGeral
+  ranking, descargaDetalhe, tmpDetalhe, movDetalhe, totalDescarga, totalTMP, tmpMedioGeral
 }: {
   ranking: RankingItem[]
-  tmpMensal: { label: string; tmp: number }[]
-  movMensal: { label: string; programadas: number; concluidas: number }[]
   descargaDetalhe: DescargaDetalhe[]
+  tmpDetalhe: { mes: string; cliente: string; produto: string; tmp: number }[]
+  movDetalhe: { mes: string; status: string; qtd: number }[]
   totalDescarga: number; totalTMP: number; tmpMedioGeral: number
 }) {
   const maxRanking = ranking[0]?.volume ?? 1
@@ -42,39 +41,33 @@ export default function AnalyticsClient({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        {/* TMP Mensal */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-700 mb-4 text-sm">TMP Médio por Mês (minutos)</h3>
-          {tmpMensal.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={tmpMensal}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                <XAxis dataKey="label" tick={{fontSize:11}}/>
-                <YAxis tick={{fontSize:11}}/>
-                <Tooltip formatter={(v) => [`${v}min`, "TMP Médio"]}/>
-                <Line type="monotone" dataKey="tmp" name="TMP Médio" stroke="#3b82f6" strokeWidth={2} dot={{r:4}}/>
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <p className="text-gray-400 text-sm text-center py-8">Dados disponíveis após registros de TMP.</p>}
-        </div>
+        {/* TMP médio por mês → Cliente → Produto (drill-down) */}
+        <DrillBarChart
+          titulo="TMP médio por mês (min) — clique para detalhar"
+          dados={tmpDetalhe}
+          niveis={[
+            { campo: "mes", titulo: "Mês" },
+            { campo: "cliente", titulo: "Cliente" },
+            { campo: "produto", titulo: "Produto" },
+          ]}
+          medidas={[{ campo: "tmp", nome: "TMP médio", cor: "#3b82f6", agregacao: "media" }]}
+          unidade="min"
+          ordenar="original"
+          semDados="Dados disponíveis após registros de TMP."
+        />
 
-        {/* Movimentações Mensais */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-700 mb-4 text-sm">Movimentações por Mês</h3>
-          {movMensal.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={movMensal}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                <XAxis dataKey="label" tick={{fontSize:11}}/>
-                <YAxis tick={{fontSize:11}}/>
-                <Tooltip/>
-                <Legend wrapperStyle={{fontSize:12}}/>
-                <Bar dataKey="programadas" name="Programadas" fill="#93c5fd" radius={[3,3,0,0]}/>
-                <Bar dataKey="concluidas" name="Concluídas" fill="#22c55e" radius={[3,3,0,0]}/>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <p className="text-gray-400 text-sm text-center py-8">Dados disponíveis após movimentações.</p>}
-        </div>
+        {/* Movimentações por mês → Status (drill-down) */}
+        <DrillBarChart
+          titulo="Movimentações por mês — clique para detalhar"
+          dados={movDetalhe}
+          niveis={[
+            { campo: "mes", titulo: "Mês" },
+            { campo: "status", titulo: "Status" },
+          ]}
+          medidas={[{ campo: "qtd", nome: "Movimentações", cor: "#22c55e" }]}
+          ordenar="original"
+          semDados="Dados disponíveis após movimentações."
+        />
       </div>
 
       {/* Drill-down: volume descarregado por Cliente → Produto → Transportadora → Placa */}

@@ -1,17 +1,19 @@
 "use client"
 
-import { GraficoPizza } from "@/components/GraficoLinha"
 import DrillBarChart from "@/components/DrillBarChart"
+import DrillPieChart from "@/components/DrillPieChart"
 
 type EstoqueDetalhe = { armazem: string; box: string; produto: string; cliente: string; quantidade: number }
-type LacreStatus = { nome: string; valor: number; cor: string }
+type LacreDetalhe = { status: string; box: string }
+
+const LACRE_CORES: Record<string, string> = { "Fechado": "#22c55e", "Aberto": "#f97316", "Não conforme": "#ef4444" }
 
 export default function DashboardCharts({
   estoqueDetalhe,
-  lacresPorStatus,
+  lacreDetalhe,
 }: {
   estoqueDetalhe: EstoqueDetalhe[]
-  lacresPorStatus: LacreStatus[]
+  lacreDetalhe: LacreDetalhe[]
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -32,15 +34,18 @@ export default function DashboardCharts({
         />
       </div>
 
-      {/* Lacres por status */}
+      {/* Lacres por status → box (drill-down) */}
       <div>
-        {lacresPorStatus.length > 0 ? (
-          <GraficoPizza titulo="Lacres (últimos 30 dias)" data={lacresPorStatus.map((l) => ({ nome: l.nome, valor: l.valor, cor: l.cor }))} />
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 h-full flex items-center justify-center">
-            <p className="text-gray-400 text-sm text-center">Nenhum lacre nos últimos 30 dias</p>
-          </div>
-        )}
+        <DrillPieChart
+          titulo="Lacres (últimos 30 dias)"
+          dados={lacreDetalhe}
+          niveis={[
+            { campo: "status", titulo: "Status" },
+            { campo: "box", titulo: "Box" },
+          ]}
+          cores={LACRE_CORES}
+          semDados="Nenhum lacre nos últimos 30 dias"
+        />
       </div>
     </div>
   )

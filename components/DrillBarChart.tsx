@@ -13,6 +13,7 @@ export type DrillMedida = {
   cor: string
   comparaCom?: string   // se valor > valor de comparaCom → usa corExcede
   corExcede?: string
+  agregacao?: "soma" | "media"   // default soma
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,7 +27,7 @@ const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 
  * Breadcrumb permite voltar. Funciona com qualquer array de registros.
  */
 export default function DrillBarChart({
-  titulo, dados, niveis, medidas, unidade = "", semDados = "Sem dados para exibir.",
+  titulo, dados, niveis, medidas, unidade = "", semDados = "Sem dados para exibir.", ordenar = "valor",
 }: {
   titulo?: string
   dados: Registro[]
@@ -34,6 +35,7 @@ export default function DrillBarChart({
   medidas: DrillMedida[]
   unidade?: string
   semDados?: string
+  ordenar?: "valor" | "original"   // "original" preserva a ordem dos dados (ex.: meses em sequência)
 }) {
   const [caminho, setCaminho] = useState<string[]>([])
 
@@ -48,13 +50,24 @@ export default function DrillBarChart({
   const grupos = new Map<string, Record<string, number>>()
   for (const d of filtrados) {
     const chave = String(d[campoNivel] ?? "—")
-    const acc = grupos.get(chave) ?? Object.fromEntries(medidas.map(m => [m.campo, 0]))
+    const acc = grupos.get(chave) ?? { __count: 0, ...Object.fromEntries(medidas.map(m => [m.campo, 0])) }
+    acc.__count += 1
     for (const m of medidas) acc[m.campo] += Number(d[m.campo]) || 0
     grupos.set(chave, acc)
   }
   const data = [...grupos]
-    .map(([label, vals]) => ({ label, ...vals }) as Record<string, string | number>)
-    .sort((a, b) => (Number(b[medidas[0].campo]) || 0) - (Number(a[medidas[0].campo]) || 0))
+    .map(([label, vals]) => {
+      const o: Record<string, string | number> = { label }
+      for (const m of medidas) {
+        const soma = vals[m.campo]
+        o[m.campo] = m.agregacao === "media" && vals.__count > 0
+          ? Math.round((soma / vals.__count) * 10) / 10
+          : soma
+      }
+      return o
+    })
+  if (ordenar === "valor")
+    data.sort((a, b) => (Number(b[medidas[0].campo]) || 0) - (Number(a[medidas[0].campo]) || 0))
 
   const horizontal = data.length > 4
   const altura = horizontal ? Math.max(220, data.length * 46 + 60) : 300
@@ -65,7 +78,13 @@ export default function DrillBarChart({
     if (label && podeDescer) setCaminho([...caminho, label])
   }
 
-  const totaisMedida = medidas.map(m => data.reduce((s, d) => s + (Number(d[m.campo]) || 0), 0))
+  const totaisMedida = medidas.map(m => {
+    if (m.agregacao === "media") {
+      const soma = filtrados.reduce((s, d) => s + (Number(d[m.campo]) || 0), 0)
+      return filtrados.length > 0 ? Math.round((soma / filtrados.length) * 10) / 10 : 0
+    }
+    return data.reduce((s, d) => s + (Number(d[m.campo]) || 0), 0)
+  })
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">

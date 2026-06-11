@@ -33,28 +33,6 @@ export default async function AnalyticsPage() {
     .slice(0, 10)
     .map(([nome, volume]) => ({ nome, volume }))
 
-  // TMP médio por mês
-  const tmpPorMes = new Map<string, { total: number; count: number }>()
-  for (const t of tmpHistorico) {
-    const mes = new Date(t.createdAt).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
-    const atual = tmpPorMes.get(mes) ?? { total: 0, count: 0 }
-    tmpPorMes.set(mes, { total: atual.total + (t.tmpMinutos ?? 0), count: atual.count + 1 })
-  }
-  const tmpMensal = [...tmpPorMes.entries()].map(([mes, { total, count }]) => ({
-    label: mes, tmp: count > 0 ? Math.round(total / count) : 0
-  }))
-
-  // Movimentações por mês
-  const movPorMes = new Map<string, { programadas: number; concluidas: number }>()
-  for (const m of movimentacoes) {
-    const mes = new Date(m.createdAt).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
-    const atual = movPorMes.get(mes) ?? { programadas: 0, concluidas: 0 }
-    if (m.status === "PROGRAMADA") atual.programadas++
-    if (m.status === "CONCLUIDA") atual.concluidas++
-    movPorMes.set(mes, atual)
-  }
-  const movMensal = [...movPorMes.entries()].map(([mes, v]) => ({ label: mes, ...v }))
-
   // Detalhe de descargas para o gráfico drill-down (Cliente → Produto → Transportadora → Placa)
   const descargaDetalhe = descargasRegistro.map((r) => ({
     cliente: r.clienteNome,
@@ -64,12 +42,24 @@ export default async function AnalyticsPage() {
     peso: Math.round(r.pesoSaida ?? 0),
   }))
 
+  // Detalhe para drill-down dos gráficos mensais (ordem cronológica preservada)
+  const mesLabel = (d: Date) => new Date(d).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
+  const MOV_LABEL: Record<string, string> = {
+    PROGRAMADA: "Programada", CONCLUIDA: "Concluída", EM_ANDAMENTO: "Em andamento", CANCELADA: "Cancelada",
+  }
+  const tmpDetalhe = tmpHistorico.map((t) => ({
+    mes: mesLabel(t.createdAt), cliente: t.clienteNome, produto: t.produto ?? "—", tmp: t.tmpMinutos ?? 0,
+  }))
+  const movDetalhe = movimentacoes.map((m) => ({
+    mes: mesLabel(m.createdAt), status: MOV_LABEL[m.status] ?? m.status, qtd: 1,
+  }))
+
   return (
     <AnalyticsClient
       ranking={ranking}
-      tmpMensal={tmpMensal}
-      movMensal={movMensal}
       descargaDetalhe={descargaDetalhe}
+      tmpDetalhe={tmpDetalhe}
+      movDetalhe={movDetalhe}
       totalDescarga={descargasRegistro.length}
       totalTMP={tmpHistorico.length}
       tmpMedioGeral={tmpHistorico.length > 0 ? Math.round(tmpHistorico.reduce((s, t) => s + (t.tmpMinutos ?? 0), 0) / tmpHistorico.length) : 0}

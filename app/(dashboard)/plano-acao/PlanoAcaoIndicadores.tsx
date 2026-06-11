@@ -1,20 +1,21 @@
 "use client"
 
 import { useMemo } from "react"
-import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
-} from "recharts"
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, Target, Users, DollarSign } from "lucide-react"
 import { format, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import type { PlanoAcaoItem } from "./PlanoAcaoClient"
 import DrillBarChart from "@/components/DrillBarChart"
+import DrillPieChart from "@/components/DrillPieChart"
 
 const STATUS_LABEL: Record<string, string> = {
   PENDENTE: "Pendente", EM_ANDAMENTO: "Em andamento", CONCLUIDO: "Concluído", CANCELADO: "Cancelado",
 }
 const PRIO_LABEL: Record<string, string> = { ALTA: "Alta", MEDIA: "Média", BAIXA: "Baixa" }
+const STATUS_CORES: Record<string, string> = {
+  "Pendente": "#f59e0b", "Em andamento": "#3b82f6", "Concluído": "#22c55e", "Cancelado": "#9ca3af",
+}
+const PRIO_CORES: Record<string, string> = { "Alta": "#ef4444", "Média": "#f59e0b", "Baixa": "#22c55e" }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -167,6 +168,15 @@ export default function PlanoAcaoIndicadores({ planos }: { planos: PlanoAcaoItem
 
   const { text: scoreText, bg: scoreBg } = scoreColor(metrics.execScore)
 
+  // Dados detalhados (1 registro por ação) para os gráficos drill-down
+  const acoesDetalhe = planos.map(p => ({
+    responsavel: p.quem || "—",
+    prioridade: PRIO_LABEL[p.prioridade] ?? p.prioridade,
+    status: STATUS_LABEL[p.status] ?? p.status,
+    acao: p.oQue,
+    qtd: 1,
+  }))
+
   return (
     <div className="space-y-6">
 
@@ -237,61 +247,31 @@ export default function PlanoAcaoIndicadores({ planos }: { planos: PlanoAcaoItem
       {/* ── Linha 2: Donuts + Ações críticas ──────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-        {/* Donut — Status */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Distribuição por Status</p>
-          {metrics.statusDist.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">Sem dados</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie data={metrics.statusDist} dataKey="value" cx="50%" cy="50%"
-                  innerRadius={48} outerRadius={72} paddingAngle={3}>
-                  {metrics.statusDist.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v: unknown, name: unknown) => [`${v} ações`, `${name}`]} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-            {metrics.statusDist.map(d => (
-              <div key={d.name} className="flex items-center gap-1 text-xs text-gray-600">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                {d.name} ({d.value})
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Donut — Status (drill: Status → Responsável → Ação) */}
+        <DrillPieChart
+          titulo="Distribuição por Status — clique para detalhar"
+          dados={acoesDetalhe}
+          niveis={[
+            { campo: "status", titulo: "Status" },
+            { campo: "responsavel", titulo: "Responsável" },
+            { campo: "acao", titulo: "Ação" },
+          ]}
+          cores={STATUS_CORES}
+          semDados="Sem dados"
+        />
 
-        {/* Donut — Prioridade */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Distribuição por Prioridade</p>
-          {metrics.prioDist.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">Sem dados</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie data={metrics.prioDist} dataKey="value" cx="50%" cy="50%"
-                  innerRadius={48} outerRadius={72} paddingAngle={3}>
-                  {metrics.prioDist.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v: unknown, name: unknown) => [`${v} ações`, `${name}`]} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-            {metrics.prioDist.map(d => (
-              <div key={d.name} className="flex items-center gap-1 text-xs text-gray-600">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                {d.name} ({d.value})
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Donut — Prioridade (drill: Prioridade → Responsável → Ação) */}
+        <DrillPieChart
+          titulo="Distribuição por Prioridade — clique para detalhar"
+          dados={acoesDetalhe}
+          niveis={[
+            { campo: "prioridade", titulo: "Prioridade" },
+            { campo: "responsavel", titulo: "Responsável" },
+            { campo: "acao", titulo: "Ação" },
+          ]}
+          cores={PRIO_CORES}
+          semDados="Sem dados"
+        />
 
         {/* Ações críticas */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -332,41 +312,10 @@ export default function PlanoAcaoIndicadores({ planos }: { planos: PlanoAcaoItem
         </div>
       </div>
 
-      {/* ── Linha 3: Gráfico de barras por responsável ──────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Carga por Responsável</p>
-        {metrics.barData.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">Sem dados suficientes</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={metrics.barData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 12 }}
-                formatter={(v: unknown, name: unknown) => [`${v}`, `${name}`]}
-              />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="Concluídos"    stackId="a" fill="#22c55e" radius={[0,0,0,0]} />
-              <Bar dataKey="Em andamento"  stackId="a" fill="#3b82f6" radius={[0,0,0,0]} />
-              <Bar dataKey="Pendentes"     stackId="a" fill="#f59e0b" radius={[0,0,0,0]} />
-              <Bar dataKey="Vencidos"      stackId="a" fill="#ef4444" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* ── Explorar ações (drill-down): Responsável → Prioridade → Status → Ação ── */}
+      {/* ── Carga por responsável (drill: Responsável → Prioridade → Status → Ação) ── */}
       <DrillBarChart
-        titulo="Explorar ações — clique para detalhar"
-        dados={planos.map(p => ({
-          responsavel: p.quem || "—",
-          prioridade: PRIO_LABEL[p.prioridade] ?? p.prioridade,
-          status: STATUS_LABEL[p.status] ?? p.status,
-          acao: p.oQue,
-          qtd: 1,
-        }))}
+        titulo="Carga por responsável — clique para detalhar"
+        dados={acoesDetalhe}
         niveis={[
           { campo: "responsavel", titulo: "Responsável" },
           { campo: "prioridade", titulo: "Prioridade" },

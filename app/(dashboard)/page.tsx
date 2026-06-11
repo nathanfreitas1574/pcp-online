@@ -29,11 +29,10 @@ async function getStats() {
       },
       orderBy: { quantidade: "desc" },
     }),
-    // Lacres dos últimos 30 dias
-    prisma.lacre.groupBy({
-      by: ["status"],
+    // Lacres dos últimos 30 dias (com box, para o gráfico drill-down)
+    prisma.lacre.findMany({
       where: { createdAt: { gte: new Date(Date.now() - 30 * 86400000) } },
-      _count: { id: true },
+      select: { status: true, box: { select: { codigo: true } } },
     }),
     // Movimentações recentes
     prisma.movimentacao.findMany({
@@ -52,17 +51,17 @@ async function getStats() {
     quantidade: Math.round(e.quantidade),
   }))
 
-  // Lacres por status
-  const lacresPorStatus = lacresUltimos30.map((l) => ({
-    nome: l.status,
-    valor: l._count.id,
-    cor: l.status === "FECHADO" ? "#22c55e" : l.status === "NAO_CONFORME" ? "#ef4444" : "#f97316",
+  // Detalhe de lacres para o gráfico drill-down (Status → Box)
+  const LACRE_LABEL: Record<string, string> = { FECHADO: "Fechado", ABERTO: "Aberto", NAO_CONFORME: "Não conforme" }
+  const lacreDetalhe = lacresUltimos30.map((l) => ({
+    status: LACRE_LABEL[l.status] ?? l.status,
+    box: l.box?.codigo ?? "—",
   }))
 
   return {
     totalBoxes, lacresNaoConformes, movProgramadas, inventarioAberto,
     alertasAbertos, totalClientes, totalProdutos,
-    estoqueDetalhe, lacresPorStatus, movUltimas,
+    estoqueDetalhe, lacreDetalhe, movUltimas,
   }
 }
 
@@ -109,7 +108,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Gráficos */}
-      <DashboardCharts estoqueDetalhe={stats.estoqueDetalhe} lacresPorStatus={stats.lacresPorStatus} />
+      <DashboardCharts estoqueDetalhe={stats.estoqueDetalhe} lacreDetalhe={stats.lacreDetalhe} />
 
       {/* Movimentações recentes */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mt-4">
