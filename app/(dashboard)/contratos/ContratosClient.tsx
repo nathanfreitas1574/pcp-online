@@ -5,6 +5,7 @@ import { Search, FileText, Upload, X, Download, Package, Users, BarChart3, Refre
 
 type Contrato = {
   id: string
+  filial: string
   numero: string
   descricao: string
   tipoMercado: string | null
@@ -94,7 +95,8 @@ export default function ContratosClient({
       })
       const data = await res.json()
       if (res.ok) {
-        setImportMsg(`✅ ${data.criados} criados, ${data.atualizados} atualizados`)
+        const ign = data.colunasIgnoradas?.length ? ` · ignoradas: ${data.colunasIgnoradas.length} col.` : ""
+        setImportMsg(`✅ ${data.criados} criados, ${data.atualizados} atualizados (${data.camposReconhecidos?.length ?? 0} campos reconhecidos${ign})`)
         await buscar()
       } else {
         setImportMsg(`❌ Erro: ${data.error}`)
@@ -252,8 +254,13 @@ export default function ContratosClient({
                   <tbody className="divide-y divide-gray-50">
                     {contratos.map(c => (
                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2.5 whitespace-nowrap">
                           <span className="font-mono font-bold text-blue-700">{c.numero}</span>
+                          {c.filial && (
+                            <span className="ml-1.5 text-[10px] text-gray-400 font-mono" title={c.filial}>
+                              {c.filial.split("-")[0]}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-gray-700 max-w-[200px]">
                           <span title={c.descricao} className="block truncate">{c.descricao}</span>

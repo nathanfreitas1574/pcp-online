@@ -57,7 +57,10 @@ export const MARCACAO_DATE_FIELDS = new Set([
  * arquivo) e devolve um mapa { campoDoModel: indiceDaColuna }.
  * Robusto a reordenação, colunas extras e variações de nome/acento.
  */
-export function mapHeaders(headerRow: unknown[]): Record<string, number> {
+export function mapHeaders(
+  headerRow: unknown[],
+  fieldAliases: Record<string, string[]> = MARCACAO_FIELD_ALIASES,
+): Record<string, number> {
   // índice normalizado → posição
   const normalizedToIndex = new Map<string, number>()
   headerRow.forEach((h, idx) => {
@@ -70,7 +73,7 @@ export function mapHeaders(headerRow: unknown[]): Record<string, number> {
 
   // Passada 1 — matches EXATOS (prioridade alta). Garante que "Cliente" e
   // "Cliente Destino", por ex., fiquem em colunas distintas.
-  for (const [field, aliases] of Object.entries(MARCACAO_FIELD_ALIASES)) {
+  for (const [field, aliases] of Object.entries(fieldAliases)) {
     for (const alias of aliases) {
       const idx = normalizedToIndex.get(alias)
       if (idx !== undefined && !claimed.has(idx)) {
@@ -83,7 +86,7 @@ export function mapHeaders(headerRow: unknown[]): Record<string, number> {
 
   // Passada 2 — fallback por match parcial, só para campos ainda não
   // resolvidos e colunas ainda não reivindicadas.
-  for (const [field, aliases] of Object.entries(MARCACAO_FIELD_ALIASES)) {
+  for (const [field, aliases] of Object.entries(fieldAliases)) {
     if (map[field] !== undefined) continue
     for (const [norm, idx] of normalizedToIndex) {
       if (claimed.has(idx)) continue

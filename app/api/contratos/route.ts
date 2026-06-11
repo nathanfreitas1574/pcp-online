@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   // Importação em lote: body = { contratos: [...] }
   if (Array.isArray(body.contratos)) {
     const items = body.contratos as Array<{
-      numero: string; ultAlt?: string; descricao: string; tipoMercado?: string
+      filial?: string; numero: string; ultAlt?: string; descricao: string; tipoMercado?: string
       dataCtr?: string; ctrExterno?: string; codEntidade?: string; lojEntidade?: string
       clienteNome: string; codProduto?: string; desProduto: string; descTabela?: string
       qtdContratada?: number; safra?: string; stsAssinatura?: string; stsFiscal?: string
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
 
     let criados = 0; let atualizados = 0
     for (const item of items) {
+      const filial = item.filial || ""
       const data = {
         ultAlt:        item.ultAlt        || null,
         descricao:     item.descricao,
@@ -88,12 +89,12 @@ export async function POST(req: NextRequest) {
         centroCusto:   item.centroCusto   || null,
         ativo:         true,
       }
-      const existing = await prisma.contratoArmazenagem.findUnique({ where: { numero: item.numero } })
+      const existing = await prisma.contratoArmazenagem.findUnique({ where: { filial_numero: { filial, numero: item.numero } } })
       if (existing) {
-        await prisma.contratoArmazenagem.update({ where: { numero: item.numero }, data })
+        await prisma.contratoArmazenagem.update({ where: { filial_numero: { filial, numero: item.numero } }, data })
         atualizados++
       } else {
-        await prisma.contratoArmazenagem.create({ data: { numero: item.numero, ...data } })
+        await prisma.contratoArmazenagem.create({ data: { filial, numero: item.numero, ...data } })
         criados++
       }
     }

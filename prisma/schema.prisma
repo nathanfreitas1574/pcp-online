@@ -1047,8 +1047,9 @@ model CustoOperacional {
 // ─── CONTRATOS DE ARMAZENAGEM (TOTVS) ────────────────────────────────────────
 model ContratoArmazenagem {
   id            String    @id @default(cuid())
-  numero        String    @unique          // "000001"
-  ultAlt        String?
+  filial        String    @default("")     // "010101-FERTALVO..." — o nº do contrato
+  numero        String                      // se repete entre filiais, por isso a
+  ultAlt        String?                      // unicidade é composta (filial+numero)
   descricao     String
   tipoMercado   String?
   dataCtr       DateTime?
@@ -1070,6 +1071,8 @@ model ContratoArmazenagem {
   ativo         Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@unique([filial, numero])
 }
 
 // ─── MARCAÇÃO DE VEÍCULOS (CARGA/DESCARGA — TOTVS) ───────────────────────────
