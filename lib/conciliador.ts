@@ -14,6 +14,24 @@ import type { EstoqueParsed } from "./estoque-columns"
 export type StatusConc = "CONCILIADO" | "DIVERGENTE"
 export type OrigemItem = "MARCACAO" | "ESTOQUE"
 
+// Tolerância de peso parametrizada por OPERAÇÃO × comparação entre planilhas:
+//   marcRom = Marcação (peso previsto) ↔ Romaneio (peso líquido)
+//   romEst  = Romaneio (peso líquido)  ↔ Estoque (quantidade)
+export type ToleranciaPar = { marcRom: number; romEst: number }
+export type ToleranciaConfig = { CARGA: ToleranciaPar; DESCARGA: ToleranciaPar }
+export const TOLERANCIA_ZERO: ToleranciaConfig = {
+  CARGA:    { marcRom: 0, romEst: 0 },
+  DESCARGA: { marcRom: 0, romEst: 0 },
+}
+/** Garante um config completo a partir de dados parciais (ex.: vindo do form). */
+export function normalizeTolerancia(t?: Partial<{ CARGA: Partial<ToleranciaPar>; DESCARGA: Partial<ToleranciaPar> }> | null): ToleranciaConfig {
+  const num = (v: unknown) => { const n = Number(v); return isNaN(n) || n < 0 ? 0 : n }
+  return {
+    CARGA:    { marcRom: num(t?.CARGA?.marcRom),    romEst: num(t?.CARGA?.romEst) },
+    DESCARGA: { marcRom: num(t?.DESCARGA?.marcRom), romEst: num(t?.DESCARGA?.romEst) },
+  }
+}
+
 // Tipos de divergência (também usados como rótulos/labels)
 export const DIVERGENCIAS = {
   SEM_ROMANEIO:           "Marcação sem romaneio",
@@ -40,7 +58,9 @@ export type ItemConciliacao = {
   pesoMarcacao: number | null
   pesoRomaneio: number | null
   pesoEstoque: number | null
-  difPeso: number | null
+  difPeso: number | null        // maior diferença (para ordenar/exibir)
+  difMarcRom: number | null     // |marcação − romaneio|
+  difRomEst: number | null      // |romaneio − estoque|
   presencaMarcacao: boolean
   presencaRomaneio: boolean
   presencaEstoque: boolean
@@ -92,13 +112,19 @@ function maxDifPeso(pesos: (number | null)[]): number | null {
   return Math.max(...v) - Math.min(...v)
 }
 
+/** Diferença absoluta arredondada (3 casas) entre dois pesos, ou null. */
+function difPar(a: number | null, b: number | null): number | null {
+  if (a === null || b === null || a <= 0 || b <= 0) return null
+  return Math.round(Math.abs(a - b) * 1000) / 1000
+}
+
 export function conciliar(
   marcacoes: MarcacaoParsed[],
   romaneios: RomaneioParsed[],
   estoque: EstoqueParsed[],
-  opts: { tolerancia?: number } = {},
+  opts: { tolerancia?: ToleranciaConfig } = {},
 ): ResultadoConciliacao {
-  const tol = opts.tolerancia ?? 0
+  const tolCfg = opts.tolerancia ?? TOLERANCIA_ZERO
 
   // Índices
   const romByCod = new Map<string, RomaneioParsed>()
@@ -153,12 +179,17 @@ export function conciliar(
         divergencias.push("CLIENTE_DIVERGENTE")
     }
 
-    // peso (tolerância)
+    // peso — tolerância por operação × comparação (marcação↔romaneio, romaneio↔estoque)
     const pesoMarcacao = m.pesoPrevisto || null
     const pesoRomaneio = rom?.pesoLiquido || null
     const pesoEstoque  = est?.quantidade || null
-    const dif = maxDifPeso([pesoMarcacao, pesoRomaneio, pesoEstoque])
-    if (dif !== null && dif > tol) divergencias.push("PESO_DIVERGENTE")
+    const opKey = (operacao || "").toUpperCase().includes("DESCARGA") ? "DESCARGA" : "CARGA"
+    const tol = tolCfg[opKey]
+    const difMarcRom = difPar(pesoMarcacao, pesoRomaneio)
+    const difRomEst  = difPar(pesoRomaneio, pesoEstoque)
+    if ((difMarcRom !== null && difMarcRom > tol.marcRom) ||
+        (difRomEst  !== null && difRomEst  > tol.romEst))
+      divergencias.push("PESO_DIVERGENTE")
 
     itens.push({
       origem: "MARCACAO",
@@ -171,7 +202,8 @@ export function conciliar(
       produtoRomaneio: rom?.desProduto ?? null,
       produtoEstoque: est?.descricao ?? null,
       pesoMarcacao, pesoRomaneio, pesoEstoque,
-      difPeso: dif,
+      difPeso: maxDifPeso([pesoMarcacao, pesoRomaneio, pesoEstoque]),
+      difMarcRom, difRomEst,
       presencaMarcacao: true,
       presencaRomaneio: !!rom,
       presencaEstoque: !!est,
@@ -224,6 +256,8 @@ export function conciliar(
       pesoRomaneio: rom?.pesoLiquido ?? null,
       pesoEstoque: e.quantidade || null,
       difPeso: null,
+      difMarcRom: null,
+      difRomEst: null,
       presencaMarcacao: false,
       presencaRomaneio: !!rom,
       presencaEstoque: true,

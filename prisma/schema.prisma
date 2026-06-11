@@ -1121,7 +1121,8 @@ model MarcacaoVeiculo {
 model ConciliacaoLote {
   id              String   @id @default(cuid())
   data            DateTime @default(now())
-  tolerancia      Float    @default(0)   // toneladas
+  tolerancia      Float    @default(0)   // legado (maior tolerância usada)
+  toleranciaJson  String?                // config por operação × comparação (JSON)
   arquivoMarcacao String?
   arquivoRomaneio String?
   arquivoEstoque  String?
@@ -1154,6 +1155,8 @@ model ConciliacaoItem {
   pesoRomaneio     Float?
   pesoEstoque      Float?
   difPeso          Float?
+  difMarcRom       Float?
+  difRomEst        Float?
   presencaMarcacao Boolean  @default(false)
   presencaRomaneio Boolean  @default(false)
   presencaEstoque  Boolean  @default(false)

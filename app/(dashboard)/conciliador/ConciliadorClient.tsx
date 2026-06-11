@@ -37,6 +37,8 @@ type Item = {
   pesoRomaneio: number | null
   pesoEstoque: number | null
   difPeso: number | null
+  difMarcRom: number | null
+  difRomEst: number | null
   presencaMarcacao: boolean
   presencaRomaneio: boolean
   presencaEstoque: boolean
@@ -95,7 +97,12 @@ export default function ConciliadorClient({ lotesIniciais }: { lotesIniciais: Lo
   const refMarc = useRef<HTMLInputElement>(null)
   const refRom  = useRef<HTMLInputElement>(null)
   const refEst  = useRef<HTMLInputElement>(null)
-  const [tolerancia, setTolerancia] = useState("0")
+  const [tol, setTol] = useState({
+    CARGA:    { marcRom: "0", romEst: "0" },
+    DESCARGA: { marcRom: "0", romEst: "0" },
+  })
+  const setTolVal = (op: "CARGA" | "DESCARGA", par: "marcRom" | "romEst", v: string) =>
+    setTol(prev => ({ ...prev, [op]: { ...prev[op], [par]: v } }))
   const [uploading, setUploading] = useState(false)
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null)
 
@@ -144,7 +151,11 @@ export default function ConciliadorClient({ lotesIniciais }: { lotesIniciais: Lo
     setUploading(true); setMsg(null)
     const fd = new FormData()
     fd.append("marcacao", fm); fd.append("romaneio", fr); fd.append("estoque", fe)
-    fd.append("tolerancia", tolerancia || "0")
+    const n = (v: string) => Number(v) || 0
+    fd.append("tolerancia", JSON.stringify({
+      CARGA:    { marcRom: n(tol.CARGA.marcRom),    romEst: n(tol.CARGA.romEst) },
+      DESCARGA: { marcRom: n(tol.DESCARGA.marcRom), romEst: n(tol.DESCARGA.romEst) },
+    }))
     try {
       const r = await fetch("/api/conciliacoes", { method: "POST", body: fd })
       const d = await r.json()
@@ -247,13 +258,36 @@ export default function ConciliadorClient({ lotesIniciais }: { lotesIniciais: Lo
               </label>
             ))}
           </div>
-          <div className="flex items-end gap-4 flex-wrap">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Tolerância de peso (ton)</label>
-              <input value={tolerancia} onChange={e => setTolerancia(e.target.value)} type="number" step="0.1" min="0"
-                className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="0 = exato" />
-              <p className="text-[11px] text-gray-400 mt-1">0 = exato. Sugestão: 0,3–0,5 p/ diferença de balança.</p>
+          <div className="border-t border-gray-100 pt-3">
+            <p className="text-xs font-semibold text-gray-600 mb-2">Tolerância de peso (ton) — por operação e por comparação</p>
+            <div className="overflow-x-auto">
+              <table className="text-sm border border-gray-100 rounded-lg">
+                <thead className="bg-gray-50 text-gray-500 text-xs">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Operação</th>
+                    <th className="px-3 py-2 text-left font-semibold">Marcação ↔ Romaneio<br/><span className="font-normal text-gray-400">previsto × pesagem</span></th>
+                    <th className="px-3 py-2 text-left font-semibold">Romaneio ↔ Estoque<br/><span className="font-normal text-gray-400">pesagem × fiscal</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(["DESCARGA", "CARGA"] as const).map(op => (
+                    <tr key={op} className="border-t border-gray-100">
+                      <td className="px-3 py-2 font-medium text-gray-700">{op === "DESCARGA" ? "Descarga" : "Carga"}</td>
+                      {(["marcRom", "romEst"] as const).map(par => (
+                        <td key={par} className="px-3 py-2">
+                          <input type="number" step="0.05" min="0" value={tol[op][par]}
+                            onChange={e => setTolVal(op, par, e.target.value)}
+                            className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-sm" placeholder="0" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">0 = exato. Sugestão p/ granel: 0,3–0,5 ton. Embalagem/lacre (unidades): deixe 0.</p>
+          </div>
+          <div className="flex justify-end mt-4">
             <button onClick={conciliar} disabled={uploading}
               className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition">
               <GitCompareArrows size={16} />
@@ -388,7 +422,10 @@ export default function ConciliadorClient({ lotesIniciais }: { lotesIniciais: Lo
                               <td className="px-3 py-2 text-center"><Presenca m={it.presencaMarcacao} r={it.presencaRomaneio} e={it.presencaEstoque} /></td>
                               <td className="px-3 py-2 text-right tabular-nums text-xs whitespace-nowrap">
                                 {fmt(it.pesoMarcacao)}/{fmt(it.pesoRomaneio)}/{fmt(it.pesoEstoque)}
-                                {it.difPeso !== null && it.difPeso > 0 && <span className="text-gray-400"> (Δ{fmt(it.difPeso)})</span>}
+                                <span className="block text-[10px] text-gray-400">
+                                  {it.difMarcRom !== null && <>ΔMR {fmt(it.difMarcRom)} </>}
+                                  {it.difRomEst !== null && <>ΔRE {fmt(it.difRomEst)}</>}
+                                </span>
                               </td>
                               <td className="px-3 py-2">
                                 {it.status === "CONCILIADO"

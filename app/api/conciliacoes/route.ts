@@ -5,7 +5,7 @@ import * as XLSX from "xlsx"
 import { parseMarcacaoRows } from "@/lib/marcacao-columns"
 import { parseRomaneioRows } from "@/lib/romaneio-columns"
 import { parseEstoqueRows } from "@/lib/estoque-columns"
-import { conciliar } from "@/lib/conciliador"
+import { conciliar, normalizeTolerancia } from "@/lib/conciliador"
 
 export const maxDuration = 120
 
@@ -38,7 +38,13 @@ export async function POST(req: NextRequest) {
   const fMarc = fd.get("marcacao") as File | null
   const fRom  = fd.get("romaneio") as File | null
   const fEst  = fd.get("estoque")  as File | null
-  const tolerancia = parseFloat(String(fd.get("tolerancia") ?? "0")) || 0
+
+  // Tolerância: matriz JSON { CARGA:{marcRom,romEst}, DESCARGA:{marcRom,romEst} }
+  let tolParsed: unknown = null
+  try { tolParsed = JSON.parse(String(fd.get("tolerancia") ?? "null")) } catch { tolParsed = null }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tolerancia = normalizeTolerancia(tolParsed as any)
+  const tolMax = Math.max(tolerancia.CARGA.marcRom, tolerancia.CARGA.romEst, tolerancia.DESCARGA.marcRom, tolerancia.DESCARGA.romEst)
 
   if (!fMarc || !fRom || !fEst)
     return NextResponse.json({ error: "Envie as 3 planilhas: marcação, romaneio e estoque." }, { status: 400 })
@@ -61,7 +67,8 @@ export async function POST(req: NextRequest) {
 
   const lote = await prisma.conciliacaoLote.create({
     data: {
-      tolerancia,
+      tolerancia: tolMax,
+      toleranciaJson: JSON.stringify(tolerancia),
       arquivoMarcacao: fMarc.name,
       arquivoRomaneio: fRom.name,
       arquivoEstoque:  fEst.name,
@@ -86,6 +93,8 @@ export async function POST(req: NextRequest) {
           pesoRomaneio:     it.pesoRomaneio,
           pesoEstoque:      it.pesoEstoque,
           difPeso:          it.difPeso,
+          difMarcRom:       it.difMarcRom,
+          difRomEst:        it.difRomEst,
           presencaMarcacao: it.presencaMarcacao,
           presencaRomaneio: it.presencaRomaneio,
           presencaEstoque:  it.presencaEstoque,
