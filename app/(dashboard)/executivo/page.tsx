@@ -114,7 +114,7 @@ export default async function ExecutivoPage() {
       previsoes={previsoes.map(p => ({
         id: p.id, produto: p.produto, cliente: p.cliente,
         boxCodigo: p.box.codigo, dataPrevisao: p.dataPrevisao.toISOString(),
-        status: p.status, naveNome: p.naveNome,
+        status: p.status, naveNome: p.naveNome, volumePrev: p.volumePrev,
       }))}
       topClientes={topClientes.map(c => ({
         nome: c.clienteNome ?? "—",

@@ -72,7 +72,7 @@ export default function ExecutivoClient({
   kpis: KPIs
   alertasCriticos: { id: string; titulo: string; descricao: string; tipo: string; createdAt: string }[]
   naviosProximos:  { id: string; nome: string; eta: string; produto?: string | null; clienteNome?: string | null; volumePrev?: number | null; status: string }[]
-  previsoes:       { id: string; produto: string; cliente: string; boxCodigo: string; dataPrevisao: string; status: string; naveNome?: string | null }[]
+  previsoes:       { id: string; produto: string; cliente: string; boxCodigo: string; dataPrevisao: string; status: string; naveNome?: string | null; volumePrev?: number | null }[]
   topClientes:     { nome: string; volume: number }[]
 }) {
   const mesLabel = new Date(kpis.mes + "-01").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
@@ -219,7 +219,14 @@ export default function ExecutivoClient({
                     </span>
                     <span className="font-mono text-xs bg-white/70 px-2 py-0.5 rounded font-bold text-gray-700">{p.boxCodigo}</span>
                   </div>
-                  <p className="text-sm font-semibold text-gray-800 truncate">{p.produto}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{p.produto}</p>
+                    {p.volumePrev ? (
+                      <span className={`text-sm font-bold shrink-0 tabular-nums ${txtMap[cor]}`}>
+                        {p.volumePrev.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} t
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="text-xs text-gray-500">{p.cliente}{p.naveNome ? ` · 🚢 ${p.naveNome}` : ""}</p>
                 </div>
               )
