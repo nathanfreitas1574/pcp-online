@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { notaNoContabil } from "@/lib/cobertura"
 import { NextRequest, NextResponse } from "next/server"
 
 // GET — lista com filtros + totais (cobertura pendente)
@@ -46,17 +47,25 @@ export async function POST(req: NextRequest) {
   if (!b.codigoRomaneio?.trim()) return NextResponse.json({ error: "Informe o código do romaneio." }, { status: 400 })
   if (!b.produto?.trim()) return NextResponse.json({ error: "Informe o produto." }, { status: 400 })
 
+  // Se já informou a NF e ela está no contábil, já entra como COBERTO
+  const numeroNota = b.numeroNota?.trim() || null
+  const coberto = numeroNota ? await notaNoContabil(numeroNota) : false
+
   const c = await prisma.coberturaPendente.create({
     data: {
       codigoRomaneio: String(b.codigoRomaneio).trim(),
       produto: String(b.produto).trim(),
       cliente: String(b.cliente ?? "").trim(),
       volume: Number(b.volume) || 0,
+      dataDescarga:    b.dataDescarga    ? new Date(b.dataDescarga)    : null,
+      numeroNota,
+      dataSolicitacao: b.dataSolicitacao ? new Date(b.dataSolicitacao) : null,
       observacao: b.observacao?.trim() || null,
       boxCodigo: b.boxCodigo?.trim() || null,
-      status: "PENDENTE",
+      status: coberto ? "COBERTO" : "PENDENTE",
+      resolvidoEm: coberto ? new Date() : null,
       criadoPorNome: session.user.name ?? null,
     },
   })
-  return NextResponse.json(c, { status: 201 })
+  return NextResponse.json({ ...c, autoCoberto: coberto }, { status: 201 })
 }

@@ -1119,21 +1119,25 @@ model EstoqueDePara {
 // Produtos descarregados (estão no estoque FÍSICO) mas sem nota fiscal para dar
 // entrada no CONTÁBIL. Registra a "cobertura pendente" = gap físico − contábil.
 model CoberturaPendente {
-  id             String    @id @default(cuid())
-  codigoRomaneio String
-  produto        String
-  cliente        String
-  volume         Float     @default(0)
-  observacao     String?
-  boxCodigo      String?
-  status         String    @default("PENDENTE")   // PENDENTE | COBERTO
-  resolvidoEm    DateTime?
-  criadoPorNome  String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  codigoRomaneio  String
+  produto         String
+  cliente         String
+  volume          Float     @default(0)
+  dataDescarga    DateTime?
+  numeroNota      String?
+  dataSolicitacao DateTime?
+  observacao      String?
+  boxCodigo       String?
+  status          String    @default("PENDENTE")   // PENDENTE | COBERTO
+  resolvidoEm     DateTime?
+  criadoPorNome   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([status])
   @@index([cliente])
+  @@index([numeroNota])
 }
 
 // ─── MARCAÇÃO DE VEÍCULOS (CARGA/DESCARGA — TOTVS) ───────────────────────────

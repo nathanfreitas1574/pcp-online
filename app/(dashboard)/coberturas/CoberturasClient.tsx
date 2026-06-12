@@ -1,20 +1,23 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   ShieldQuestion, Plus, Search, Save, X, Pencil, Trash2, CheckCircle2, RotateCcw, Scale, ClipboardList,
+  Upload, RefreshCw,
 } from "lucide-react"
 
 type Cobertura = {
   id: string; codigoRomaneio: string; produto: string; cliente: string
   volume: number; observacao: string | null; boxCodigo: string | null
+  dataDescarga: string | null; numeroNota: string | null; dataSolicitacao: string | null
   status: string; createdAt: string
 }
 type Props = { clientes: string[]; produtos: string[]; boxes: string[] }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR") : "—"
 const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-const VAZIO = { codigoRomaneio: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "" }
+const VAZIO = { codigoRomaneio: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "", dataDescarga: "", numeroNota: "", dataSolicitacao: "" }
 
 export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   const [itens, setItens] = useState<Cobertura[]>([])
@@ -29,6 +32,10 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   const [editId, setEditId] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState("")
+  const [importando, setImportando] = useState(false)
+  const [conferindo, setConferindo] = useState(false)
+  const [aviso, setAviso] = useState("")
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -46,8 +53,36 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
 
   function abrirNovo() { setForm({ ...VAZIO }); setEditId(null); setErro("") }
   function abrirEdit(c: Cobertura) {
-    setForm({ codigoRomaneio: c.codigoRomaneio, produto: c.produto, cliente: c.cliente, volume: String(c.volume), boxCodigo: c.boxCodigo ?? "", observacao: c.observacao ?? "" })
+    setForm({
+      codigoRomaneio: c.codigoRomaneio, produto: c.produto, cliente: c.cliente, volume: String(c.volume),
+      boxCodigo: c.boxCodigo ?? "", observacao: c.observacao ?? "", numeroNota: c.numeroNota ?? "",
+      dataDescarga: c.dataDescarga ? c.dataDescarga.slice(0, 10) : "", dataSolicitacao: c.dataSolicitacao ? c.dataSolicitacao.slice(0, 10) : "",
+    })
     setEditId(c.id); setErro("")
+  }
+
+  async function importar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportando(true); setAviso("")
+    const fd = new FormData(); fd.append("file", file)
+    try {
+      const r = await fetch("/api/coberturas/importar", { method: "POST", body: fd })
+      const d = await r.json()
+      if (r.ok) { setAviso(`✅ ${d.criados} importadas${d.jaCobertos ? ` · ${d.jaCobertos} já cobertas (NF no contábil)` : ""}.`); await carregar() }
+      else setAviso(`❌ ${d.error ?? "Falha na importação."}`)
+    } catch { setAviso("❌ Erro de rede ao importar.") }
+    setImportando(false)
+    if (fileRef.current) fileRef.current.value = ""
+  }
+
+  async function conferir() {
+    setConferindo(true); setAviso("")
+    const r = await fetch("/api/coberturas/conferir", { method: "POST" })
+    const d = await r.json()
+    setConferindo(false)
+    if (r.ok) { setAviso(`✅ ${d.finalizadas} de ${d.conferidas} finalizada(s) (NF encontrada no contábil).`); await carregar() }
+    else setAviso(`❌ ${d.error ?? "Erro ao conferir."}`)
   }
 
   async function salvar() {
@@ -56,9 +91,13 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     setSalvando(true); setErro("")
     const url = editId ? `/api/coberturas/${editId}` : "/api/coberturas"
     const r = await fetch(url, { method: editId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) })
+    const d = await r.json().catch(() => ({}))
     setSalvando(false)
-    if (r.ok) { setForm(null); await carregar() }
-    else { const d = await r.json().catch(() => ({})); setErro(d.error ?? "Erro ao salvar.") }
+    if (r.ok) {
+      setForm(null)
+      if (d.autoCoberto) setAviso("✅ NF encontrada no estoque contábil — cobertura finalizada automaticamente.")
+      await carregar()
+    } else setErro(d.error ?? "Erro ao salvar.")
   }
 
   async function alterarStatus(c: Cobertura, status: string) {
@@ -84,10 +123,28 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
             <p className="text-sm text-gray-500">Produtos descarregados (no físico) sem NF para entrar no contábil — cobertura pendente</p>
           </div>
         </div>
-        <button onClick={abrirNovo} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">
-          <Plus size={16} /> Nova cobertura
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={conferir} disabled={conferindo}
+            className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Conferir NFs no estoque contábil e finalizar as cobertas">
+            <RefreshCw size={15} className={conferindo ? "animate-spin" : ""} /> {conferindo ? "Conferindo…" : "Conferir notas"}
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={importar} />
+          <button onClick={() => fileRef.current?.click()} disabled={importando}
+            className="flex items-center gap-2 bg-green-600 text-white px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition">
+            <Upload size={15} /> {importando ? "Importando…" : "Importar Excel"}
+          </button>
+          <button onClick={abrirNovo} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">
+            <Plus size={16} /> Nova cobertura
+          </button>
+        </div>
       </div>
+
+      {aviso && (
+        <div className="mb-4 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700">
+          <span className="flex-1">{aviso}</span>
+          <button onClick={() => setAviso("")}><X size={15} className="opacity-60 hover:opacity-100" /></button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
@@ -128,11 +185,12 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
               <tr>
                 <th className="text-left px-3 py-2.5 font-semibold">Romaneio</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Descarga</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Produto</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Cliente</th>
-                <th className="text-left px-3 py-2.5 font-semibold">Box</th>
                 <th className="text-right px-3 py-2.5 font-semibold">Volume</th>
-                <th className="text-left px-3 py-2.5 font-semibold">Observação</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Nº Nota</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Solicitação</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Status</th>
                 <th className="text-center px-3 py-2.5 font-semibold">Ações</th>
               </tr>
@@ -141,11 +199,12 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
               {itens.map(c => (
                 <tr key={c.id} className="hover:bg-amber-50/30">
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.codigoRomaneio}</td>
-                  <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate" title={c.produto}>{c.produto}</td>
-                  <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate" title={c.cliente}>{c.cliente || "—"}</td>
-                  <td className="px-3 py-2 text-gray-600">{c.boxCodigo || "—"}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{dt(c.dataDescarga)}</td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate" title={c.produto}>{c.produto}</td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[160px] truncate" title={c.cliente}>{c.cliente || "—"}</td>
                   <td className="px-3 py-2 text-right font-semibold text-gray-800 tabular-nums">{fmt(c.volume)} t</td>
-                  <td className="px-3 py-2 text-gray-500 max-w-[200px] truncate" title={c.observacao ?? ""}>{c.observacao || "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.numeroNota || "—"}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{dt(c.dataSolicitacao)}</td>
                   <td className="px-3 py-2">
                     {c.status === "PENDENTE"
                       ? <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Pendente</span>
@@ -165,7 +224,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
                 </tr>
               ))}
               {!loading && itens.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   Nenhuma cobertura {statusFiltro === "PENDENTE" ? "pendente" : ""}. Clique em <strong>Nova cobertura</strong> para registrar.
                 </td></tr>
               )}
@@ -190,6 +249,18 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Volume (t)</label>
                 <input type="number" step="0.01" value={form.volume} onChange={e => setForm({ ...form, volume: e.target.value })} className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Data da descarga</label>
+                <input type="date" value={form.dataDescarga} onChange={e => setForm({ ...form, dataDescarga: e.target.value })} className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Nº da nota</label>
+                <input value={form.numeroNota} onChange={e => setForm({ ...form, numeroNota: e.target.value })} placeholder="confere no contábil ao salvar" className={inp + " font-mono"} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Data da solicitação ao cliente</label>
+                <input type="date" value={form.dataSolicitacao} onChange={e => setForm({ ...form, dataSolicitacao: e.target.value })} className={inp} />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Produto *</label>
