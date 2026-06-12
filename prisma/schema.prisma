@@ -1076,6 +1076,33 @@ model ContratoArmazenagem {
   @@unique([filial, numero])
 }
 
+// ─── ESTOQUE CONTÁBIL (Materiais De/Em Terceiros — TOTVS) ────────────────────
+// Snapshot do estoque em poder de terceiros. Cada importação substitui o
+// conjunto anterior (estado atual). Importado via planilha (casa por cabeçalho).
+model EstoqueContabil {
+  id          String    @id @default(cuid())
+  filial      String?
+  produto     String?
+  descricao   String?
+  armazem     String?
+  razaoSocial String?
+  docOriginal String
+  serieDoc    String?
+  dtEmissao   DateTime?
+  quantidade  Float     @default(0)
+  totalNF     Float     @default(0)
+  tes         String?
+  tipoDeEm    String?
+  saldo       Float     @default(0)
+  poderTerc   String?
+  sentido     String?   // ENTRADA / SAIDA
+  importadoEm DateTime  @default(now())
+
+  @@index([razaoSocial])
+  @@index([armazem])
+  @@index([docOriginal])
+}
+
 // ─── MARCAÇÃO DE VEÍCULOS (CARGA/DESCARGA — TOTVS) ───────────────────────────
 // As colunas do Excel exportado podem mudar de posição; a importação casa
 // por NOME do cabeçalho (normalizado), não por índice. Linka com contrato
