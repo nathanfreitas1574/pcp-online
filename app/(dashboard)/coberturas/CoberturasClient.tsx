@@ -1,0 +1,226 @@
+"use client"
+
+import { useState, useEffect, useCallback } from "react"
+import {
+  ShieldQuestion, Plus, Search, Save, X, Pencil, Trash2, CheckCircle2, RotateCcw, Scale, ClipboardList,
+} from "lucide-react"
+
+type Cobertura = {
+  id: string; codigoRomaneio: string; produto: string; cliente: string
+  volume: number; observacao: string | null; boxCodigo: string | null
+  status: string; createdAt: string
+}
+type Props = { clientes: string[]; produtos: string[]; boxes: string[] }
+
+const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+const VAZIO = { codigoRomaneio: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "" }
+
+export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
+  const [itens, setItens] = useState<Cobertura[]>([])
+  const [pendente, setPendente] = useState({ count: 0, volume: 0 })
+  const [coberto, setCoberto] = useState({ count: 0, volume: 0 })
+  const [loading, setLoading] = useState(true)
+  const [statusFiltro, setStatusFiltro] = useState("PENDENTE")
+  const [busca, setBusca] = useState("")
+  // modal
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [form, setForm] = useState<any | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState("")
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    const qs = new URLSearchParams()
+    if (statusFiltro) qs.set("status", statusFiltro)
+    if (busca) qs.set("busca", busca)
+    const r = await fetch("/api/coberturas?" + qs.toString())
+    const d = await r.json()
+    setItens(d.itens ?? [])
+    setPendente(d.pendente ?? { count: 0, volume: 0 })
+    setCoberto(d.coberto ?? { count: 0, volume: 0 })
+    setLoading(false)
+  }, [statusFiltro, busca])
+  useEffect(() => { carregar() }, [carregar])
+
+  function abrirNovo() { setForm({ ...VAZIO }); setEditId(null); setErro("") }
+  function abrirEdit(c: Cobertura) {
+    setForm({ codigoRomaneio: c.codigoRomaneio, produto: c.produto, cliente: c.cliente, volume: String(c.volume), boxCodigo: c.boxCodigo ?? "", observacao: c.observacao ?? "" })
+    setEditId(c.id); setErro("")
+  }
+
+  async function salvar() {
+    if (!form.codigoRomaneio.trim()) { setErro("Informe o código do romaneio."); return }
+    if (!form.produto.trim()) { setErro("Informe o produto."); return }
+    setSalvando(true); setErro("")
+    const url = editId ? `/api/coberturas/${editId}` : "/api/coberturas"
+    const r = await fetch(url, { method: editId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) })
+    setSalvando(false)
+    if (r.ok) { setForm(null); await carregar() }
+    else { const d = await r.json().catch(() => ({})); setErro(d.error ?? "Erro ao salvar.") }
+  }
+
+  async function alterarStatus(c: Cobertura, status: string) {
+    await fetch(`/api/coberturas/${c.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) })
+    await carregar()
+  }
+  async function excluir(c: Cobertura) {
+    if (!confirm(`Excluir a cobertura do romaneio ${c.codigoRomaneio}?`)) return
+    await fetch(`/api/coberturas/${c.id}`, { method: "DELETE" })
+    setItens(prev => prev.filter(x => x.id !== c.id))
+  }
+
+  return (
+    <div className="p-6 max-w-[1500px] mx-auto">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center">
+            <ShieldQuestion className="text-amber-700" size={22} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Gerenciador de Coberturas</h1>
+            <p className="text-sm text-gray-500">Produtos descarregados (no físico) sem NF para entrar no contábil — cobertura pendente</p>
+          </div>
+        </div>
+        <button onClick={abrirNovo} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">
+          <Plus size={16} /> Nova cobertura
+        </button>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+        <div className="bg-white rounded-xl border border-amber-100 p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-amber-600 text-xs font-medium mb-1"><Scale size={14}/> Cobertura pendente</div>
+          <p className="text-2xl font-bold text-gray-800">{fmt(pendente.volume)} <span className="text-sm font-medium text-gray-400">t · {pendente.count} reg.</span></p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-green-600 text-xs font-medium mb-1"><CheckCircle2 size={14}/> Já coberto</div>
+          <p className="text-2xl font-bold text-gray-800">{fmt(coberto.volume)} <span className="text-sm font-medium text-gray-400">t · {coberto.count} reg.</span></p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-gray-500 text-xs font-medium mb-1"><ClipboardList size={14}/> Total registros</div>
+          <p className="text-2xl font-bold text-gray-800">{pendente.count + coberto.count}</p>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
+          {[["PENDENTE", "Pendentes"], ["COBERTO", "Cobertas"], ["", "Todas"]].map(([v, l]) => (
+            <button key={v} onClick={() => setStatusFiltro(v)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${statusFiltro === v ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>{l}</button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar romaneio, produto, cliente…"
+            className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div className="text-sm text-gray-500">{loading ? "Carregando…" : `${itens.length} registro(s)`}</div>
+      </div>
+
+      {/* Tabela */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-3 py-2.5 font-semibold">Romaneio</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Produto</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Cliente</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Box</th>
+                <th className="text-right px-3 py-2.5 font-semibold">Volume</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Observação</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Status</th>
+                <th className="text-center px-3 py-2.5 font-semibold">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {itens.map(c => (
+                <tr key={c.id} className="hover:bg-amber-50/30">
+                  <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.codigoRomaneio}</td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate" title={c.produto}>{c.produto}</td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate" title={c.cliente}>{c.cliente || "—"}</td>
+                  <td className="px-3 py-2 text-gray-600">{c.boxCodigo || "—"}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-gray-800 tabular-nums">{fmt(c.volume)} t</td>
+                  <td className="px-3 py-2 text-gray-500 max-w-[200px] truncate" title={c.observacao ?? ""}>{c.observacao || "—"}</td>
+                  <td className="px-3 py-2">
+                    {c.status === "PENDENTE"
+                      ? <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Pendente</span>
+                      : <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded">Coberto</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center justify-center gap-1">
+                      {c.status === "PENDENTE" ? (
+                        <button onClick={() => alterarStatus(c, "COBERTO")} className="p-1.5 rounded-lg text-gray-400 hover:bg-green-50 hover:text-green-600" title="Marcar como coberto"><CheckCircle2 size={14} /></button>
+                      ) : (
+                        <button onClick={() => alterarStatus(c, "PENDENTE")} className="p-1.5 rounded-lg text-gray-400 hover:bg-amber-50 hover:text-amber-600" title="Reabrir"><RotateCcw size={14} /></button>
+                      )}
+                      <button onClick={() => abrirEdit(c)} className="p-1.5 rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600" title="Editar"><Pencil size={14} /></button>
+                      <button onClick={() => excluir(c)} className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600" title="Excluir"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!loading && itens.length === 0 && (
+                <tr><td colSpan={8} className="text-center py-12 text-gray-400">
+                  Nenhuma cobertura {statusFiltro === "PENDENTE" ? "pendente" : ""}. Clique em <strong>Nova cobertura</strong> para registrar.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal criar/editar */}
+      {form && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setForm(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <h3 className="font-bold text-gray-800">{editId ? "Editar cobertura" : "Nova cobertura pendente"}</h3>
+              <button onClick={() => setForm(null)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Código do romaneio *</label>
+                <input value={form.codigoRomaneio} onChange={e => setForm({ ...form, codigoRomaneio: e.target.value })} className={inp + " font-mono"} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Volume (t)</label>
+                <input type="number" step="0.01" value={form.volume} onChange={e => setForm({ ...form, volume: e.target.value })} className={inp} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Produto *</label>
+                <input list="cob-produtos" value={form.produto} onChange={e => setForm({ ...form, produto: e.target.value })} className={inp} />
+                <datalist id="cob-produtos">{produtos.map(p => <option key={p} value={p} />)}</datalist>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Cliente</label>
+                <input list="cob-clientes" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} className={inp} />
+                <datalist id="cob-clientes">{clientes.map(c => <option key={c} value={c} />)}</datalist>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Box (opcional)</label>
+                <input list="cob-boxes" value={form.boxCodigo} onChange={e => setForm({ ...form, boxCodigo: e.target.value })} className={inp} />
+                <datalist id="cob-boxes">{boxes.map(b => <option key={b} value={b} />)}</datalist>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Observações</label>
+                <textarea value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} rows={2} className={inp} />
+              </div>
+            </div>
+            {erro && <div className="mx-5 mb-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{erro}</div>}
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100">
+              <button onClick={() => setForm(null)} className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">Cancelar</button>
+              <button onClick={salvar} disabled={salvando} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+                <Save size={15} /> {salvando ? "Salvando…" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
