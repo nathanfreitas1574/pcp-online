@@ -27,11 +27,13 @@ type Props = {
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
 const fmtInt = (n: number) => n.toLocaleString("pt-BR")
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+const ARM_NOME: Record<string, string> = { "10": "Produto", "20": "Aditivo", "30": "Insumos" }
+const armLabel = (a: string) => ARM_NOME[a] ? `${a} · ${ARM_NOME[a]}` : `Armazém ${a}`
 
 export default function EstoqueContabilClient({ clientes, armazens, totalGeral, porSentido, importadoEm, produtosVistoria, coberturaPendente }: Props) {
   const [view, setView] = useState<"estoque" | "depara" | "dashboard">("estoque")
   const [itens, setItens] = useState<Item[]>([])
-  const [totalFiltrado, setTotalFiltrado] = useState({ count: 0, quantidade: 0 })
+  const [totalFiltrado, setTotalFiltrado] = useState({ count: 0, quantidade: 0, saldo: 0 })
   const [loading, setLoading] = useState(false)
   const [importadoEmState, setImportadoEm] = useState(importadoEm)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -41,6 +43,8 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
   const [armazem, setArmazem] = useState("")
   const [produto, setProduto] = useState("")
   const [sentido, setSentido] = useState("")
+  const [dataIni, setDataIni] = useState("")
+  const [dataFim, setDataFim] = useState("")
 
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null)
@@ -53,13 +57,15 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
     if (armazem) qs.set("armazem", armazem)
     if (produto) qs.set("produto", produto)
     if (sentido) qs.set("sentido", sentido)
+    if (dataIni) qs.set("dataInicio", dataIni)
+    if (dataFim) qs.set("dataFim", dataFim)
     const r = await fetch("/api/estoque-contabil?" + qs.toString())
     const d = await r.json()
     setItens(d.itens ?? [])
-    setTotalFiltrado(d.totalFiltrado ?? { count: 0, quantidade: 0 })
+    setTotalFiltrado(d.totalFiltrado ?? { count: 0, quantidade: 0, saldo: 0 })
     if (d.importadoEm) setImportadoEm(d.importadoEm)
     setLoading(false)
-  }, [busca, cliente, armazem, produto, sentido])
+  }, [busca, cliente, armazem, produto, sentido, dataIni, dataFim])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -85,7 +91,7 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
     if (fileRef.current) fileRef.current.value = ""
   }
 
-  function limpar() { setBusca(""); setCliente(""); setArmazem(""); setProduto(""); setSentido("") }
+  function limpar() { setBusca(""); setCliente(""); setArmazem(""); setProduto(""); setSentido(""); setDataIni(""); setDataFim("") }
 
   const entrada = porSentido.find(s => s.sentido === "ENTRADA")
   const saida   = porSentido.find(s => s.sentido === "SAIDA")
@@ -190,7 +196,7 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
           </select>
           <select value={armazem} onChange={e => setArmazem(e.target.value)} className={inp}>
             <option value="">Todos os armazéns</option>
-            {armazens.map(a => <option key={a} value={a}>Armazém {a}</option>)}
+            {armazens.map(a => <option key={a} value={a}>{armLabel(a)}</option>)}
           </select>
           <select value={sentido} onChange={e => setSentido(e.target.value)} className={inp}>
             <option value="">Entradas e saídas</option>
@@ -199,12 +205,31 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
           </select>
           <input value={produto} onChange={e => setProduto(e.target.value)} placeholder="Produto contém…"
             className={inp} onKeyDown={e => e.key === "Enter" && carregar()} />
+          <div>
+            <label className="block text-[11px] text-gray-400 mb-0.5">Movimentação — de</label>
+            <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)} className={inp + " py-1.5"} />
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-400 mb-0.5">até</label>
+            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className={inp + " py-1.5"} />
+          </div>
         </div>
-        <div className="flex gap-2 mt-3">
+        {/* Chips rápidos de armazém (tipo) */}
+        <div className="flex gap-1.5 mt-3 flex-wrap">
+          <span className="text-xs text-gray-400 self-center mr-1">Tipo:</span>
+          {[["", "Todos"], ["10", "Produto"], ["20", "Aditivo"], ["30", "Insumos"]].map(([v, l]) => (
+            <button key={v} onClick={() => { setArmazem(v) }}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${armazem === v ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{l}</button>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-3 flex-wrap">
           <button onClick={carregar} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Aplicar filtros</button>
           <button onClick={limpar} className="text-gray-500 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition">Limpar</button>
           <div className="ml-auto self-center text-sm text-gray-500">
-            {loading ? "Carregando…" : `${fmtInt(totalFiltrado.count)} registros · ${fmt(totalFiltrado.quantidade)} qtd`}
+            {loading ? "Carregando…" : <>
+              {fmtInt(totalFiltrado.count)} registros · {fmt(totalFiltrado.quantidade)} qtd ·
+              <span className="text-blue-700 font-semibold"> saldo {fmt(totalFiltrado.saldo)}</span>
+            </>}
           </div>
         </div>
       </div>

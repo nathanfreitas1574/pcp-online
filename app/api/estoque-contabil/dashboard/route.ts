@@ -18,7 +18,7 @@ export async function GET() {
 
   const mapAbrev = new Map(depara.map(d => [d.codigoProduto, d.descricaoAbreviada]))
 
-  const NOME_ARM: Record<string, string> = { "10": "10 · Granel", "20": "20 · Aditivo", "30": "30 · Embalagem/Lacre" }
+  const NOME_ARM: Record<string, string> = { "10": "10 · Produto", "20": "20 · Aditivo", "30": "30 · Insumos" }
 
   const dados = agg
     .filter(a => (a._sum.saldo ?? 0) !== 0)
