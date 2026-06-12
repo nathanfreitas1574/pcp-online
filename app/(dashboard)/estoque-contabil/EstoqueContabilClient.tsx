@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import DrillBarChart from "@/components/DrillBarChart"
 import DeParaProdutos from "./DeParaProdutos"
+import DashboardContabil from "./DashboardContabil"
 
 type Item = {
   id: string; filial: string | null; produto: string | null; descricao: string | null
@@ -28,7 +29,7 @@ const fmtInt = (n: number) => n.toLocaleString("pt-BR")
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
 
 export default function EstoqueContabilClient({ clientes, armazens, totalGeral, porSentido, importadoEm, produtosVistoria, coberturaPendente }: Props) {
-  const [view, setView] = useState<"estoque" | "depara">("estoque")
+  const [view, setView] = useState<"estoque" | "depara" | "dashboard">("estoque")
   const [itens, setItens] = useState<Item[]>([])
   const [totalFiltrado, setTotalFiltrado] = useState({ count: 0, quantidade: 0 })
   const [loading, setLoading] = useState(false)
@@ -133,9 +134,14 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
           className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "depara" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>
           <ArrowLeftRight size={13} /> De-Para Produtos
         </button>
+        <button onClick={() => setView("dashboard")}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "dashboard" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>
+          <Scale size={13} /> Dashboard
+        </button>
       </div>
 
       {view === "depara" && <DeParaProdutos produtosVistoria={produtosVistoria} />}
+      {view === "dashboard" && <DashboardContabil />}
 
       {view === "estoque" && (<>
       {/* KPIs */}
