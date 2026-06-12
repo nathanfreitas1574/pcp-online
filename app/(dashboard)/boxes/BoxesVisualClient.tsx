@@ -259,6 +259,7 @@ export default function BoxesVisualClient({
   boxesLivres: _boxesLivres,
   todasPrevisoes = [],
   naviosDisponiveis = [],
+  contabilGranel = null,
 }: {
   boxes: BoxItem[]
   totalCapacidade: number
@@ -267,6 +268,7 @@ export default function BoxesVisualClient({
   boxesLivres: number
   todasPrevisoes?: (Previsao & { boxId: string })[]
   naviosDisponiveis?: { id: string; nome: string; eta: string; produto?: string | null; clienteNome?: string | null }[]
+  contabilGranel?: number | null
 }) {
   const [visao, setVisao] = useState<"MAPA" | "GRADE" | "LINHA">("MAPA")
   const [estruturaSel, setEstruturaSel] = useState<string | null>(null)
@@ -540,19 +542,57 @@ export default function BoxesVisualClient({
         </div>
       )}
 
-      {/* ── Barra global ── */}
+      {/* ── Barra global: Físico × Contábil × Diferença ── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5">
         <div className="flex justify-between text-sm mb-2">
           <span className="font-medium text-gray-700">Capacidade total do armazém</span>
           <span className="font-bold text-gray-800">{pctTotal.toFixed(1)}%</span>
         </div>
-        <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-700" style={{
-            width: `${pctTotal}%`,
-            background: pctTotal >= 90 ? "#ef4444" : pctTotal >= 70 ? "#f97316" : "#22c55e",
-          }} />
+
+        {/* Físico (boxes) */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs text-gray-500 w-32 shrink-0">📦 Físico (boxes)</span>
+          <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-700" style={{
+              width: `${Math.min(pctTotal, 100)}%`,
+              background: pctTotal >= 90 ? "#ef4444" : pctTotal >= 70 ? "#f97316" : "#22c55e",
+            }} />
+          </div>
+          <span className="text-xs font-bold text-gray-700 w-28 text-right tabular-nums">{localTotalVolume.toLocaleString("pt-BR")} t</span>
         </div>
-        <div className="flex justify-between text-xs text-gray-400 mt-1">
+
+        {contabilGranel !== null && (() => {
+          const pctCont = totalCapacidade > 0 ? (contabilGranel / totalCapacidade) * 100 : 0
+          const dif = localTotalVolume - contabilGranel
+          const pctDif = localTotalVolume > 0 ? (Math.abs(dif) / localTotalVolume) * 100 : 0
+          return (
+            <>
+              {/* Contábil (granel · TOTVS) */}
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs text-gray-500 w-32 shrink-0">📊 Contábil (granel)</span>
+                <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-blue-500 transition-all duration-700" style={{ width: `${Math.min(pctCont, 100)}%` }} />
+                </div>
+                <span className="text-xs font-bold text-blue-700 w-28 text-right tabular-nums">{contabilGranel.toLocaleString("pt-BR")} t</span>
+              </div>
+
+              {/* Diferença físico − contábil */}
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                <span className="text-xs text-gray-500 w-32 shrink-0">⚖️ Diferença</span>
+                <div className="flex-1 flex items-center gap-2">
+                  <span className={`text-sm font-bold tabular-nums ${Math.abs(dif) < 0.05 ? "text-green-600" : Math.abs(dif) <= localTotalVolume * 0.05 ? "text-amber-600" : "text-red-600"}`}>
+                    {dif > 0 ? "+" : ""}{dif.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} t
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    ({pctDif.toFixed(1)}% · {dif > 0 ? "físico maior que o contábil" : dif < 0 ? "contábil maior que o físico" : "conferem"})
+                  </span>
+                </div>
+              </div>
+            </>
+          )
+        })()}
+
+        <div className="flex justify-between text-xs text-gray-400 mt-2">
           {[0, 0.25, 0.5, 0.75, 1].map(f => (
             <span key={f}>{(totalCapacidade * f).toLocaleString("pt-BR")} ton</span>
           ))}

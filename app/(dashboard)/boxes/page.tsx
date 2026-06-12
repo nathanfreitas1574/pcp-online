@@ -4,7 +4,7 @@ import BoxesVisualClient from "./BoxesVisualClient"
 export const dynamic = "force-dynamic"
 
 export default async function BoxesPage() {
-  const [boxes, alertasAbertos, previsoes, navios] = await Promise.all([
+  const [boxes, alertasAbertos, previsoes, navios, contabilAgg] = await Promise.all([
     prisma.box.findMany({
       where: { ativo: true },
       include: {
@@ -42,6 +42,8 @@ export default async function BoxesPage() {
       orderBy: { eta: "asc" },
       select: { id: true, nome: true, eta: true, produto: true, clienteNome: true },
     }),
+    // estoque contábil granel (armazém 10) — saldo atual, p/ comparar com o físico
+    prisma.estoqueContabil.aggregate({ where: { armazem: "10" }, _sum: { saldo: true } }),
   ])
 
   // Mapa boxId → contagem de alertas abertos
@@ -126,6 +128,7 @@ export default async function BoxesPage() {
         produto: n.produto,
         clienteNome: n.clienteNome,
       }))}
+      contabilGranel={contabilAgg._sum.saldo != null ? Math.round(contabilAgg._sum.saldo) : null}
     />
   )
 }
