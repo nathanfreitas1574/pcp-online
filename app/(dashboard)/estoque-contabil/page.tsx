@@ -4,7 +4,7 @@ import EstoqueContabilClient from "./EstoqueContabilClient"
 export const dynamic = "force-dynamic"
 
 export default async function EstoqueContabilPage() {
-  const [clientes, armazens, totalGeral, porSentido, ultimo] = await Promise.all([
+  const [clientes, armazens, totalGeral, porSentido, ultimo, produtos] = await Promise.all([
     prisma.estoqueContabil.findMany({
       where: { razaoSocial: { not: null } }, distinct: ["razaoSocial"],
       select: { razaoSocial: true }, orderBy: { razaoSocial: "asc" }, take: 300,
@@ -16,6 +16,7 @@ export default async function EstoqueContabilPage() {
     prisma.estoqueContabil.aggregate({ _count: { id: true }, _sum: { quantidade: true } }),
     prisma.estoqueContabil.groupBy({ by: ["sentido"], _count: { id: true }, _sum: { quantidade: true } }),
     prisma.estoqueContabil.findFirst({ orderBy: { importadoEm: "desc" }, select: { importadoEm: true } }),
+    prisma.produto.findMany({ where: { ativo: true }, select: { descricao: true }, orderBy: { descricao: "asc" } }),
   ])
 
   return (
@@ -25,6 +26,7 @@ export default async function EstoqueContabilPage() {
       totalGeral={{ count: totalGeral._count.id, quantidade: totalGeral._sum.quantidade ?? 0 }}
       porSentido={porSentido.map(s => ({ sentido: s.sentido ?? "—", count: s._count.id, quantidade: s._sum.quantidade ?? 0 }))}
       importadoEm={ultimo?.importadoEm ? ultimo.importadoEm.toISOString() : null}
+      produtosVistoria={[...new Set(produtos.map(p => p.descricao).filter(Boolean))]}
     />
   )
 }

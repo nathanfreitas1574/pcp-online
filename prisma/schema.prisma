@@ -1103,6 +1103,18 @@ model EstoqueContabil {
   @@index([docOriginal])
 }
 
+// ─── DE-PARA de produtos do estoque contábil ────────────────────────────────
+// Mapeia o produto do contábil (código + descrição completa) para a descrição
+// abreviada usada na VISTORIA, permitindo comparar físico × contábil por produto.
+model EstoqueDePara {
+  id                 String   @id @default(cuid())
+  codigoProduto      String   @unique
+  descricaoOriginal  String
+  descricaoAbreviada String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
 // ─── MARCAÇÃO DE VEÍCULOS (CARGA/DESCARGA — TOTVS) ───────────────────────────
 // As colunas do Excel exportado podem mudar de posição; a importação casa
 // por NOME do cabeçalho (normalizado), não por índice. Linka com contrato

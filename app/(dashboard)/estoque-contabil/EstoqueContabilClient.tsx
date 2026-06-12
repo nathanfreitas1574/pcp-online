@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
   Database, Upload, Search, ArrowDownToLine, ArrowUpFromLine, Boxes,
-  CheckCircle2, AlertTriangle, X, Scale,
+  CheckCircle2, AlertTriangle, X, Scale, Table2, ArrowLeftRight,
 } from "lucide-react"
 import DrillBarChart from "@/components/DrillBarChart"
+import DeParaProdutos from "./DeParaProdutos"
 
 type Item = {
   id: string; filial: string | null; produto: string | null; descricao: string | null
@@ -18,13 +19,15 @@ type Props = {
   totalGeral: { count: number; quantidade: number }
   porSentido: { sentido: string; count: number; quantidade: number }[]
   importadoEm: string | null
+  produtosVistoria: string[]
 }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
 const fmtInt = (n: number) => n.toLocaleString("pt-BR")
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
 
-export default function EstoqueContabilClient({ clientes, armazens, totalGeral, porSentido, importadoEm }: Props) {
+export default function EstoqueContabilClient({ clientes, armazens, totalGeral, porSentido, importadoEm, produtosVistoria }: Props) {
+  const [view, setView] = useState<"estoque" | "depara">("estoque")
   const [itens, setItens] = useState<Item[]>([])
   const [totalFiltrado, setTotalFiltrado] = useState({ count: 0, quantidade: 0 })
   const [loading, setLoading] = useState(false)
@@ -119,6 +122,21 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
         </div>
       )}
 
+      {/* Toggle Estoque / De-Para */}
+      <div className="flex bg-gray-100 p-1 rounded-lg gap-1 w-fit mb-4">
+        <button onClick={() => setView("estoque")}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "estoque" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>
+          <Table2 size={13} /> Estoque
+        </button>
+        <button onClick={() => setView("depara")}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "depara" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>
+          <ArrowLeftRight size={13} /> De-Para Produtos
+        </button>
+      </div>
+
+      {view === "depara" && <DeParaProdutos produtosVistoria={produtosVistoria} />}
+
+      {view === "estoque" && (<>
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
@@ -235,6 +253,7 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
           <p className="text-[11px] text-gray-400 px-3 py-2 border-t border-gray-100">Mostrando os 500 maiores por quantidade. Use os filtros para refinar.</p>
         )}
       </div>
+      </>)}
     </div>
   )
 }
