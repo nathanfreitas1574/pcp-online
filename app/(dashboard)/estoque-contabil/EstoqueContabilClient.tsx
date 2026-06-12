@@ -20,13 +20,14 @@ type Props = {
   porSentido: { sentido: string; count: number; quantidade: number }[]
   importadoEm: string | null
   produtosVistoria: string[]
+  coberturaPendente: { volume: number; count: number }
 }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
 const fmtInt = (n: number) => n.toLocaleString("pt-BR")
 const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
 
-export default function EstoqueContabilClient({ clientes, armazens, totalGeral, porSentido, importadoEm, produtosVistoria }: Props) {
+export default function EstoqueContabilClient({ clientes, armazens, totalGeral, porSentido, importadoEm, produtosVistoria, coberturaPendente }: Props) {
   const [view, setView] = useState<"estoque" | "depara">("estoque")
   const [itens, setItens] = useState<Item[]>([])
   const [totalFiltrado, setTotalFiltrado] = useState({ count: 0, quantidade: 0 })
@@ -156,6 +157,18 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
           <p className="text-2xl font-bold text-gray-800">{fmt(saida?.quantidade ?? 0)} <span className="text-sm font-medium text-gray-400">· {fmtInt(saida?.count ?? 0)}</span></p>
         </div>
       </div>
+
+      {/* Saldo pendente de cobertura */}
+      {coberturaPendente.volume > 0 && (
+        <a href="/coberturas" className="flex items-center gap-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100/60 transition">
+          <span className="text-2xl">🛡️</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">{coberturaPendente.volume.toLocaleString("pt-BR")} t pendentes de cobertura</p>
+            <p className="text-xs text-amber-700">{coberturaPendente.count} romaneio(s) descarregado(s) sem NF para entrar no contábil — ainda não refletido no saldo acima</p>
+          </div>
+          <span className="text-amber-600 text-sm">Gerenciar →</span>
+        </a>
+      )}
 
       {/* Filtros */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm mb-4">

@@ -12,6 +12,7 @@ type KPIs = {
   recebidoTon: number; expedidoTon: number
   custoTotal: number; custoPorTon: number | null
   alertasCriticosCount: number; vistoriaHoje: number; lacresNaoConformes: number
+  coberturaPendenteVol: number; coberturaPendenteCount: number
   mes: string
 }
 
@@ -119,6 +120,18 @@ export default function ExecutivoClient({
         <Card label="Vistorias Hoje"   value={kpis.vistoriaHoje}  sub="realizadas"            icon={ClipboardCheck} cor="blue" />
         <Card label="Lacres N/C"       value={kpis.lacresNaoConformes} sub="não conformes"    icon={Lock}           cor={kpis.lacresNaoConformes > 0 ? "red" : "green"} />
       </div>
+
+      {/* Cobertura pendente */}
+      {kpis.coberturaPendenteVol > 0 && (
+        <a href="/coberturas" className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3.5 hover:bg-amber-100/60 transition">
+          <span className="text-2xl">🛡️</span>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-amber-800">{kpis.coberturaPendenteVol.toLocaleString("pt-BR")} t pendentes de cobertura</p>
+            <p className="text-xs text-amber-700">{kpis.coberturaPendenteCount} romaneio(s) descarregado(s) sem NF para entrar no contábil</p>
+          </div>
+          <span className="text-amber-600 text-sm font-medium">Gerenciar →</span>
+        </a>
+      )}
 
       {/* ── Barra de ocupação ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">

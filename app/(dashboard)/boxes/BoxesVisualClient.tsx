@@ -260,6 +260,7 @@ export default function BoxesVisualClient({
   todasPrevisoes = [],
   naviosDisponiveis = [],
   contabilGranel = null,
+  coberturaPendente = null,
 }: {
   boxes: BoxItem[]
   totalCapacidade: number
@@ -269,6 +270,7 @@ export default function BoxesVisualClient({
   todasPrevisoes?: (Previsao & { boxId: string })[]
   naviosDisponiveis?: { id: string; nome: string; eta: string; produto?: string | null; clienteNome?: string | null }[]
   contabilGranel?: number | null
+  coberturaPendente?: { volume: number; count: number } | null
 }) {
   const [visao, setVisao] = useState<"MAPA" | "GRADE" | "LINHA">("MAPA")
   const [estruturaSel, setEstruturaSel] = useState<string | null>(null)
@@ -591,6 +593,14 @@ export default function BoxesVisualClient({
             </>
           )
         })()}
+
+        {coberturaPendente && coberturaPendente.volume > 0 && (
+          <a href="/coberturas" className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100 hover:bg-amber-50/40 rounded px-1 transition">
+            <span className="text-xs text-gray-500 w-32 shrink-0">🛡️ Cobertura pendente</span>
+            <span className="text-sm font-bold text-amber-600 tabular-nums">{coberturaPendente.volume.toLocaleString("pt-BR")} t</span>
+            <span className="text-xs text-gray-400">({coberturaPendente.count} romaneio{coberturaPendente.count !== 1 ? "s" : ""} descarregado{coberturaPendente.count !== 1 ? "s" : ""} sem NF no contábil) →</span>
+          </a>
+        )}
 
         <div className="flex justify-between text-xs text-gray-400 mt-2">
           {[0, 0.25, 0.5, 0.75, 1].map(f => (

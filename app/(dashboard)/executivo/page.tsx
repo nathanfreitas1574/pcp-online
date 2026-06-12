@@ -16,7 +16,7 @@ export default async function ExecutivoPage() {
   const [
     boxes, alertasCriticos, naviosProximos, previsoes,
     recebimentoMes, expedicaoMes, custoMes, topClientes,
-    vistoriaHoje, lacresNaoConformes,
+    vistoriaHoje, lacresNaoConformes, coberturaAgg,
   ] = await Promise.all([
     // Ocupação geral
     prisma.box.findMany({
@@ -75,6 +75,8 @@ export default async function ExecutivoPage() {
     prisma.lacre.count({
       where: { status: "NAO_CONFORME", inativado: false },
     }),
+    // Cobertura pendente (descarregado sem NF no contábil)
+    prisma.coberturaPendente.aggregate({ where: { status: "PENDENTE" }, _sum: { volume: true }, _count: { id: true } }),
   ])
 
   // Calcular KPIs de boxes
@@ -100,6 +102,8 @@ export default async function ExecutivoPage() {
         custoTotal, custoPorTon,
         alertasCriticosCount: alertasCriticos.length,
         vistoriaHoje, lacresNaoConformes,
+        coberturaPendenteVol: Math.round(coberturaAgg._sum.volume ?? 0),
+        coberturaPendenteCount: coberturaAgg._count.id,
         mes: mesStr,
       }}
       alertasCriticos={alertasCriticos.map(a => ({
