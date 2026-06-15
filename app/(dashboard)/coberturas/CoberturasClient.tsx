@@ -36,6 +36,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   const [importando, setImportando] = useState(false)
   const [conferindo, setConferindo] = useState(false)
   const [aviso, setAviso] = useState("")
+  const [sel, setSel] = useState<Set<string>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
 
   const carregar = useCallback(async () => {
@@ -48,6 +49,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     setItens(d.itens ?? [])
     setPendente(d.pendente ?? { count: 0, volume: 0 })
     setCoberto(d.coberto ?? { count: 0, volume: 0 })
+    setSel(new Set())
     setLoading(false)
   }, [statusFiltro, busca])
   useEffect(() => { carregar() }, [carregar])
@@ -71,7 +73,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     try {
       const r = await fetch("/api/coberturas/importar", { method: "POST", body: fd })
       const d = await r.json()
-      if (r.ok) { setAviso(`✅ ${d.criados} importadas${d.jaCobertos ? ` · ${d.jaCobertos} já cobertas (NF no contábil)` : ""}.`); await carregar() }
+      if (r.ok) { setAviso(`✅ ${d.criados} importadas${d.jaCobertos ? ` · ${d.jaCobertos} já cobertas (NF no contábil)` : ""}${d.pulados ? ` · ${d.pulados} ignoradas (duplicadas)` : ""}.`); await carregar() }
       else setAviso(`❌ ${d.error ?? "Falha na importação."}`)
     } catch { setAviso("❌ Erro de rede ao importar.") }
     setImportando(false)
@@ -128,6 +130,18 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     if (!w) { alert("Permita pop-ups para exportar em PDF."); return }
     w.document.write(html); w.document.close(); w.focus()
     setTimeout(() => w.print(), 300)
+  }
+
+  const toggleSel = (id: string) => setSel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleTodos = () => setSel(prev => prev.size === itens.length ? new Set() : new Set(itens.map(i => i.id)))
+
+  async function excluirLote() {
+    if (sel.size === 0) return
+    if (!confirm(`Excluir ${sel.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return
+    const r = await fetch("/api/coberturas/excluir-lote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: [...sel] }) })
+    const d = await r.json()
+    if (r.ok) { setAviso(`✅ ${d.excluidos} registro(s) excluído(s).`); setSel(new Set()); await carregar() }
+    else setAviso(`❌ ${d.error ?? "Erro ao excluir."}`)
   }
 
   return (
@@ -203,6 +217,12 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar romaneio, produto, cliente…"
             className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
+        {sel.size > 0 && (
+          <button onClick={excluirLote}
+            className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-red-700 transition">
+            <Trash2 size={15} /> Excluir selecionados ({sel.size})
+          </button>
+        )}
         <div className="text-sm text-gray-500">{loading ? "Carregando…" : `${itens.length} registro(s)`}</div>
       </div>
 
@@ -212,6 +232,11 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
               <tr>
+                <th className="px-3 py-2.5 w-8">
+                  <input type="checkbox" checked={itens.length > 0 && sel.size === itens.length}
+                    ref={el => { if (el) el.indeterminate = sel.size > 0 && sel.size < itens.length }}
+                    onChange={toggleTodos} title="Selecionar todos" />
+                </th>
                 <th className="text-left px-3 py-2.5 font-semibold">Romaneio</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Documento</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Placa</th>
@@ -227,7 +252,10 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {itens.map(c => (
-                <tr key={c.id} className="hover:bg-amber-50/30">
+                <tr key={c.id} className={sel.has(c.id) ? "bg-blue-50/60" : "hover:bg-amber-50/30"}>
+                  <td className="px-3 py-2">
+                    <input type="checkbox" checked={sel.has(c.id)} onChange={() => toggleSel(c.id)} />
+                  </td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.codigoRomaneio}</td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.numeroDocumento || "—"}</td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.placa || "—"}</td>
@@ -256,7 +284,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
                 </tr>
               ))}
               {!loading && itens.length === 0 && (
-                <tr><td colSpan={11} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={12} className="text-center py-12 text-gray-400">
                   Nenhuma cobertura {statusFiltro === "PENDENTE" ? "pendente" : ""}. Clique em <strong>Nova cobertura</strong> para registrar.
                 </td></tr>
               )}

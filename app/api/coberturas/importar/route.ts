@@ -74,9 +74,20 @@ export async function POST(req: NextRequest) {
     : new Set<string>()
   const estaCoberto = (nf: string | null) => !!nf && candidatosNF(nf).some(c => noContabil.has(c))
 
+  // Dedup: pula romaneio+documento já existentes (evita duplicar em reimportação)
+  const chave = (rom: string, doc: string | null) => `${(rom ?? "").trim()}|${(doc ?? "").trim()}`
+  const existentes = new Set(
+    (await prisma.coberturaPendente.findMany({ select: { codigoRomaneio: true, numeroDocumento: true } }))
+      .map(c => chave(c.codigoRomaneio, c.numeroDocumento)),
+  )
+  const noArquivo = new Set<string>()
+
   const agora = new Date()
-  let criados = 0, jaCobertos = 0
+  let criados = 0, jaCobertos = 0, pulados = 0
   for (const r of regs) {
+    const k = chave(r.codigoRomaneio, r.numeroDocumento)
+    if (existentes.has(k) || noArquivo.has(k)) { pulados++; continue }
+    noArquivo.add(k)
     const coberto = estaCoberto(r.numeroNota)
     if (coberto) jaCobertos++
     await prisma.coberturaPendente.create({
@@ -85,5 +96,5 @@ export async function POST(req: NextRequest) {
     criados++
   }
 
-  return NextResponse.json({ ok: true, criados, jaCobertos, camposReconhecidos })
+  return NextResponse.json({ ok: true, criados, jaCobertos, pulados, camposReconhecidos })
 }
