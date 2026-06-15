@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { notaNoContabil } from "@/lib/cobertura"
+import { notaNoContabil, dataInputUTC } from "@/lib/cobertura"
 import { NextRequest, NextResponse } from "next/server"
 
 // PATCH — edita ou marca como coberto/pendente
@@ -19,8 +19,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (b[k] !== undefined) data[k] = b[k] === "" ? null : b[k]
   }
   if (b.volume !== undefined) data.volume = Number(b.volume) || 0
-  if (b.dataDescarga !== undefined)    data.dataDescarga    = b.dataDescarga    ? new Date(b.dataDescarga)    : null
-  if (b.dataSolicitacao !== undefined) data.dataSolicitacao = b.dataSolicitacao ? new Date(b.dataSolicitacao) : null
+  if (b.dataDescarga !== undefined)    data.dataDescarga    = dataInputUTC(b.dataDescarga)
+  if (b.dataSolicitacao !== undefined) data.dataSolicitacao = dataInputUTC(b.dataSolicitacao)
   if (b.status !== undefined) {
     data.status = b.status
     data.resolvidoEm = b.status === "COBERTO" ? new Date() : null

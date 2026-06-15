@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { notaNoContabil } from "@/lib/cobertura"
+import { notaNoContabil, dataInputUTC } from "@/lib/cobertura"
 import { NextRequest, NextResponse } from "next/server"
 
 // GET — lista com filtros + totais (cobertura pendente)
@@ -59,9 +59,9 @@ export async function POST(req: NextRequest) {
       produto: String(b.produto).trim(),
       cliente: String(b.cliente ?? "").trim(),
       volume: Number(b.volume) || 0,
-      dataDescarga:    b.dataDescarga    ? new Date(b.dataDescarga)    : null,
+      dataDescarga:    dataInputUTC(b.dataDescarga),
       numeroNota,
-      dataSolicitacao: b.dataSolicitacao ? new Date(b.dataSolicitacao) : null,
+      dataSolicitacao: dataInputUTC(b.dataSolicitacao),
       observacao: b.observacao?.trim() || null,
       boxCodigo: b.boxCodigo?.trim() || null,
       status: coberto ? "COBERTO" : "PENDENTE",

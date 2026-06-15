@@ -16,7 +16,7 @@ type Cobertura = {
 type Props = { clientes: string[]; produtos: string[]; boxes: string[] }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
-const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR") : "—"
+const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—"
 const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
 const VAZIO = { codigoRomaneio: "", numeroDocumento: "", placa: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "", dataDescarga: "", numeroNota: "", dataSolicitacao: "" }
 

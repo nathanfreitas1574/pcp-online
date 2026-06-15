@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   ]
 
   const itens = await prisma.coberturaPendente.findMany({ where, orderBy: { createdAt: "desc" } })
-  const fmtD = (d: Date | null) => d ? new Date(d).toLocaleDateString("pt-BR") : ""
+  const fmtD = (d: Date | null) => d ? new Date(d).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : ""
 
   const linhas = itens.map(c => ({
     "Romaneio": c.codigoRomaneio,
