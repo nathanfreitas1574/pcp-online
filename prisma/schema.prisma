@@ -1115,6 +1115,35 @@ model EstoqueDePara {
   updatedAt          DateTime @updatedAt
 }
 
+// ─── CONTROLE DE VARREDURA (calcário/varredura — semanal) ────────────────────
+model VarreduraSemanal {
+  id                  String    @id @default(cuid())
+  ano                 Int
+  mesNum              Int                          // 1-12 (para ordenar)
+  mesLabel            String                       // "JANEIRO 2026"
+  semana              String                       // "S2"
+  dataSegunda         DateTime?
+  medSegundaVarredura Float     @default(0)
+  medSegundaCalcario  Float     @default(0)
+  dataSexta           DateTime?
+  medSextaVarredura   Float     @default(0)
+  medSextaCalcario    Float     @default(0)
+  expedicaoSemana     Float     @default(0)
+  geracaoIntervalo    Float     @default(0)
+  geracaoCalcario     Float     @default(0)
+  geracaoMP           Float     @default(0)
+  houveExpedicao      Boolean   @default(false)
+  calcarioFisico      Float     @default(0)
+  compraCalcario      Float     @default(0)
+  saldoAcumulado      Float     @default(0)
+  observacao          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([ano, semana])
+  @@index([ano, mesNum])
+}
+
 // ─── CONTROLE DE ADITIVOS (Físico × Contábil — armazém 20) ──────────────────
 model AditivoControle {
   id            String   @id @default(cuid())
