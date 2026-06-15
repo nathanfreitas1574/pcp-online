@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
   const c = await prisma.coberturaPendente.create({
     data: {
       codigoRomaneio: String(b.codigoRomaneio).trim(),
+      numeroDocumento: b.numeroDocumento?.trim() || null,
+      placa: b.placa?.trim() || null,
       produto: String(b.produto).trim(),
       cliente: String(b.cliente ?? "").trim(),
       volume: Number(b.volume) || 0,

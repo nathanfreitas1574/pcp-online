@@ -1121,6 +1121,8 @@ model EstoqueDePara {
 model CoberturaPendente {
   id              String    @id @default(cuid())
   codigoRomaneio  String
+  numeroDocumento String?
+  placa           String?
   produto         String
   cliente         String
   volume          Float     @default(0)

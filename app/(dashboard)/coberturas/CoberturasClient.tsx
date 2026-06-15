@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
   ShieldQuestion, Plus, Search, Save, X, Pencil, Trash2, CheckCircle2, RotateCcw, Scale, ClipboardList,
-  Upload, RefreshCw,
+  Upload, RefreshCw, FileSpreadsheet, FileText,
 } from "lucide-react"
 
 type Cobertura = {
-  id: string; codigoRomaneio: string; produto: string; cliente: string
+  id: string; codigoRomaneio: string; numeroDocumento: string | null; placa: string | null
+  produto: string; cliente: string
   volume: number; observacao: string | null; boxCodigo: string | null
   dataDescarga: string | null; numeroNota: string | null; dataSolicitacao: string | null
   status: string; createdAt: string
@@ -17,7 +18,7 @@ type Props = { clientes: string[]; produtos: string[]; boxes: string[] }
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
 const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR") : "—"
 const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-const VAZIO = { codigoRomaneio: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "", dataDescarga: "", numeroNota: "", dataSolicitacao: "" }
+const VAZIO = { codigoRomaneio: "", numeroDocumento: "", placa: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "", dataDescarga: "", numeroNota: "", dataSolicitacao: "" }
 
 export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   const [itens, setItens] = useState<Cobertura[]>([])
@@ -54,7 +55,8 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   function abrirNovo() { setForm({ ...VAZIO }); setEditId(null); setErro("") }
   function abrirEdit(c: Cobertura) {
     setForm({
-      codigoRomaneio: c.codigoRomaneio, produto: c.produto, cliente: c.cliente, volume: String(c.volume),
+      codigoRomaneio: c.codigoRomaneio, numeroDocumento: c.numeroDocumento ?? "", placa: c.placa ?? "",
+      produto: c.produto, cliente: c.cliente, volume: String(c.volume),
       boxCodigo: c.boxCodigo ?? "", observacao: c.observacao ?? "", numeroNota: c.numeroNota ?? "",
       dataDescarga: c.dataDescarga ? c.dataDescarga.slice(0, 10) : "", dataSolicitacao: c.dataSolicitacao ? c.dataSolicitacao.slice(0, 10) : "",
     })
@@ -110,6 +112,24 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     setItens(prev => prev.filter(x => x.id !== c.id))
   }
 
+  function exportarExcel() {
+    const qs = new URLSearchParams()
+    if (statusFiltro) qs.set("status", statusFiltro)
+    if (busca) qs.set("busca", busca)
+    window.open("/api/coberturas/export?" + qs.toString(), "_blank")
+  }
+
+  function exportarPDF() {
+    const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!))
+    const linhas = itens.map(c => `<tr><td>${esc(c.codigoRomaneio)}</td><td>${esc(c.numeroDocumento ?? "")}</td><td>${esc(c.placa ?? "")}</td><td>${esc(c.produto)}</td><td>${esc(c.cliente)}</td><td style="text-align:right">${fmt(c.volume)}</td><td>${dt(c.dataDescarga)}</td><td>${esc(c.numeroNota ?? "")}</td><td>${dt(c.dataSolicitacao)}</td><td>${c.status === "COBERTO" ? "Coberto" : "Pendente"}</td></tr>`).join("")
+    const total = itens.reduce((s, c) => s + c.volume, 0)
+    const html = `<html><head><meta charset="utf-8"><title>Coberturas</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}tfoot td{font-weight:bold;background:#fafafa}</style></head><body><h1>Coberturas ${statusFiltro === "PENDENTE" ? "pendentes" : statusFiltro === "COBERTO" ? "cobertas" : ""}</h1><p>${itens.length} registro(s) &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>Romaneio</th><th>Documento</th><th>Placa</th><th>Produto</th><th>Cliente</th><th>Volume (t)</th><th>Descarga</th><th>N&ordm; Nota</th><th>Solicita&ccedil;&atilde;o</th><th>Status</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${fmt(total)}</td><td colspan="4"></td></tr></tfoot></table></body></html>`
+    const w = window.open("", "_blank")
+    if (!w) { alert("Permita pop-ups para exportar em PDF."); return }
+    w.document.write(html); w.document.close(); w.focus()
+    setTimeout(() => w.print(), 300)
+  }
+
   return (
     <div className="p-6 max-w-[1500px] mx-auto">
       {/* Cabeçalho */}
@@ -124,6 +144,14 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={exportarExcel} disabled={itens.length === 0}
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para Excel">
+            <FileSpreadsheet size={15} className="text-green-600" /> Excel
+          </button>
+          <button onClick={exportarPDF} disabled={itens.length === 0}
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para PDF (impressão)">
+            <FileText size={15} className="text-red-600" /> PDF
+          </button>
           <button onClick={conferir} disabled={conferindo}
             className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Conferir NFs no estoque contábil e finalizar as cobertas">
             <RefreshCw size={15} className={conferindo ? "animate-spin" : ""} /> {conferindo ? "Conferindo…" : "Conferir notas"}
@@ -185,6 +213,8 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
               <tr>
                 <th className="text-left px-3 py-2.5 font-semibold">Romaneio</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Documento</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Placa</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Descarga</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Produto</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Cliente</th>
@@ -199,6 +229,8 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
               {itens.map(c => (
                 <tr key={c.id} className="hover:bg-amber-50/30">
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.codigoRomaneio}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.numeroDocumento || "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.placa || "—"}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{dt(c.dataDescarga)}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate" title={c.produto}>{c.produto}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[160px] truncate" title={c.cliente}>{c.cliente || "—"}</td>
@@ -224,7 +256,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
                 </tr>
               ))}
               {!loading && itens.length === 0 && (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={11} className="text-center py-12 text-gray-400">
                   Nenhuma cobertura {statusFiltro === "PENDENTE" ? "pendente" : ""}. Clique em <strong>Nova cobertura</strong> para registrar.
                 </td></tr>
               )}
@@ -249,6 +281,14 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Volume (t)</label>
                 <input type="number" step="0.01" value={form.volume} onChange={e => setForm({ ...form, volume: e.target.value })} className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Número do documento</label>
+                <input value={form.numeroDocumento} onChange={e => setForm({ ...form, numeroDocumento: e.target.value })} className={inp + " font-mono"} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Placa</label>
+                <input value={form.placa} onChange={e => setForm({ ...form, placa: e.target.value.toUpperCase() })} className={inp + " font-mono"} placeholder="ABC1D23" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Data da descarga</label>
