@@ -1115,6 +1115,23 @@ model EstoqueDePara {
   updatedAt          DateTime @updatedAt
 }
 
+// ─── CONTROLE DE ADITIVOS (Físico × Contábil — armazém 20) ──────────────────
+model AditivoControle {
+  id            String   @id @default(cuid())
+  cliente       String
+  produto       String
+  fisico        Float    @default(0)
+  contabil      Float    @default(0)
+  custoUnitario Float    @default(0)   // R$/un para simular custo de perda
+  observacao    String?
+  ordem         Int      @default(0)
+  atualizadoPor String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([cliente, produto])
+}
+
 // ─── COBERTURAS PENDENTES ────────────────────────────────────────────────────
 // Produtos descarregados (estão no estoque FÍSICO) mas sem nota fiscal para dar
 // entrada no CONTÁBIL. Registra a "cobertura pendente" = gap físico − contábil.
