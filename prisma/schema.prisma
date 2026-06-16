@@ -1115,6 +1115,38 @@ model EstoqueDePara {
   updatedAt          DateTime @updatedAt
 }
 
+// ─── INDICADORES (PCP / produção / custo — mensal com YTD e total) ──────────
+model IndicadorPcp {
+  id            String   @id @default(cuid())
+  ano           Int
+  area          String   @default("PCP")
+  indicador     String
+  ordem         Int      @default(0)
+  meta          Float?
+  unidade       String?
+  sentidoIdeal  String?            // MAIOR | MENOR
+  desdobramento String?
+  recursoMedido String
+  jan Float @default(0)
+  fev Float @default(0)
+  mar Float @default(0)
+  abr Float @default(0)
+  mai Float @default(0)
+  jun Float @default(0)
+  jul Float @default(0)
+  ago Float @default(0)
+  set Float @default(0)
+  out Float @default(0)
+  nov Float @default(0)
+  dez Float @default(0)
+  obs           String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([ano, area, indicador, recursoMedido])
+  @@index([ano, area])
+}
+
 // ─── CONTROLE DE NOTAS CANCELADAS / NUMERAÇÕES INUTILIZADAS (Balança) ────────
 model ControleNota {
   id             String    @id @default(cuid())
