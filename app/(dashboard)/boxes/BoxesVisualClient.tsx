@@ -9,6 +9,7 @@ import {
 import BoxVisual, { BoxData } from "@/components/BoxVisual"
 import VistoriaDiariaModal from "@/components/VistoriaDiariaModal"
 import NovoRecebimentoModal from "@/components/NovoRecebimentoModal"
+import DrillBarChart from "@/components/DrillBarChart"
 
 type Previsao = {
   id: string; naveNome: string | null; produto: string; cliente: string
@@ -281,6 +282,7 @@ export default function BoxesVisualClient({
   const [showNovoRecebimento, setShowNovoRecebimento] = useState(false)
   const [showPrevisoes, setShowPrevisoes] = useState(false)
   const [form, setForm] = useState({ codigo: "", descricao: "", localizacao: "", capacidade: "" })
+  const [verDetalhe, setVerDetalhe] = useState(false)
   const [saving, setSaving] = useState(false)
   const [previsoes, setPrevisoes] = useState(todasPrevisoes)
 
@@ -607,6 +609,30 @@ export default function BoxesVisualClient({
             <span key={f}>{(totalCapacidade * f).toLocaleString("pt-BR")} ton</span>
           ))}
         </div>
+
+        {/* Detalhe por cliente → produto (físico nos boxes) */}
+        <button onClick={() => setVerDetalhe(v => !v)}
+          className="mt-3 flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800">
+          <ChevronRight size={14} className={`transition-transform ${verDetalhe ? "rotate-90" : ""}`} />
+          {verDetalhe ? "Ocultar" : "Ver produto e volume por cliente"}
+        </button>
+        {verDetalhe && (
+          <div className="mt-3">
+            <DrillBarChart
+              dados={boxesState.filter(b => b.volumeAtual > 0).map(b => ({
+                cliente: b.cliente || "—", produto: b.produto || "—", box: b.codigo, volume: Math.round(b.volumeAtual),
+              }))}
+              niveis={[
+                { campo: "cliente", titulo: "Cliente" },
+                { campo: "produto", titulo: "Produto" },
+                { campo: "box", titulo: "Box" },
+              ]}
+              medidas={[{ campo: "volume", nome: "Volume", cor: "#22c55e" }]}
+              unidade="t"
+              semDados="Nenhum produto nos boxes."
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Seletor de visão ── */}
