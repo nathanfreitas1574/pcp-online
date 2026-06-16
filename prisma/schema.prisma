@@ -94,6 +94,27 @@ model Armazem {
   custos    CustoOperacional[]
 }
 
+// ─── PLANTA DO ARMAZÉM (layout visual: zonas Área Geral / por cliente) ─────────
+model PlantaItem {
+  id         String   @id @default(cuid())
+  armazemId  String                          // FK solta para Armazem
+  produto    String
+  cliente    String?                          // null/"" = Área Geral; senão = zona do cliente
+  quantidade Float    @default(0)            // sacos/unidades
+  ordem      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([armazemId])
+}
+
+model PlantaConfig {
+  id            String   @id @default(cuid())
+  armazemId     String   @unique
+  balcaoFechado Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+}
+
 model Box {
   id               String          @id @default(cuid())
   codigo           String          @unique
