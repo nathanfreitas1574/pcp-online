@@ -1115,6 +1115,29 @@ model EstoqueDePara {
   updatedAt          DateTime @updatedAt
 }
 
+// ─── CONTROLE DE NOTAS CANCELADAS / NUMERAÇÕES INUTILIZADAS (Balança) ────────
+model ControleNota {
+  id             String    @id @default(cuid())
+  data           DateTime?
+  usuario        String?                      // quem lançou (Balança)
+  numero         String                       // numeração/romaneio (ex: 15819)
+  cliente        String?
+  tipo           String    @default("CANCELAMENTO")  // CANCELAMENTO | INUTILIZACAO
+  codigoOperacao String?                       // "015-CA" | "030-INA"
+  descricao      String?
+  numeroNF       String?                       // NF cancelada (para validar no contábil)
+  motivoErro     String?                       // "ERRO OPERACIONAL" | "ERRO SISTEMA"
+  observacao     String?
+  alertaContabil Boolean   @default(false)     // NF ainda lançada no contábil (não cancelada)
+  criadoPorNome  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tipo])
+  @@index([cliente])
+  @@index([numero])
+}
+
 // ─── CONTROLE DE VARREDURA (calcário/varredura — semanal) ────────────────────
 model VarreduraSemanal {
   id                  String    @id @default(cuid())
