@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
   ShieldQuestion, Plus, Search, Save, X, Pencil, Trash2, CheckCircle2, RotateCcw, Scale, ClipboardList,
-  Upload, RefreshCw, FileSpreadsheet, FileText,
+  Upload, RefreshCw, FileSpreadsheet, FileText, Truck,
 } from "lucide-react"
 
 type Cobertura = {
   id: string; codigoRomaneio: string; numeroDocumento: string | null; placa: string | null
+  transportadora: string | null; motorista: string | null
   produto: string; cliente: string
   volume: number; observacao: string | null; boxCodigo: string | null
   dataDescarga: string | null; numeroNota: string | null; dataSolicitacao: string | null
@@ -18,7 +19,7 @@ type Props = { clientes: string[]; produtos: string[]; boxes: string[] }
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
 const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—"
 const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-const VAZIO = { codigoRomaneio: "", numeroDocumento: "", placa: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "", dataDescarga: "", numeroNota: "", dataSolicitacao: "" }
+const VAZIO = { codigoRomaneio: "", numeroDocumento: "", placa: "", transportadora: "", motorista: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "", dataDescarga: "", numeroNota: "", dataSolicitacao: "" }
 
 export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   const [itens, setItens] = useState<Cobertura[]>([])
@@ -58,6 +59,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   function abrirEdit(c: Cobertura) {
     setForm({
       codigoRomaneio: c.codigoRomaneio, numeroDocumento: c.numeroDocumento ?? "", placa: c.placa ?? "",
+      transportadora: c.transportadora ?? "", motorista: c.motorista ?? "",
       produto: c.produto, cliente: c.cliente, volume: String(c.volume),
       boxCodigo: c.boxCodigo ?? "", observacao: c.observacao ?? "", numeroNota: c.numeroNota ?? "",
       dataDescarga: c.dataDescarga ? c.dataDescarga.slice(0, 10) : "", dataSolicitacao: c.dataSolicitacao ? c.dataSolicitacao.slice(0, 10) : "",
@@ -87,6 +89,31 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     setConferindo(false)
     if (r.ok) { setAviso(`✅ ${d.finalizadas} de ${d.conferidas} finalizada(s) (NF encontrada no contábil).`); await carregar() }
     else setAviso(`❌ ${d.error ?? "Erro ao conferir."}`)
+  }
+
+  // Auto-preenche transportadora/motorista pela placa (Marcação) — só se vazios
+  async function buscarVeiculo(placa: string) {
+    if (!placa.trim()) return
+    if (form?.transportadora && form?.motorista) return
+    try {
+      const r = await fetch(`/api/coberturas/dados-veiculo?placa=${encodeURIComponent(placa)}`)
+      const d = await r.json()
+      setForm((f: typeof form) => f ? {
+        ...f,
+        transportadora: f.transportadora || d.transportadora || "",
+        motorista: f.motorista || d.motorista || "",
+      } : f)
+    } catch { /* silencioso */ }
+  }
+
+  const [preenchendo, setPreenchendo] = useState(false)
+  async function preencherVeiculos() {
+    setPreenchendo(true); setAviso("")
+    const r = await fetch("/api/coberturas/preencher-veiculos", { method: "POST" })
+    const d = await r.json()
+    setPreenchendo(false)
+    if (r.ok) { setAviso(`✅ ${d.atualizados} registro(s) preenchidos pela placa${d.semMarcacao ? ` · ${d.semMarcacao} sem marcação correspondente` : ""}.`); await carregar() }
+    else setAviso(`❌ ${d.error ?? "Erro ao preencher."}`)
   }
 
   async function salvar() {
@@ -123,9 +150,9 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
 
   function exportarPDF() {
     const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!))
-    const linhas = itens.map(c => `<tr><td>${esc(c.codigoRomaneio)}</td><td>${esc(c.numeroDocumento ?? "")}</td><td>${esc(c.placa ?? "")}</td><td>${esc(c.produto)}</td><td>${esc(c.cliente)}</td><td style="text-align:right">${fmt(c.volume)}</td><td>${dt(c.dataDescarga)}</td><td>${esc(c.numeroNota ?? "")}</td><td>${dt(c.dataSolicitacao)}</td><td>${c.status === "COBERTO" ? "Coberto" : "Pendente"}</td></tr>`).join("")
+    const linhas = itens.map(c => `<tr><td>${esc(c.codigoRomaneio)}</td><td>${esc(c.numeroDocumento ?? "")}</td><td>${esc(c.placa ?? "")}</td><td>${esc(c.transportadora ?? "")}</td><td>${esc(c.motorista ?? "")}</td><td>${esc(c.produto)}</td><td>${esc(c.cliente)}</td><td style="text-align:right">${fmt(c.volume)}</td><td>${dt(c.dataDescarga)}</td><td>${esc(c.numeroNota ?? "")}</td><td>${dt(c.dataSolicitacao)}</td><td>${c.status === "COBERTO" ? "Coberto" : "Pendente"}</td></tr>`).join("")
     const total = itens.reduce((s, c) => s + c.volume, 0)
-    const html = `<html><head><meta charset="utf-8"><title>Coberturas</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}tfoot td{font-weight:bold;background:#fafafa}</style></head><body><h1>Coberturas ${statusFiltro === "PENDENTE" ? "pendentes" : statusFiltro === "COBERTO" ? "cobertas" : ""}</h1><p>${itens.length} registro(s) &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>Romaneio</th><th>Documento</th><th>Placa</th><th>Produto</th><th>Cliente</th><th>Volume (t)</th><th>Descarga</th><th>N&ordm; Nota</th><th>Solicita&ccedil;&atilde;o</th><th>Status</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${fmt(total)}</td><td colspan="4"></td></tr></tfoot></table></body></html>`
+    const html = `<html><head><meta charset="utf-8"><title>Coberturas</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}tfoot td{font-weight:bold;background:#fafafa}</style></head><body><h1>Coberturas ${statusFiltro === "PENDENTE" ? "pendentes" : statusFiltro === "COBERTO" ? "cobertas" : ""}</h1><p>${itens.length} registro(s) &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>Romaneio</th><th>Documento</th><th>Placa</th><th>Transportadora</th><th>Motorista</th><th>Produto</th><th>Cliente</th><th>Volume (t)</th><th>Descarga</th><th>N&ordm; Nota</th><th>Solicita&ccedil;&atilde;o</th><th>Status</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="7">Total</td><td style="text-align:right">${fmt(total)}</td><td colspan="4"></td></tr></tfoot></table></body></html>`
     const w = window.open("", "_blank")
     if (!w) { alert("Permita pop-ups para exportar em PDF."); return }
     w.document.write(html); w.document.close(); w.focus()
@@ -165,6 +192,10 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
           <button onClick={exportarPDF} disabled={itens.length === 0}
             className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para PDF (impressão)">
             <FileText size={15} className="text-red-600" /> PDF
+          </button>
+          <button onClick={preencherVeiculos} disabled={preenchendo}
+            className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Puxar transportadora e motorista da Marcação, pela placa">
+            <Truck size={15} className={preenchendo ? "animate-pulse" : ""} /> {preenchendo ? "Puxando…" : "Transp./Motorista"}
           </button>
           <button onClick={conferir} disabled={conferindo}
             className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Conferir NFs no estoque contábil e finalizar as cobertas">
@@ -240,6 +271,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
                 <th className="text-left px-3 py-2.5 font-semibold">Romaneio</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Documento</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Placa</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Transp. / Motorista</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Descarga</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Produto</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Cliente</th>
@@ -259,6 +291,14 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.codigoRomaneio}</td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.numeroDocumento || "—"}</td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{c.placa || "—"}</td>
+                  <td className="px-3 py-2 text-xs max-w-[180px]">
+                    {c.transportadora || c.motorista ? (
+                      <div className="leading-tight">
+                        <div className="text-gray-700 font-medium truncate" title={c.transportadora ?? ""}>{c.transportadora || "—"}</div>
+                        <div className="text-gray-400 truncate" title={c.motorista ?? ""}>{c.motorista || "—"}</div>
+                      </div>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{dt(c.dataDescarga)}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate" title={c.produto}>{c.produto}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[160px] truncate" title={c.cliente}>{c.cliente || "—"}</td>
@@ -284,7 +324,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
                 </tr>
               ))}
               {!loading && itens.length === 0 && (
-                <tr><td colSpan={12} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={13} className="text-center py-12 text-gray-400">
                   Nenhuma cobertura {statusFiltro === "PENDENTE" ? "pendente" : ""}. Clique em <strong>Nova cobertura</strong> para registrar.
                 </td></tr>
               )}
@@ -316,7 +356,16 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Placa</label>
-                <input value={form.placa} onChange={e => setForm({ ...form, placa: e.target.value.toUpperCase() })} className={inp + " font-mono"} placeholder="ABC1D23" />
+                <input value={form.placa} onChange={e => setForm({ ...form, placa: e.target.value.toUpperCase() })} onBlur={e => buscarVeiculo(e.target.value)} className={inp + " font-mono"} placeholder="ABC1D23" />
+                <p className="text-[10px] text-gray-400 mt-0.5">Ao sair do campo, puxo transp./motorista da Marcação.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Transportadora</label>
+                <input value={form.transportadora} onChange={e => setForm({ ...form, transportadora: e.target.value })} className={inp} placeholder="nome da transportadora" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Motorista</label>
+                <input value={form.motorista} onChange={e => setForm({ ...form, motorista: e.target.value })} className={inp} placeholder="nome do motorista" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Data da descarga</label>

@@ -1259,6 +1259,8 @@ model CoberturaPendente {
   codigoRomaneio  String
   numeroDocumento String?
   placa           String?
+  transportadora  String?                          // puxado da Marcação pela placa
+  motorista       String?                          // puxado da Marcação pela placa
   produto         String
   cliente         String
   volume          Float     @default(0)

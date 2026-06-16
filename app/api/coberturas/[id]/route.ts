@@ -15,7 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = {}
-  for (const k of ["codigoRomaneio", "produto", "cliente", "observacao", "boxCodigo", "numeroNota", "numeroDocumento", "placa"]) {
+  for (const k of ["codigoRomaneio", "produto", "cliente", "observacao", "boxCodigo", "numeroNota", "numeroDocumento", "placa", "transportadora", "motorista"]) {
     if (b[k] !== undefined) data[k] = b[k] === "" ? null : b[k]
   }
   if (b.volume !== undefined) data.volume = Number(b.volume) || 0

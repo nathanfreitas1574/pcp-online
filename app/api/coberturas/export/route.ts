@@ -30,6 +30,8 @@ export async function GET(req: NextRequest) {
     "Romaneio": c.codigoRomaneio,
     "Nº Documento": c.numeroDocumento ?? "",
     "Placa": c.placa ?? "",
+    "Transportadora": c.transportadora ?? "",
+    "Motorista": c.motorista ?? "",
     "Produto": c.produto,
     "Cliente": c.cliente,
     "Volume (t)": c.volume,

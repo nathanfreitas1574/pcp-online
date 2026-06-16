@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { notaNoContabil, dataInputUTC } from "@/lib/cobertura"
+import { notaNoContabil, dataInputUTC, dadosVeiculoPorPlaca } from "@/lib/cobertura"
 import { NextRequest, NextResponse } from "next/server"
 
 // GET — lista com filtros + totais (cobertura pendente)
@@ -51,11 +51,22 @@ export async function POST(req: NextRequest) {
   const numeroNota = b.numeroNota?.trim() || null
   const coberto = numeroNota ? await notaNoContabil(numeroNota) : false
 
+  // transportadora/motorista: usa o informado ou puxa da Marcação pela placa
+  const placa = b.placa?.trim() || null
+  let transportadora = b.transportadora?.trim() || null
+  let motorista = b.motorista?.trim() || null
+  if (placa && (!transportadora || !motorista)) {
+    const v = await dadosVeiculoPorPlaca(placa)
+    if (v) { transportadora = transportadora || v.transportadora; motorista = motorista || v.motorista }
+  }
+
   const c = await prisma.coberturaPendente.create({
     data: {
       codigoRomaneio: String(b.codigoRomaneio).trim(),
       numeroDocumento: b.numeroDocumento?.trim() || null,
-      placa: b.placa?.trim() || null,
+      placa,
+      transportadora,
+      motorista,
       produto: String(b.produto).trim(),
       cliente: String(b.cliente ?? "").trim(),
       volume: Number(b.volume) || 0,

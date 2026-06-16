@@ -27,3 +27,44 @@ export async function notaNoContabil(numeroNota: string | null | undefined): Pro
   const achou = await prisma.estoqueContabil.findFirst({ where: { docOriginal: { in: cands } }, select: { id: true } })
   return !!achou
 }
+
+// ── Placa → transportadora / motorista (a partir da Marcação de Veículos) ──────
+
+/** Normaliza placa: maiúsculas, só letras/dígitos (ignora hífen e espaços). */
+export function normalizaPlaca(placa: string | null | undefined): string {
+  return String(placa ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "")
+}
+
+export type DadosVeiculo = { transportadora: string | null; motorista: string | null }
+
+/** Mapa placa-normalizada → {transportadora, motorista} a partir da Marcação
+ *  (marcação mais recente vence). Use para preenchimento em lote. */
+export async function mapaVeiculosPorPlaca(): Promise<Map<string, DadosVeiculo>> {
+  const marcs = await prisma.marcacaoVeiculo.findMany({
+    where: { placa: { not: null } },
+    select: { placa: true, transportadora: true, motorista: true, dataMarcacao: true, createdAt: true },
+    orderBy: [{ dataMarcacao: "asc" }, { createdAt: "asc" }],
+  })
+  const mapa = new Map<string, DadosVeiculo>()
+  for (const m of marcs) {
+    const key = normalizaPlaca(m.placa)
+    if (!key) continue
+    // como está ordenado asc, a última escrita (mais recente) prevalece
+    mapa.set(key, { transportadora: m.transportadora ?? null, motorista: m.motorista ?? null })
+  }
+  return mapa
+}
+
+/** Busca transportadora/motorista de UMA placa (marcação mais recente). */
+export async function dadosVeiculoPorPlaca(placa: string | null | undefined): Promise<DadosVeiculo | null> {
+  const key = normalizaPlaca(placa)
+  if (!key) return null
+  const marcs = await prisma.marcacaoVeiculo.findMany({
+    where: { placa: { not: null }, OR: [{ transportadora: { not: null } }, { motorista: { not: null } }] },
+    select: { placa: true, transportadora: true, motorista: true },
+    orderBy: [{ dataMarcacao: "desc" }, { createdAt: "desc" }],
+    take: 500,
+  })
+  const achou = marcs.find(m => normalizaPlaca(m.placa) === key)
+  return achou ? { transportadora: achou.transportadora ?? null, motorista: achou.motorista ?? null } : null
+}

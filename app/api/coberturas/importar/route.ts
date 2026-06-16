@@ -3,12 +3,14 @@ import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { mapHeaders, cleanText, parsePeso, parseDataBR } from "@/lib/marcacao-columns"
-import { candidatosNF } from "@/lib/cobertura"
+import { candidatosNF, mapaVeiculosPorPlaca, normalizaPlaca } from "@/lib/cobertura"
 
 const ALIASES: Record<string, string[]> = {
   codigoRomaneio:  ["romaneio", "cod romaneio", "codigo romaneio", "cod romaneio", "ordem"],
   numeroDocumento: ["numero documento", "num documento", "documento", "doc", "nro documento", "num doc"],
   placa:           ["placa", "placa veiculo"],
+  transportadora:  ["transportadora", "transp", "nome transportadora", "transportador"],
+  motorista:       ["motorista", "nome motorista", "condutor", "nome do motorista"],
   produto:         ["produto", "descricao produto", "desc produto", "descricao"],
   cliente:         ["cliente", "razao social", "nome cliente", "cliente destino"],
   volume:          ["volume", "peso", "peso liquido", "quantidade", "qtd"],
@@ -43,7 +45,7 @@ export async function POST(req: NextRequest) {
   const camposReconhecidos = Object.keys(headerMap)
   const get = (row: unknown[], f: string) => { const i = headerMap[f]; return i === undefined ? null : row[i] }
 
-  type Reg = { codigoRomaneio: string; numeroDocumento: string | null; placa: string | null; produto: string; cliente: string; volume: number; dataDescarga: Date | null; numeroNota: string | null; dataSolicitacao: Date | null; observacao: string | null; boxCodigo: string | null }
+  type Reg = { codigoRomaneio: string; numeroDocumento: string | null; placa: string | null; transportadora: string | null; motorista: string | null; produto: string; cliente: string; volume: number; dataDescarga: Date | null; numeroNota: string | null; dataSolicitacao: Date | null; observacao: string | null; boxCodigo: string | null }
   const regs: Reg[] = []
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i]
@@ -55,6 +57,8 @@ export async function POST(req: NextRequest) {
       codigoRomaneio: codigoRomaneio ?? "",
       numeroDocumento: cleanText(get(row, "numeroDocumento")),
       placa: cleanText(get(row, "placa")),
+      transportadora: cleanText(get(row, "transportadora")),
+      motorista: cleanText(get(row, "motorista")),
       produto: produto ?? "",
       cliente: cleanText(get(row, "cliente")) ?? "",
       volume: parsePeso(get(row, "volume")),
@@ -66,6 +70,16 @@ export async function POST(req: NextRequest) {
     })
   }
   if (!regs.length) return NextResponse.json({ error: "Nenhuma linha válida encontrada.", camposReconhecidos }, { status: 400 })
+
+  // Preenche transportadora/motorista vazios a partir da Marcação (pela placa)
+  if (regs.some(r => r.placa && (!r.transportadora || !r.motorista))) {
+    const mapa = await mapaVeiculosPorPlaca()
+    for (const r of regs) {
+      if (!r.placa) continue
+      const v = mapa.get(normalizaPlaca(r.placa))
+      if (v) { r.transportadora = r.transportadora || v.transportadora; r.motorista = r.motorista || v.motorista }
+    }
+  }
 
   // Auto-conferência em lote: quais NFs já estão no contábil
   const todosCands = [...new Set(regs.flatMap(r => r.numeroNota ? candidatosNF(r.numeroNota) : []))]
