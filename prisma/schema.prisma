@@ -1154,7 +1154,7 @@ model ControleNota {
   usuario        String?                      // quem lançou (Balança)
   numero         String                       // numeração/romaneio (ex: 15819)
   cliente        String?
-  tipo           String    @default("CANCELAMENTO")  // CANCELAMENTO | INUTILIZACAO
+  tipo           String    @default("CANCELAMENTO")  // CANCELAMENTO | INUTILIZACAO | EXTEMPORANEO
   codigoOperacao String?                       // "015-CA" | "030-INA"
   descricao      String?
   numeroNF       String?                       // NF cancelada (para validar no contábil)
@@ -1162,12 +1162,26 @@ model ControleNota {
   observacao     String?
   alertaContabil Boolean   @default(false)     // NF ainda lançada no contábil (não cancelada)
   criadoPorNome  String?
+
+  // Cancelamento extemporâneo — aprovação Fiscal Interno + Financeiro (via link próprio)
+  aprovacaoToken        String?   @unique       // token do link de aprovação
+  statusAprovacao       String?                 // null (comum) | PENDENTE | APROVADO
+  aprovadoFiscal        Boolean   @default(false)
+  aprovadoFiscalPor     String?
+  aprovadoFiscalEm      DateTime?
+  aprovadoFinanceiro    Boolean   @default(false)
+  aprovadoFinanceiroPor String?
+  aprovadoFinanceiroEm  DateTime?
+  taxaCancelamento      Float?                  // taxa gerada ao aprovar (valor fixo)
+  procedimentos         String?                 // outros procedimentos / parecer
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   @@index([tipo])
   @@index([cliente])
   @@index([numero])
+  @@index([statusAprovacao])
 }
 
 // ─── CONTROLE DE VARREDURA (calcário/varredura — semanal) ────────────────────

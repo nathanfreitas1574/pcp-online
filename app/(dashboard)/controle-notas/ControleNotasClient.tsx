@@ -3,14 +3,20 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
   FileX2, Plus, Search, Save, X, Pencil, Trash2, Upload, FileSpreadsheet, AlertTriangle, Ban, Hash,
+  ShieldCheck, Copy, Check, Clock, Smartphone,
 } from "lucide-react"
 
 type Nota = {
   id: string; data: string | null; usuario: string | null; numero: string; cliente: string | null
   tipo: string; codigoOperacao: string | null; descricao: string | null; numeroNF: string | null
   motivoErro: string | null; observacao: string | null; alertaContabil: boolean
+  aprovacaoToken: string | null; statusAprovacao: string | null
+  aprovadoFiscal: boolean; aprovadoFiscalPor: string | null
+  aprovadoFinanceiro: boolean; aprovadoFinanceiroPor: string | null
+  taxaCancelamento: number | null
 }
 type Props = { clientes: string[]; usuarios: string[] }
+const brl = (n: number | null) => (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
 const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—"
 const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -20,9 +26,14 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
   const [itens, setItens] = useState<Nota[]>([])
   const [porTipo, setPorTipo] = useState<{ tipo: string; count: number }[]>([])
   const [alertas, setAlertas] = useState(0)
+  const [extempPendentes, setExtempPendentes] = useState(0)
   const [loading, setLoading] = useState(true)
   const [tipoF, setTipoF] = useState("")
   const [busca, setBusca] = useState("")
+  const [origin, setOrigin] = useState("")
+  const [copiado, setCopiado] = useState("")
+  useEffect(() => { setOrigin(window.location.origin) }, [])
+  function copiar(txt: string, key: string) { navigator.clipboard?.writeText(txt); setCopiado(key); setTimeout(() => setCopiado(""), 1800) }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<any | null>(null)
   const [editId, setEditId] = useState<string | null>(null)
@@ -42,6 +53,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
     setItens(d.itens ?? [])
     setPorTipo(d.porTipo ?? [])
     setAlertas(d.alertas ?? 0)
+    setExtempPendentes(d.extempPendentes ?? 0)
     setLoading(false)
   }, [tipoF, busca])
   useEffect(() => { carregar() }, [carregar])
@@ -96,6 +108,8 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
 
   const nCancel = porTipo.find(t => t.tipo === "CANCELAMENTO")?.count ?? 0
   const nInut = porTipo.find(t => t.tipo === "INUTILIZACAO")?.count ?? 0
+  const nExtemp = porTipo.find(t => t.tipo === "EXTEMPORANEO")?.count ?? 0
+  const linkBalanca = origin ? `${origin}/registrar-nota` : ""
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -109,6 +123,9 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => copiar(linkBalanca, "balanca")} title={linkBalanca} className="flex items-center gap-1.5 border border-rose-300 text-rose-700 bg-rose-50 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-rose-100 transition">
+            {copiado === "balanca" ? <><Check size={15} /> Link copiado!</> : <><Smartphone size={15} /> Link da Balança</>}
+          </button>
           <button onClick={exportar} disabled={itens.length === 0} className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition"><FileSpreadsheet size={15} className="text-green-600" /> Exportar</button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={importar} />
           <button onClick={() => fileRef.current?.click()} disabled={importando} className="flex items-center gap-2 bg-green-600 text-white px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition"><Upload size={15} /> {importando ? "Importando…" : "Importar Excel"}</button>
@@ -123,7 +140,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-green-600 text-xs font-medium mb-1"><Ban size={14}/> Cancelamentos</div>
           <p className="text-2xl font-bold text-gray-800">{nCancel}</p>
@@ -132,8 +149,12 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
           <div className="flex items-center gap-2 text-gray-500 text-xs font-medium mb-1"><Hash size={14}/> Inutilizações</div>
           <p className="text-2xl font-bold text-gray-800">{nInut}</p>
         </div>
+        <div className={`rounded-xl border p-4 shadow-sm ${extempPendentes > 0 ? "bg-purple-50 border-purple-200" : "bg-white border-gray-100"}`}>
+          <div className="flex items-center gap-2 text-purple-600 text-xs font-medium mb-1"><ShieldCheck size={14}/> Extemporâneos</div>
+          <p className="text-2xl font-bold text-gray-800">{nExtemp} {extempPendentes > 0 && <span className="text-xs font-semibold text-purple-600">· {extempPendentes} pendente(s)</span>}</p>
+        </div>
         <div className={`rounded-xl border p-4 shadow-sm ${alertas > 0 ? "bg-amber-50 border-amber-200" : "bg-white border-gray-100"}`}>
-          <div className="flex items-center gap-2 text-amber-600 text-xs font-medium mb-1"><AlertTriangle size={14}/> Alertas (NF ainda no contábil)</div>
+          <div className="flex items-center gap-2 text-amber-600 text-xs font-medium mb-1"><AlertTriangle size={14}/> Alertas (NF no contábil)</div>
           <p className={`text-2xl font-bold ${alertas > 0 ? "text-amber-700" : "text-gray-800"}`}>{alertas}</p>
         </div>
       </div>
@@ -141,7 +162,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
       {/* Filtros */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm mb-4 flex flex-wrap items-center gap-3">
         <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
-          {[["", "Todos"], ["CANCELAMENTO", "Cancelamentos"], ["INUTILIZACAO", "Inutilizações"]].map(([v, l]) => (
+          {[["", "Todos"], ["CANCELAMENTO", "Cancelamentos"], ["INUTILIZACAO", "Inutilizações"], ["EXTEMPORANEO", "Extemporâneos"]].map(([v, l]) => (
             <button key={v} onClick={() => setTipoF(v)} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${tipoF === v ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>{l}</button>
           ))}
         </div>
@@ -165,6 +186,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
                 <th className="text-left px-3 py-2.5 font-semibold">Tipo</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Nº NF</th>
                 <th className="text-left px-3 py-2.5 font-semibold">Motivo</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Aprovação</th>
                 <th className="text-center px-3 py-2.5 font-semibold">Ações</th>
               </tr>
             </thead>
@@ -178,6 +200,8 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
                   <td className="px-3 py-2">
                     {n.tipo === "CANCELAMENTO"
                       ? <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded">Cancelamento</span>
+                      : n.tipo === "EXTEMPORANEO"
+                      ? <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">Extemporâneo</span>
                       : <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded">Inutilização</span>}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">
@@ -185,6 +209,25 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
                     {n.alertaContabil && <span className="ml-1 text-amber-600" title="NF ainda lançada no contábil"><AlertTriangle size={12} className="inline" /></span>}
                   </td>
                   <td className="px-3 py-2 text-xs text-gray-500">{n.motivoErro || "—"}</td>
+                  <td className="px-3 py-2">
+                    {n.tipo !== "EXTEMPORANEO" ? <span className="text-gray-300">—</span> : (
+                      <div className="space-y-1">
+                        {n.statusAprovacao === "APROVADO"
+                          ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded"><Check size={12} /> Aprovado · {brl(n.taxaCancelamento)}</span>
+                          : <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded"><Clock size={12} /> Pendente</span>}
+                        <div className="flex items-center gap-1 text-[10px]">
+                          <span className={n.aprovadoFiscal ? "text-green-600 font-semibold" : "text-gray-400"} title={n.aprovadoFiscalPor ?? ""}>{n.aprovadoFiscal ? "✓" : "○"} Fiscal</span>
+                          <span className={n.aprovadoFinanceiro ? "text-green-600 font-semibold" : "text-gray-400"} title={n.aprovadoFinanceiroPor ?? ""}>{n.aprovadoFinanceiro ? "✓" : "○"} Financ.</span>
+                        </div>
+                        {n.statusAprovacao !== "APROVADO" && n.aprovacaoToken && origin && (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => copiar(`${origin}/aprovar-nota/${n.aprovacaoToken}?p=fiscal`, "f" + n.id)} className="text-[10px] text-purple-600 hover:underline flex items-center gap-0.5">{copiado === "f" + n.id ? <Check size={10} /> : <Copy size={10} />} fiscal</button>
+                            <button onClick={() => copiar(`${origin}/aprovar-nota/${n.aprovacaoToken}?p=financeiro`, "x" + n.id)} className="text-[10px] text-purple-600 hover:underline flex items-center gap-0.5">{copiado === "x" + n.id ? <Check size={10} /> : <Copy size={10} />} financ.</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => abrirEdit(n)} className="p-1.5 rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600" title="Editar"><Pencil size={14} /></button>
@@ -194,7 +237,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
                 </tr>
               ))}
               {!loading && itens.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">Nenhum registro. Use <strong>Registrar</strong> ou <strong>Importar Excel</strong>.</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">Nenhum registro. Use <strong>Registrar</strong> ou <strong>Importar Excel</strong>.</td></tr>
               )}
             </tbody>
           </table>
@@ -216,13 +259,20 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
                 <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} className={inp}>
                   <option value="CANCELAMENTO">Cancelamento (015-CA)</option>
                   <option value="INUTILIZACAO">Inutilização (030-INA)</option>
+                  <option value="EXTEMPORANEO">Cancelamento extemporâneo (aprovação)</option>
                 </select>
               </div>
               <div><label className="block text-xs font-semibold text-gray-600 mb-1">Número *</label><input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} className={inp + " font-mono"} /></div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Nº NF {form.tipo === "CANCELAMENTO" && <span className="text-amber-600">(valida no contábil)</span>}</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Nº NF {(form.tipo === "CANCELAMENTO" || form.tipo === "EXTEMPORANEO") && <span className="text-amber-600">(valida no contábil)</span>}</label>
                 <input value={form.numeroNF} onChange={e => setForm({ ...form, numeroNF: e.target.value })} className={inp + " font-mono"} disabled={form.tipo === "INUTILIZACAO"} />
               </div>
+              {form.tipo === "EXTEMPORANEO" && !editId && (
+                <div className="col-span-2 flex items-start gap-2 bg-purple-50 border border-purple-200 text-purple-800 rounded-lg px-3 py-2 text-xs">
+                  <ShieldCheck size={15} className="shrink-0 mt-0.5" />
+                  <span>Ao salvar, o sistema gera os <strong>links de aprovação</strong> (Fiscal Interno e Financeiro). A taxa de cancelamento (valor fixo) é gerada quando os dois validarem.</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Usuário</label>
                 <input list="cn-usuarios" value={form.usuario} onChange={e => setForm({ ...form, usuario: e.target.value })} className={inp} />

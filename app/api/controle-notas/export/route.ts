@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { TIPO_LABEL } from "@/lib/controle-notas"
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 
@@ -30,12 +31,16 @@ export async function GET(req: NextRequest) {
     "Usuário": c.usuario ?? "",
     "Número": c.numero,
     "Cliente": c.cliente ?? "",
-    "Tipo": c.tipo === "CANCELAMENTO" ? "Cancelamento" : "Inutilização",
+    "Tipo": TIPO_LABEL[c.tipo] ?? c.tipo,
     "Código": c.codigoOperacao ?? "",
     "Descrição": c.descricao ?? "",
     "Nº NF": c.numeroNF ?? "",
     "Motivo": c.motivoErro ?? "",
     "Alerta contábil": c.alertaContabil ? "SIM — NF ainda no contábil" : "",
+    "Status aprovação": c.tipo === "EXTEMPORANEO" ? (c.statusAprovacao ?? "") : "",
+    "Validado Fiscal": c.aprovadoFiscalPor ?? "",
+    "Validado Financeiro": c.aprovadoFinanceiroPor ?? "",
+    "Taxa cancelamento": c.taxaCancelamento ?? "",
     "Observação": c.observacao ?? "",
   }))
 

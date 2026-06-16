@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { notaNoContabil, dataInputUTC } from "@/lib/cobertura"
+import { normalizaTipo, gerarToken } from "@/lib/controle-notas"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -17,15 +18,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (b[k] !== undefined) data[k] = b[k] === "" ? null : b[k]
   }
   if (b.numero !== undefined) data.numero = String(b.numero).trim()
-  if (b.tipo !== undefined) data.tipo = b.tipo === "INUTILIZACAO" ? "INUTILIZACAO" : "CANCELAMENTO"
+  if (b.tipo !== undefined) data.tipo = normalizaTipo(b.tipo)
   if (b.data !== undefined) data.data = dataInputUTC(b.data)
 
   // revalida a NF se mudou número/NF/tipo
   const atual = await prisma.controleNota.findUnique({ where: { id } })
   const tipoFinal = data.tipo ?? atual?.tipo
   const nf = (data.numeroNF ?? atual?.numeroNF ?? data.numero ?? atual?.numero ?? "").trim()
-  if (tipoFinal === "CANCELAMENTO" && nf) data.alertaContabil = await notaNoContabil(nf)
+  if ((tipoFinal === "CANCELAMENTO" || tipoFinal === "EXTEMPORANEO") && nf) data.alertaContabil = await notaNoContabil(nf)
   else if (tipoFinal === "INUTILIZACAO") data.alertaContabil = false
+
+  // virou extemporâneo sem token → inicia o fluxo de aprovação
+  if (tipoFinal === "EXTEMPORANEO" && !atual?.aprovacaoToken) {
+    data.aprovacaoToken = gerarToken()
+    data.statusAprovacao = atual?.statusAprovacao ?? "PENDENTE"
+  }
 
   const c = await prisma.controleNota.update({ where: { id }, data })
   return NextResponse.json(c)

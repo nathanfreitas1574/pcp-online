@@ -2,13 +2,8 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { notaNoContabil } from "@/lib/cobertura"
 import { dataInputUTC } from "@/lib/cobertura"
+import { CODIGO, DESC, normalizaTipo, gerarToken } from "@/lib/controle-notas"
 import { NextRequest, NextResponse } from "next/server"
-
-const DESC: Record<string, string> = {
-  CANCELAMENTO: "CANCELAMENTO AUTORIZADO",
-  INUTILIZACAO: "INUTILIZACAO DE NUMERACAO AUTORIZADA",
-}
-const CODIGO: Record<string, string> = { CANCELAMENTO: "015-CA", INUTILIZACAO: "030-INA" }
 
 // GET — lista com filtros + totais por tipo + alertas
 export async function GET(req: NextRequest) {
@@ -38,16 +33,18 @@ export async function GET(req: NextRequest) {
     if (dataFim) { const d = new Date(dataFim); d.setHours(23, 59, 59, 999); where.data.lte = d }
   }
 
-  const [itens, porTipo, alertas] = await Promise.all([
+  const [itens, porTipo, alertas, extempPendentes] = await Promise.all([
     prisma.controleNota.findMany({ where, orderBy: { data: "desc" }, take: 2000 }),
     prisma.controleNota.groupBy({ by: ["tipo"], _count: { id: true } }),
     prisma.controleNota.count({ where: { alertaContabil: true } }),
+    prisma.controleNota.count({ where: { tipo: "EXTEMPORANEO", statusAprovacao: "PENDENTE" } }),
   ])
 
   return NextResponse.json({
     itens,
     porTipo: porTipo.map(t => ({ tipo: t.tipo, count: t._count.id })),
     alertas,
+    extempPendentes,
   })
 }
 
@@ -60,11 +57,12 @@ export async function POST(req: NextRequest) {
 
   const b = await req.json()
   if (!b.numero?.trim()) return NextResponse.json({ error: "Informe o número." }, { status: 400 })
-  const tipo = b.tipo === "INUTILIZACAO" ? "INUTILIZACAO" : "CANCELAMENTO"
+  const tipo = normalizaTipo(b.tipo)
+  const extemp = tipo === "EXTEMPORANEO"
 
   // valida: NF cancelada que AINDA está no contábil = não foi cancelada
-  const nf = (b.numeroNF || b.numero || "").trim()
-  const alertaContabil = tipo === "CANCELAMENTO" && nf ? await notaNoContabil(nf) : false
+  const nf = (b.numeroNF || (tipo !== "INUTILIZACAO" ? b.numero : "") || "").trim()
+  const alertaContabil = (tipo === "CANCELAMENTO" || extemp) && nf ? await notaNoContabil(nf) : false
 
   const c = await prisma.controleNota.create({
     data: {
@@ -80,6 +78,8 @@ export async function POST(req: NextRequest) {
       observacao: b.observacao?.trim() || null,
       alertaContabil,
       criadoPorNome: session.user.name ?? null,
+      aprovacaoToken: extemp ? gerarToken() : null,
+      statusAprovacao: extemp ? "PENDENTE" : null,
     },
   })
   return NextResponse.json({ ...c, alertaContabil }, { status: 201 })
