@@ -64,6 +64,10 @@ export default function RegistrarNotaPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex items-start justify-center p-4 py-8">
       <div className="w-full max-w-md">
+        <div className="flex justify-center mb-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/fertalvo-logo.svg" alt="Fertalvo" className="h-10" />
+        </div>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-11 h-11 bg-rose-600 rounded-2xl flex items-center justify-center shadow-lg shadow-rose-200"><FileX2 className="text-white" size={22} /></div>
           <div>

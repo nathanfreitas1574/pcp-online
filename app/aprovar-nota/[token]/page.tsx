@@ -137,7 +137,11 @@ export default function AprovarNotaPage() {
 
 function Wrap({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex items-start justify-center p-4 py-8">
+    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex flex-col items-center justify-start p-4 py-8">
+      <div className="flex justify-center mb-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/fertalvo-logo.svg" alt="Fertalvo" className="h-10" />
+      </div>
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6">{children}</div>
     </div>
   )

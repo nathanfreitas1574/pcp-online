@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 56" role="img" aria-label="Fertalvo">
+  <defs>
+    <linearGradient id="fzg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#15803d"/>
+    </linearGradient>
+  </defs>
+  <!-- ícone -->
+  <rect x="6" y="8" width="40" height="40" rx="11" fill="url(#fzg)"/>
+  <path d="M16 36 C 16 22 26 15 38 15 C 38 29 29 37 16 36 Z" fill="#ffffff"/>
+  <path d="M19 34 C 25 30 31 24 36 18" fill="none" stroke="#15803d" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- wordmark -->
+  <text x="58" y="31" font-family="Segoe UI, Arial, sans-serif" font-size="23" font-weight="800" letter-spacing="0.5" fill="#14532d">FERTALVO</text>
+  <text x="59" y="45" font-family="Segoe UI, Arial, sans-serif" font-size="8" font-weight="600" letter-spacing="2.4" fill="#6b7280">INDÚSTRIA DE FERTILIZANTES</text>
+</svg>
