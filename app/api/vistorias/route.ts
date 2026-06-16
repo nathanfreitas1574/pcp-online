@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
     conforme: r.conforme,
     observacao: r.observacao,
     fotos: r.fotos?.length ?? 0,
+    fotosUrls: r.fotos ?? [],
   }))
 
   return NextResponse.json({ itens, total, conformes: total - naoConformes, naoConformes })

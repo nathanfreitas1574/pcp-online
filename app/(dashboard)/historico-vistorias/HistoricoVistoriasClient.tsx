@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { ClipboardCheck, Search, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, Camera } from "lucide-react"
+import { ClipboardCheck, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, Camera, X } from "lucide-react"
 
 type Vistoria = {
   id: string; data: string; boxCodigo: string; boxDescricao: string
-  usuario: string; conforme: boolean; observacao: string | null; fotos: number
+  usuario: string; conforme: boolean; observacao: string | null; fotos: number; fotosUrls: string[]
 }
+type FotoModal = { box: string; data: string; fotos: string[] }
 type Props = { boxes: string[]; usuarios: string[] }
 
 const dtH = (s: string) => new Date(s).toLocaleString("pt-BR", { timeZone: "UTC" })
@@ -21,6 +22,7 @@ export default function HistoricoVistoriasClient({ boxes, usuarios }: Props) {
   const [conforme, setConforme] = useState("")
   const [dataIni, setDataIni] = useState("")
   const [dataFim, setDataFim] = useState("")
+  const [fotoModal, setFotoModal] = useState<FotoModal | null>(null)
 
   const qs = useCallback(() => {
     const p = new URLSearchParams()
@@ -136,7 +138,11 @@ export default function HistoricoVistoriasClient({ boxes, usuarios }: Props) {
                       : <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded">⚠ Não conforme</span>}
                   </td>
                   <td className="px-3 py-2 text-gray-500 max-w-[300px] truncate" title={v.observacao ?? ""}>{v.observacao || "—"}</td>
-                  <td className="px-3 py-2 text-center">{v.fotos > 0 ? <span className="inline-flex items-center gap-1 text-xs text-gray-500"><Camera size={13} /> {v.fotos}</span> : "—"}</td>
+                  <td className="px-3 py-2 text-center">
+                    {v.fotos > 0
+                      ? <button onClick={() => setFotoModal({ box: v.boxCodigo, data: dtH(v.data), fotos: v.fotosUrls })} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"><Camera size={13} /> ver {v.fotos > 1 ? `(${v.fotos})` : ""}</button>
+                      : <span className="text-gray-300">—</span>}
+                  </td>
                 </tr>
               ))}
               {!loading && itens.length === 0 && (
@@ -146,6 +152,34 @@ export default function HistoricoVistoriasClient({ boxes, usuarios }: Props) {
           </table>
         </div>
       </div>
+
+      {/* Modal de fotos */}
+      {fotoModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setFotoModal(null)}>
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Camera size={18} className="text-blue-600" />
+                <div>
+                  <p className="font-bold text-gray-800 text-sm">Fotos da vistoria — Box {fotoModal.box}</p>
+                  <p className="text-xs text-gray-400">{fotoModal.data}</p>
+                </div>
+              </div>
+              <button onClick={() => setFotoModal(null)} className="text-gray-400 hover:text-gray-700 p-1 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+            </div>
+            <div className="p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {fotoModal.fotos.length === 0 && <p className="text-gray-400 text-sm col-span-2 text-center py-8">Sem fotos registradas.</p>}
+              {fotoModal.fotos.map((f, i) => (
+                <a key={i} href={f} target="_blank" rel="noopener noreferrer" className="block border border-gray-200 rounded-xl overflow-hidden hover:ring-2 hover:ring-blue-400 transition">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={f} alt={`Foto ${i + 1}`} className="w-full h-auto object-contain bg-gray-50" />
+                </a>
+              ))}
+            </div>
+            <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400">Clique na imagem para abrir em tamanho real.</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
