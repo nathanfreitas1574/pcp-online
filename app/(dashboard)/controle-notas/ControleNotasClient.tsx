@@ -92,7 +92,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
     try {
       const r = await fetch("/api/controle-notas/importar", { method: "POST", body: fd })
       const d = await r.json()
-      if (r.ok) { setAviso(`✅ ${d.criados} importadas${d.alertas ? ` · ${d.alertas} com alerta (NF ainda no contábil)` : ""}.`); await carregar() }
+      if (r.ok) { setAviso(`✅ ${d.criados} importadas${d.alertas ? ` · ${d.alertas} com alerta (NF ainda no contábil)` : ""}${d.pulados ? ` · ${d.pulados} ignoradas (duplicadas)` : ""}.`); await carregar() }
       else setAviso(`❌ ${d.error ?? "Falha na importação."}`)
     } catch { setAviso("❌ Erro de rede ao importar.") }
     setImportando(false)

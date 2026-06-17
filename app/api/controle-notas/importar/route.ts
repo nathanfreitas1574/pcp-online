@@ -73,13 +73,25 @@ export async function POST(req: NextRequest) {
     : new Set<string>()
   const alerta = (r: Reg) => r.tipo === "CANCELAMENTO" && candidatosNF(r.numeroNF || r.numero).some(c => noContabil.has(c))
 
-  let criados = 0, alertas = 0
+  // Dedup: ignora os que já existem (por número + NF + tipo) e repetidos no próprio arquivo
+  const chave = (numero: string, numeroNF: string | null, tipo: string) =>
+    `${(numero ?? "").trim()}|${(numeroNF ?? "").trim()}|${tipo}`
+  const existentes = new Set(
+    (await prisma.controleNota.findMany({ select: { numero: true, numeroNF: true, tipo: true } }))
+      .map(c => chave(c.numero, c.numeroNF, c.tipo)),
+  )
+  const noArquivo = new Set<string>()
+
+  let criados = 0, alertas = 0, pulados = 0
   for (const r of regs) {
+    const k = chave(r.numero, r.numeroNF, r.tipo)
+    if (existentes.has(k) || noArquivo.has(k)) { pulados++; continue }
+    noArquivo.add(k)
     const alertaContabil = alerta(r)
     if (alertaContabil) alertas++
     await prisma.controleNota.create({ data: { ...r, alertaContabil, criadoPorNome: session.user.name ?? null } })
     criados++
   }
 
-  return NextResponse.json({ ok: true, criados, alertas, camposReconhecidos: Object.keys(headerMap) })
+  return NextResponse.json({ ok: true, criados, alertas, pulados, camposReconhecidos: Object.keys(headerMap) })
 }

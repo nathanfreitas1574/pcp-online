@@ -4,6 +4,7 @@ import { normCliente, produtoMatch } from "@/lib/texto"
 
 export const dynamic = "force-dynamic"
 
+// Semana no padrão do sistema: semana 1 contém 1º de janeiro, começa no domingo.
 function getSemanaAtual() {
   const hoje = new Date()
   const start = new Date(hoje.getFullYear(), 0, 1)
@@ -11,8 +12,34 @@ function getSemanaAtual() {
   return { ano: hoje.getFullYear(), semana }
 }
 
-export default async function ProgramacaoPage() {
-  const { ano, semana } = getSemanaAtual()
+// Domingo (início) de uma semana específica do ano — inverso de getSemanaAtual.
+function domingoDaSemana(ano: number, semana: number): Date {
+  const jan1 = new Date(ano, 0, 1)
+  const base = new Date(ano, 0, 1 - jan1.getDay())          // domingo da semana 1
+  const d = new Date(base)
+  d.setDate(base.getDate() + (semana - 1) * 7)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+// Quantas semanas o ano tem (semana que contém 31/12).
+function semanasDoAno(ano: number): number {
+  const jan1 = new Date(ano, 0, 1)
+  const dez31 = new Date(ano, 11, 31)
+  const dias = Math.round((dez31.getTime() - jan1.getTime()) / 86400000)
+  return Math.ceil((dias + jan1.getDay() + 1) / 7)
+}
+
+export default async function ProgramacaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ano?: string; semana?: string }>
+}) {
+  const sp = await searchParams
+  const atual = getSemanaAtual()
+  const ano = Number(sp.ano) || atual.ano
+  const maxSemana = semanasDoAno(ano)
+  const semana = Math.min(Math.max(Number(sp.semana) || atual.semana, 1), maxSemana)
 
   const [programacoes, boxes, clientes, produtos] = await Promise.all([
     prisma.programacaoSemanal.findMany({
@@ -25,26 +52,27 @@ export default async function ProgramacaoPage() {
     prisma.produto.findMany({ where: { ativo: true }, orderBy: { descricao: "asc" }, select: { id: true, descricao: true, codigo: true } }),
   ])
 
-  // Calcula datas da semana (Dom → Sáb, alinhado aos rótulos da tabela)
-  const hoje = new Date()
-  const domingo = new Date(hoje)
-  domingo.setDate(hoje.getDate() - hoje.getDay())
-  domingo.setHours(0, 0, 0, 0)
+  // Datas da semana SELECIONADA (Dom → Sáb)
+  const domingo = domingoDaSemana(ano, semana)
   const diasSemana = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(domingo)
     d.setDate(domingo.getDate() + i)
     return d
   })
 
-  // ── Realizado por dia: vem da marcação do Connect ─────────────────────────
-  // Casa cada linha de programação (cliente + produto) com as marcações da
-  // semana e soma o peso líquido por dia. RECEBIMENTO=DESCARGA, EXPEDICAO=CARGA.
+  // ── Realizado por dia: marcações FINALIZADAS (status CHECKOUT) ─────────────
+  // Casa cada linha (cliente + produto + operação) com as marcações da semana e
+  // soma o peso líquido por dia. RECEBIMENTO=DESCARGA, EXPEDICAO=CARGA.
   const semanaIni = diasSemana[0]
   const semanaFim = new Date(diasSemana[6]); semanaFim.setHours(23, 59, 59, 999)
-  const marcacoes = await prisma.marcacaoVeiculo.findMany({
+  const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: semanaIni, lte: semanaFim } },
-    select: { clienteDestino: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true },
+    select: { clienteDestino: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
   })
+  // só veículos finalizados (CHECKOUT) — robusto a "CHECK-OUT"/"Check Out"
+  const ehCheckout = (s: string | null) => (s ?? "").toUpperCase().replace(/[^A-Z]/g, "").includes("CHECKOUT")
+  const marcacoes = marcacoesRaw.filter(m => ehCheckout(m.status))
+
   const idxPorData = new Map<string, number>()
   diasSemana.forEach((d, i) => idxPorData.set(d.toDateString(), i))
 
@@ -70,12 +98,14 @@ export default async function ProgramacaoPage() {
 
   return (
     <ProgramacaoClient
+      key={`${ano}-${semana}`}
       programacoes={programacoes}
       boxes={boxes}
       clientes={clientes}
       produtos={produtos}
       semana={semana}
       ano={ano}
+      maxSemana={maxSemana}
       diasSemana={diasSemana.map((d) => d.toISOString())}
       realizadoPorDia={realizadoPorDia}
     />
