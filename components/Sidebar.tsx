@@ -41,6 +41,7 @@ const nav: NavItem[] = [
   { href: "/controle-notas", label: "Notas Canceladas", icon: FileX2 },
   { section: "Planejamento" },
   { href: "/programacao", label: "Programação Semanal", icon: Calendar },
+  { href: "/programacao/historico", label: "Histórico Programação", icon: History },
   { href: "/navios", label: "Cronograma de Navios", icon: Ship },
   { href: "/metas", label: "Metas Operacionais", icon: Crosshair },
   { section: "Estoque & BI" },

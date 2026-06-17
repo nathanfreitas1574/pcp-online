@@ -2,15 +2,15 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight } from "lucide-react"
+import Link from "next/link"
+import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight, History } from "lucide-react"
 import ProgramacaoGraficos from "./ProgramacaoGraficos"
+import { DIA, ddMM, domingoDaSemana } from "@/lib/programacao"
 
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
 const TOL = 0.95 // atende com 95% do programado
-const DIA = 86400000
 const pad = (n: number) => String(n).padStart(2, "0")
-const ddMMu = (d: Date) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`
 
 // Estilo do realizado de um dia. `passou` = o dia já decorreu.
 function estiloDia(prog: number, real: number, passou: boolean): { cls: string; sym: string } {
@@ -23,12 +23,6 @@ function estiloDia(prog: number, real: number, passou: boolean): { cls: string; 
   if (real >= prog * TOL) return { cls: "text-green-700 bg-green-50 rounded font-semibold", sym: "✓" } // atendido
   // parcial: só reprova (✕) se o dia já decorreu; senão é parcial em andamento (azul)
   return passou ? { cls: "text-red-600 bg-red-50/60 rounded font-semibold", sym: "✕" } : { cls: "text-blue-600", sym: "" }
-}
-
-// Domingo de uma semana (UTC, igual ao servidor) — p/ rótulos do seletor.
-function domingoDaSemana(ano: number, semana: number): Date {
-  const jan1Dow = new Date(Date.UTC(ano, 0, 1)).getUTCDay()
-  return new Date(Date.UTC(ano, 0, 1 - jan1Dow) + (semana - 1) * 7 * DIA)
 }
 
 type Dia = { ymd: string; label: string }
@@ -173,7 +167,7 @@ export default function ProgramacaoClient({
                 className="border border-gray-200 rounded-lg px-2 py-1 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {Array.from({ length: maxSemana }, (_, i) => i + 1).map((s) => {
                   const dom = domingoDaSemana(ano, s); const sab = new Date(dom.getTime() + 6 * DIA)
-                  return <option key={s} value={s}>Semana {s} — {ddMMu(dom)} a {ddMMu(sab)}</option>
+                  return <option key={s} value={s}>Semana {s} — {ddMM(dom)} a {ddMM(sab)}</option>
                 })}
               </select>
               <span className="text-gray-400">/ {ano}</span>
@@ -204,6 +198,10 @@ export default function ProgramacaoClient({
               <BarChart3 size={13} /> Gráficos
             </button>
           </div>
+          <Link href="/programacao/historico"
+            className="flex items-center gap-2 border border-indigo-300 text-indigo-700 bg-indigo-50 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition" title="Histórico e cobrança">
+            <History size={15} /> Histórico
+          </Link>
           {view === "tabela" && (
             <button onClick={() => setAddMode(true)}
               className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">

@@ -1,34 +1,9 @@
 import { prisma } from "@/lib/prisma"
 import ProgramacaoClient from "./ProgramacaoClient"
 import { normCliente, produtoMatch } from "@/lib/texto"
+import { DIA, ymd, ddMM, getSemanaAtual, semanasDoAno, diasDaSemana, ehCheckout } from "@/lib/programacao"
 
 export const dynamic = "force-dynamic"
-
-const DIA = 86400000
-const pad = (n: number) => String(n).padStart(2, "0")
-const ymd = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
-const ddMM = (d: Date) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`
-
-// Semana do sistema: semana 1 contém 1º/jan, começa no DOMINGO. Tudo em UTC
-// (imune a fuso/horário de verão e consistente com o navegador via strings YYYY-MM-DD).
-function getSemanaAtual() {
-  const h = new Date()
-  const ano = h.getUTCFullYear()
-  const jan1 = Date.UTC(ano, 0, 1)
-  const hojeUTC = Date.UTC(ano, h.getUTCMonth(), h.getUTCDate())
-  const dias = Math.round((hojeUTC - jan1) / DIA)
-  const semana = Math.ceil((dias + new Date(jan1).getUTCDay() + 1) / 7)
-  return { ano, semana }
-}
-function domingoDaSemana(ano: number, semana: number): Date {
-  const jan1Dow = new Date(Date.UTC(ano, 0, 1)).getUTCDay()
-  return new Date(Date.UTC(ano, 0, 1 - jan1Dow) + (semana - 1) * 7 * DIA)
-}
-function semanasDoAno(ano: number): number {
-  const jan1 = Date.UTC(ano, 0, 1)
-  const dias = Math.round((Date.UTC(ano, 11, 31) - jan1) / DIA)
-  return Math.ceil((dias + new Date(jan1).getUTCDay() + 1) / 7)
-}
 
 export default async function ProgramacaoPage({
   searchParams,
@@ -53,8 +28,7 @@ export default async function ProgramacaoPage({
   ])
 
   // Datas da semana SELECIONADA (Dom → Sáb), em UTC
-  const domingo = domingoDaSemana(ano, semana)
-  const diasSemana = Array.from({ length: 7 }, (_, i) => new Date(domingo.getTime() + i * DIA))
+  const diasSemana = diasDaSemana(ano, semana)
   // payload neutro para o cliente (sem reinterpretação de fuso)
   const dias = diasSemana.map(d => ({ ymd: ymd(d), label: ddMM(d) }))
 
@@ -65,7 +39,6 @@ export default async function ProgramacaoPage({
     where: { ativo: true, dataCarregamento: { gte: semanaIni, lte: semanaFim } },
     select: { clienteDestino: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
   })
-  const ehCheckout = (s: string | null) => (s ?? "").toUpperCase().replace(/[^A-Z]/g, "").includes("CHECKOUT")
   const marcacoes = marcacoesRaw.filter(m => ehCheckout(m.status))
 
   const idxPorData = new Map<string, number>()
