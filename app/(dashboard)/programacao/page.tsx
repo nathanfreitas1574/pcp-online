@@ -4,30 +4,30 @@ import { normCliente, produtoMatch } from "@/lib/texto"
 
 export const dynamic = "force-dynamic"
 
-// Semana no padrão do sistema: semana 1 contém 1º de janeiro, começa no domingo.
+const DIA = 86400000
+const pad = (n: number) => String(n).padStart(2, "0")
+const ymd = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+const ddMM = (d: Date) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`
+
+// Semana do sistema: semana 1 contém 1º/jan, começa no DOMINGO. Tudo em UTC
+// (imune a fuso/horário de verão e consistente com o navegador via strings YYYY-MM-DD).
 function getSemanaAtual() {
-  const hoje = new Date()
-  const start = new Date(hoje.getFullYear(), 0, 1)
-  const semana = Math.ceil(((hoje.getTime() - start.getTime()) / 86400000 + start.getDay() + 1) / 7)
-  return { ano: hoje.getFullYear(), semana }
+  const h = new Date()
+  const ano = h.getUTCFullYear()
+  const jan1 = Date.UTC(ano, 0, 1)
+  const hojeUTC = Date.UTC(ano, h.getUTCMonth(), h.getUTCDate())
+  const dias = Math.round((hojeUTC - jan1) / DIA)
+  const semana = Math.ceil((dias + new Date(jan1).getUTCDay() + 1) / 7)
+  return { ano, semana }
 }
-
-// Domingo (início) de uma semana específica do ano — inverso de getSemanaAtual.
 function domingoDaSemana(ano: number, semana: number): Date {
-  const jan1 = new Date(ano, 0, 1)
-  const base = new Date(ano, 0, 1 - jan1.getDay())          // domingo da semana 1
-  const d = new Date(base)
-  d.setDate(base.getDate() + (semana - 1) * 7)
-  d.setHours(0, 0, 0, 0)
-  return d
+  const jan1Dow = new Date(Date.UTC(ano, 0, 1)).getUTCDay()
+  return new Date(Date.UTC(ano, 0, 1 - jan1Dow) + (semana - 1) * 7 * DIA)
 }
-
-// Quantas semanas o ano tem (semana que contém 31/12).
 function semanasDoAno(ano: number): number {
-  const jan1 = new Date(ano, 0, 1)
-  const dez31 = new Date(ano, 11, 31)
-  const dias = Math.round((dez31.getTime() - jan1.getTime()) / 86400000)
-  return Math.ceil((dias + jan1.getDay() + 1) / 7)
+  const jan1 = Date.UTC(ano, 0, 1)
+  const dias = Math.round((Date.UTC(ano, 11, 31) - jan1) / DIA)
+  return Math.ceil((dias + new Date(jan1).getUTCDay() + 1) / 7)
 }
 
 export default async function ProgramacaoPage({
@@ -52,29 +52,24 @@ export default async function ProgramacaoPage({
     prisma.produto.findMany({ where: { ativo: true }, orderBy: { descricao: "asc" }, select: { id: true, descricao: true, codigo: true } }),
   ])
 
-  // Datas da semana SELECIONADA (Dom → Sáb)
+  // Datas da semana SELECIONADA (Dom → Sáb), em UTC
   const domingo = domingoDaSemana(ano, semana)
-  const diasSemana = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(domingo)
-    d.setDate(domingo.getDate() + i)
-    return d
-  })
+  const diasSemana = Array.from({ length: 7 }, (_, i) => new Date(domingo.getTime() + i * DIA))
+  // payload neutro para o cliente (sem reinterpretação de fuso)
+  const dias = diasSemana.map(d => ({ ymd: ymd(d), label: ddMM(d) }))
 
   // ── Realizado por dia: marcações FINALIZADAS (status CHECKOUT) ─────────────
-  // Casa cada linha (cliente + produto + operação) com as marcações da semana e
-  // soma o peso líquido por dia. RECEBIMENTO=DESCARGA, EXPEDICAO=CARGA.
   const semanaIni = diasSemana[0]
-  const semanaFim = new Date(diasSemana[6]); semanaFim.setHours(23, 59, 59, 999)
+  const semanaFim = new Date(diasSemana[6].getTime() + DIA - 1)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: semanaIni, lte: semanaFim } },
     select: { clienteDestino: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
   })
-  // só veículos finalizados (CHECKOUT) — robusto a "CHECK-OUT"/"Check Out"
   const ehCheckout = (s: string | null) => (s ?? "").toUpperCase().replace(/[^A-Z]/g, "").includes("CHECKOUT")
   const marcacoes = marcacoesRaw.filter(m => ehCheckout(m.status))
 
   const idxPorData = new Map<string, number>()
-  diasSemana.forEach((d, i) => idxPorData.set(d.toDateString(), i))
+  diasSemana.forEach((d, i) => idxPorData.set(ymd(d), i))
 
   const realizadoPorDia: Record<string, number[]> = {}
   for (const prog of programacoes) {
@@ -89,7 +84,7 @@ export default async function ProgramacaoPage({
       if (querCarga ? !ehCarga : !ehDescarga) continue
       if (normCliente(m.clienteDestino) !== cliProg) continue
       if (!produtoMatch(m.produto, prog.produto)) continue
-      const idx = idxPorData.get(new Date(m.dataCarregamento).toDateString())
+      const idx = idxPorData.get(ymd(new Date(m.dataCarregamento)))
       if (idx === undefined) continue
       arr[idx] += m.pesoLiquido || 0
     }
@@ -106,7 +101,7 @@ export default async function ProgramacaoPage({
       semana={semana}
       ano={ano}
       maxSemana={maxSemana}
-      diasSemana={diasSemana.map((d) => d.toISOString())}
+      dias={dias}
       realizadoPorDia={realizadoPorDia}
     />
   )

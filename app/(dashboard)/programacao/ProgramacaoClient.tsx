@@ -3,15 +3,16 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import ProgramacaoGraficos from "./ProgramacaoGraficos"
 
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
 const TOL = 0.95 // atende com 95% do programado
+const DIA = 86400000
+const pad = (n: number) => String(n).padStart(2, "0")
+const ddMMu = (d: Date) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`
 
-// Estilo do realizado de um dia. `passou` = o dia já aconteceu (p/ marcar não atendido).
+// Estilo do realizado de um dia. `passou` = o dia já decorreu.
 function estiloDia(prog: number, real: number, passou: boolean): { cls: string; sym: string } {
   if (real <= 0) {
     if (prog > 0 && passou) return { cls: "text-red-600 bg-red-50 rounded font-semibold", sym: "✕" } // não atendido
@@ -20,17 +21,17 @@ function estiloDia(prog: number, real: number, passou: boolean): { cls: string; 
   if (prog === 0) return { cls: "text-amber-600 bg-amber-50 rounded font-semibold", sym: "▲" } // realizado sem programação
   if (real > prog * 1.05) return { cls: "text-amber-600 bg-amber-50 rounded font-semibold", sym: "▲" } // ultrapassou
   if (real >= prog * TOL) return { cls: "text-green-700 bg-green-50 rounded font-semibold", sym: "✓" } // atendido
-  return { cls: "text-red-600 bg-red-50/60 rounded font-semibold", sym: "✕" } // parcial = não atendido
+  // parcial: só reprova (✕) se o dia já decorreu; senão é parcial em andamento (azul)
+  return passou ? { cls: "text-red-600 bg-red-50/60 rounded font-semibold", sym: "✕" } : { cls: "text-blue-600", sym: "" }
 }
 
-// Domingo de uma semana (igual ao servidor) — p/ rótulos do seletor de semanas.
+// Domingo de uma semana (UTC, igual ao servidor) — p/ rótulos do seletor.
 function domingoDaSemana(ano: number, semana: number): Date {
-  const jan1 = new Date(ano, 0, 1)
-  const base = new Date(ano, 0, 1 - jan1.getDay())
-  const d = new Date(base); d.setDate(base.getDate() + (semana - 1) * 7); d.setHours(0, 0, 0, 0)
-  return d
+  const jan1Dow = new Date(Date.UTC(ano, 0, 1)).getUTCDay()
+  return new Date(Date.UTC(ano, 0, 1 - jan1Dow) + (semana - 1) * 7 * DIA)
 }
 
+type Dia = { ymd: string; label: string }
 type Prog = {
   id: string; clienteNome: string; produto: string; boxId?: string | null; boxCodigo: string | null; numeroContrato: string | null
   dom: number; seg: number; ter: number; qua: number; qui: number; sex: number; sab: number
@@ -41,10 +42,10 @@ type Cliente = { id: string; nome: string; codigo: string }
 type Produto = { id: string; descricao: string; codigo: string }
 
 export default function ProgramacaoClient({
-  programacoes: inicial, boxes, clientes, produtos, semana, ano, maxSemana, diasSemana, realizadoPorDia
+  programacoes: inicial, boxes, clientes, produtos, semana, ano, maxSemana, dias, realizadoPorDia
 }: {
   programacoes: Prog[]; boxes: Box[]; clientes: Cliente[]; produtos: Produto[]
-  semana: number; ano: number; maxSemana: number; diasSemana: string[]; realizadoPorDia: Record<string, number[]>
+  semana: number; ano: number; maxSemana: number; dias: Dia[]; realizadoPorDia: Record<string, number[]>
 }) {
   const router = useRouter()
   const [rows, setRows] = useState<Prog[]>(inicial)
@@ -58,10 +59,11 @@ export default function ProgramacaoClient({
 
   const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
 
-  // Dias já decorridos desta semana (estritamente antes de hoje) — p/ YTD e "não atendido"
-  const startToday = new Date(); startToday.setHours(0, 0, 0, 0)
+  // Dias já decorridos (ymd do dia < hoje no fuso do navegador) — p/ YTD e "não atendido"
+  const now = new Date()
+  const hojeYmd = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
   let elapsedIdx = -1
-  diasSemana.forEach((iso, i) => { const d = new Date(iso); d.setHours(0, 0, 0, 0); if (d.getTime() < startToday.getTime()) elapsedIdx = i })
+  dias.forEach((d, i) => { if (d.ymd < hojeYmd) elapsedIdx = i })
   const passou = (i: number) => i <= elapsedIdx
 
   function irParaSemana(s: number) {
@@ -95,7 +97,6 @@ export default function ProgramacaoClient({
   const realizadoGeral = realizadoDia.reduce((s, v) => s + v, 0)
   const fmt1 = (n: number) => n ? n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : ""
 
-  // YTD (semana até hoje): soma prog/real dos dias decorridos
   function ytd(prog: Prog) {
     const real = realDe(prog.id)
     let p = 0, r = 0
@@ -111,6 +112,7 @@ export default function ProgramacaoClient({
   function CelulaYTD({ p, r }: { p: number; r: number }) {
     if (elapsedIdx < 0) return <span className="text-gray-300 text-xs" title="Semana ainda não iniciada">—</span>
     if (p === 0 && r === 0) return <span className="text-gray-300 text-xs">—</span>
+    if (p === 0) return <div className="leading-tight"><div className="text-amber-600 text-xs font-bold">▲ sem prog</div><div className="text-[10px] text-gray-400">{fmt1(r)}</div></div>
     const emLinha = r >= p * TOL
     return (
       <div className="leading-tight">
@@ -126,9 +128,7 @@ export default function ProgramacaoClient({
     setRows((prev) => prev.map((r) => r.id === row.id ? updated : r))
     setSaving(row.id + campo)
     await fetch(`/api/programacao/${row.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [campo]: num }),
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [campo]: num }),
     })
     setSaving(null)
   }
@@ -138,9 +138,7 @@ export default function ProgramacaoClient({
     setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, boxId, boxCodigo: codigo } : r))
     setSaving(row.id + "box")
     await fetch(`/api/programacao/${row.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ boxId }),
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ boxId }),
     })
     setSaving(null)
   }
@@ -149,16 +147,13 @@ export default function ProgramacaoClient({
     if (!novaLinha.clienteNome || !novaLinha.produto) return
     setSaving("nova")
     const res = await fetch("/api/programacao", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...novaLinha, semana, ano, tipo, dataInicio: diasSemana[0], dataFim: diasSemana[6] }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...novaLinha, semana, ano, tipo, dataInicio: dias[0].ymd, dataFim: dias[6].ymd }),
     })
     const nova = await res.json()
     setRows((prev) => [...prev, nova])
     setNovaLinha({ numeroContrato: "", clienteNome: "", produto: "", boxId: "" })
-    setCtrInfo("")
-    setAddMode(false)
-    setSaving(null)
+    setCtrInfo(""); setAddMode(false); setSaving(null)
   }
 
   const ehSemanaAtual = elapsedIdx >= 0 && elapsedIdx < 6
@@ -177,8 +172,8 @@ export default function ProgramacaoClient({
               <select value={semana} onChange={(e) => irParaSemana(Number(e.target.value))}
                 className="border border-gray-200 rounded-lg px-2 py-1 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {Array.from({ length: maxSemana }, (_, i) => i + 1).map((s) => {
-                  const dom = domingoDaSemana(ano, s); const sab = new Date(dom); sab.setDate(dom.getDate() + 6)
-                  return <option key={s} value={s}>Semana {s} — {format(dom, "dd/MM")} a {format(sab, "dd/MM")}</option>
+                  const dom = domingoDaSemana(ano, s); const sab = new Date(dom.getTime() + 6 * DIA)
+                  return <option key={s} value={s}>Semana {s} — {ddMMu(dom)} a {ddMMu(sab)}</option>
                 })}
               </select>
               <span className="text-gray-400">/ {ano}</span>
@@ -232,10 +227,10 @@ export default function ProgramacaoClient({
                 <th className="px-3 py-3 text-left font-medium min-w-24">Box</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Cliente</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Produto</th>
-                {diasSemana.map((d, i) => (
+                {dias.map((d, i) => (
                   <th key={i} className={`px-2 py-3 text-center font-medium min-w-20 ${passou(i) ? "" : "opacity-80"}`}>
                     <div>{DIAS[i]}</div>
-                    <div className="text-xs opacity-70 font-normal">{format(new Date(d), "dd/MM", { locale: ptBR })}</div>
+                    <div className="text-xs opacity-70 font-normal">{d.label}</div>
                     <div className="text-[9px] opacity-60 font-normal mt-0.5">prog / real</div>
                   </th>
                 ))}
@@ -252,9 +247,7 @@ export default function ProgramacaoClient({
                 const y = ytd(row)
                 return (
                 <tr key={row.id} className="hover:bg-blue-50/30">
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-gray-600">{row.numeroContrato ?? "—"}</span>
-                  </td>
+                  <td className="px-3 py-2"><span className="font-mono text-xs text-gray-600">{row.numeroContrato ?? "—"}</span></td>
                   <td className="px-2 py-2">
                     <select value={row.boxId ?? ""} onChange={(e) => salvarBox(row, e.target.value)}
                       className={`text-xs border rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 ${saving === row.id + "box" ? "border-blue-400 bg-blue-50" : "border-gray-200 text-blue-700 font-bold"}`}
@@ -269,33 +262,23 @@ export default function ProgramacaoClient({
                     const e = estiloDia(row[d] ?? 0, real[i], passou(i))
                     return (
                     <td key={d} className="px-1 py-1 align-top">
-                      <input
-                        type="number"
-                        min="0"
-                        defaultValue={row[d] || ""}
+                      <input type="number" min="0" defaultValue={row[d] || ""}
                         onBlur={(ev) => salvarLinha(row, d, ev.target.value)}
-                        className={`w-full text-center text-xs border rounded px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                          saving === row.id + d ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-gray-400"
-                        }`}
-                        placeholder="0"
-                      />
+                        className={`w-full text-center text-xs border rounded px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 ${saving === row.id + d ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-gray-400"}`}
+                        placeholder="0" />
                       <div className={`text-center text-[10px] mt-0.5 px-0.5 ${e.cls}`} title="Realizado (CHECKOUT) · ✓ atendido · ✕ não atendido · ▲ excedeu">
                         {real[i] > 0 ? `${e.sym} ${fmt1(real[i])}`.trim() : (e.sym || "·")}
                       </div>
                     </td>
                     )
                   })}
-                  <td className="px-3 py-2 text-center font-bold text-gray-800 align-top">
-                    {row.total.toLocaleString("pt-BR")}
-                  </td>
+                  <td className="px-3 py-2 text-center font-bold text-gray-800 align-top">{row.total.toLocaleString("pt-BR")}</td>
                   <td className="px-3 py-2 text-center align-top"><CelulaYTD p={y.p} r={y.r} /></td>
                   <td className="px-3 py-2 text-center align-top">
                     <span className={`text-xs font-bold ${realTotal >= row.total && row.total > 0 ? "text-green-600" : realTotal > 0 ? "text-amber-600" : "text-gray-400"}`}>
                       {realTotal > 0 ? fmt1(realTotal) : "—"}
                     </span>
-                    {row.total > 0 && (
-                      <div className="text-[10px] text-gray-400">{Math.round((realTotal / row.total) * 100)}%</div>
-                    )}
+                    {row.total > 0 && (<div className="text-[10px] text-gray-400">{Math.round((realTotal / row.total) * 100)}%</div>)}
                   </td>
                   <td className="px-3 py-2 text-center align-top">
                     {(() => {
@@ -346,16 +329,12 @@ export default function ProgramacaoClient({
                       <Save size={12} /> {saving === "nova" ? "…" : "OK"}
                     </button>
                   </td>
-                  <td className="px-2 py-2">
-                    <button onClick={() => setAddMode(false)} className="text-xs text-gray-400 hover:text-red-500">✕</button>
-                  </td>
+                  <td className="px-2 py-2"><button onClick={() => setAddMode(false)} className="text-xs text-gray-400 hover:text-red-500">✕</button></td>
                   <td /><td />
                 </tr>
               )}
               {addMode && ctrInfo && (
-                <tr className="bg-blue-50">
-                  <td colSpan={15} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td>
-                </tr>
+                <tr className="bg-blue-50"><td colSpan={15} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
               )}
 
               {/* Linha de totais */}
@@ -396,7 +375,6 @@ export default function ProgramacaoClient({
         </div>
       </div>
 
-      {/* Legenda dos indicadores */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[11px] text-gray-500">
         <span className="font-semibold text-gray-600">Realizado (CHECKOUT):</span>
         <span><span className="text-green-700 font-semibold">✓ atendido</span> (≥95% do dia)</span>
