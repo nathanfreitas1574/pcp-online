@@ -18,6 +18,8 @@ type Props = { clientes: string[]; produtos: string[]; boxes: string[] }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
 const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—"
+const MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+const mesLabel = (m: string) => { const x = /^(\d{4})-(\d{2})$/.exec(m); return x ? `${MESES_PT[+x[2] - 1]}/${x[1]}` : m }
 const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
 const VAZIO = { codigoRomaneio: "", numeroDocumento: "", placa: "", transportadora: "", motorista: "", produto: "", cliente: "", volume: "", boxCodigo: "", observacao: "", dataDescarga: "", numeroNota: "", dataSolicitacao: "" }
 
@@ -28,6 +30,10 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   const [loading, setLoading] = useState(true)
   const [statusFiltro, setStatusFiltro] = useState("PENDENTE")
   const [busca, setBusca] = useState("")
+  const [mes, setMes] = useState("")   // "" = acumulado; "YYYY-MM" = mês
+  const [meses, setMeses] = useState<{ mes: string; count: number }[]>([])
+  const [semData, setSemData] = useState(0)       // registros sem data de descarga
+  const [tabelaTotal, setTabelaTotal] = useState(0) // total real do filtro atual (p/ truncamento)
   // modal
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form, setForm] = useState<any | null>(null)
@@ -45,15 +51,21 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     const qs = new URLSearchParams()
     if (statusFiltro) qs.set("status", statusFiltro)
     if (busca) qs.set("busca", busca)
+    if (mes) qs.set("mes", mes)
     const r = await fetch("/api/coberturas?" + qs.toString())
     const d = await r.json()
     setItens(d.itens ?? [])
     setPendente(d.pendente ?? { count: 0, volume: 0 })
     setCoberto(d.coberto ?? { count: 0, volume: 0 })
+    setMeses(d.meses ?? [])
+    setSemData(d.semData ?? 0)
+    setTabelaTotal(d.tabelaTotal ?? (d.itens?.length ?? 0))
     setSel(new Set())
     setLoading(false)
-  }, [statusFiltro, busca])
+  }, [statusFiltro, busca, mes])
   useEffect(() => { carregar() }, [carregar])
+  // se o mês selecionado sumir da lista (ex.: após excluir todos), volta ao acumulado
+  useEffect(() => { if (mes && meses.length && !meses.some(m => m.mes === mes)) setMes("") }, [meses, mes])
 
   function abrirNovo() { setForm({ ...VAZIO }); setEditId(null); setErro("") }
   function abrirEdit(c: Cobertura) {
@@ -145,6 +157,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     const qs = new URLSearchParams()
     if (statusFiltro) qs.set("status", statusFiltro)
     if (busca) qs.set("busca", busca)
+    if (mes) qs.set("mes", mes)
     window.open("/api/coberturas/export?" + qs.toString(), "_blank")
   }
 
@@ -152,7 +165,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!))
     const linhas = itens.map(c => `<tr><td>${esc(c.codigoRomaneio)}</td><td>${esc(c.numeroDocumento ?? "")}</td><td>${esc(c.placa ?? "")}</td><td>${esc(c.transportadora ?? "")}</td><td>${esc(c.motorista ?? "")}</td><td>${esc(c.produto)}</td><td>${esc(c.cliente)}</td><td style="text-align:right">${fmt(c.volume)}</td><td>${dt(c.dataDescarga)}</td><td>${esc(c.numeroNota ?? "")}</td><td>${dt(c.dataSolicitacao)}</td><td>${c.status === "COBERTO" ? "Coberto" : "Pendente"}</td></tr>`).join("")
     const total = itens.reduce((s, c) => s + c.volume, 0)
-    const html = `<html><head><meta charset="utf-8"><title>Coberturas</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}tfoot td{font-weight:bold;background:#fafafa}</style></head><body><h1>Coberturas ${statusFiltro === "PENDENTE" ? "pendentes" : statusFiltro === "COBERTO" ? "cobertas" : ""}</h1><p>${itens.length} registro(s) &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>Romaneio</th><th>Documento</th><th>Placa</th><th>Transportadora</th><th>Motorista</th><th>Produto</th><th>Cliente</th><th>Volume (t)</th><th>Descarga</th><th>N&ordm; Nota</th><th>Solicita&ccedil;&atilde;o</th><th>Status</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="7">Total</td><td style="text-align:right">${fmt(total)}</td><td colspan="4"></td></tr></tfoot></table></body></html>`
+    const html = `<html><head><meta charset="utf-8"><title>Coberturas</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}tfoot td{font-weight:bold;background:#fafafa}</style></head><body><h1>Coberturas ${statusFiltro === "PENDENTE" ? "pendentes" : statusFiltro === "COBERTO" ? "cobertas" : ""}${mes ? ` — ${mesLabel(mes)}` : ""}</h1><p>${itens.length} registro(s)${tabelaTotal > itens.length ? ` (parcial de ${tabelaTotal} — exporte em Excel para a lista completa)` : ""} &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>Romaneio</th><th>Documento</th><th>Placa</th><th>Transportadora</th><th>Motorista</th><th>Produto</th><th>Cliente</th><th>Volume (t)</th><th>Descarga</th><th>N&ordm; Nota</th><th>Solicita&ccedil;&atilde;o</th><th>Status</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="7">Total</td><td style="text-align:right">${fmt(total)}</td><td colspan="4"></td></tr></tfoot></table></body></html>`
     const w = window.open("", "_blank")
     if (!w) { alert("Permita pop-ups para exportar em PDF."); return }
     w.document.write(html); w.document.close(); w.focus()
@@ -219,6 +232,24 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
         </div>
       )}
 
+      {/* Indicador de período */}
+      <div className="flex items-center gap-2 mb-2 text-sm">
+        {mes ? (
+          <span className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-full font-semibold">
+            📅 {mesLabel(mes)} · {pendente.count + coberto.count} reg. no mês
+            <button onClick={() => setMes("")} className="ml-1 text-blue-400 hover:text-blue-700" title="Limpar mês"><X size={13} /></button>
+          </span>
+        ) : (
+          <span className="text-gray-400">Acumulado — todos os meses{meses.length > 0 && ` · selecione um mês para o relatório mensal`}</span>
+        )}
+        {semData > 0 && (
+          <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-1 rounded-full text-xs"
+            title="Registros sem data de descarga não entram em nenhum mês — só aparecem no acumulado">
+            ⚠ {semData} sem data de descarga {mes ? "(fora deste mês)" : "(não somam nos meses)"}
+          </span>
+        )}
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
         <div className="bg-white rounded-xl border border-amber-100 p-4 shadow-sm">
@@ -243,6 +274,12 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${statusFiltro === v ? "bg-white shadow text-blue-700" : "text-gray-500"}`}>{l}</button>
           ))}
         </div>
+        <select value={mes} onChange={e => setMes(e.target.value)}
+          className={`border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 ${mes ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}
+          title="Filtrar por mês (data de descarga)">
+          <option value="">📅 Todos os meses (acumulado)</option>
+          {meses.map(m => <option key={m.mes} value={m.mes}>{mesLabel(m.mes)} ({m.count})</option>)}
+        </select>
         <div className="relative flex-1 min-w-[220px]">
           <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar romaneio, produto, cliente…"
@@ -254,7 +291,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
             <Trash2 size={15} /> Excluir selecionados ({sel.size})
           </button>
         )}
-        <div className="text-sm text-gray-500">{loading ? "Carregando…" : `${itens.length} registro(s)`}</div>
+        <div className="text-sm text-gray-500">{loading ? "Carregando…" : (tabelaTotal > itens.length ? `${itens.length} de ${tabelaTotal} — exporte em Excel p/ a lista completa` : `${itens.length} registro(s)`)}</div>
       </div>
 
       {/* Tabela */}

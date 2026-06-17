@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { notaNoContabil, dataInputUTC, dadosVeiculoPorPlaca } from "@/lib/cobertura"
+import { notaNoContabil, dataInputUTC, dadosVeiculoPorPlaca, mesRange } from "@/lib/cobertura"
 import { NextRequest, NextResponse } from "next/server"
 
 // GET — lista com filtros + totais (cobertura pendente)
@@ -12,27 +12,55 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status") || undefined
   const cliente = searchParams.get("cliente") || undefined
   const busca = searchParams.get("busca") || undefined
+  const mes = searchParams.get("mes") || undefined   // "YYYY-MM" → filtra por data de descarga
+
+  // Escopo do mês (aplica a KPIs + tabela). Sem mês = acumulado.
+  const range = mesRange(mes)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mesWhere: any = range ? { dataDescarga: { gte: range.gte, lt: range.lt } } : {}
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {}
+  const where: any = { ...mesWhere }
   if (status) where.status = status
   if (cliente) where.cliente = { contains: cliente, mode: "insensitive" }
   if (busca) where.OR = [
     { codigoRomaneio: { contains: busca, mode: "insensitive" } },
     { produto: { contains: busca, mode: "insensitive" } },
     { cliente: { contains: busca, mode: "insensitive" } },
+    { numeroNota: { contains: busca, mode: "insensitive" } },
+    { placa: { contains: busca, mode: "insensitive" } },
+    { transportadora: { contains: busca, mode: "insensitive" } },
+    { motorista: { contains: busca, mode: "insensitive" } },
   ]
 
-  const [itens, pendente, coberto] = await Promise.all([
-    prisma.coberturaPendente.findMany({ where, orderBy: { createdAt: "desc" }, take: 1000 }),
-    prisma.coberturaPendente.aggregate({ where: { status: "PENDENTE" }, _count: { id: true }, _sum: { volume: true } }),
-    prisma.coberturaPendente.aggregate({ where: { status: "COBERTO" }, _count: { id: true }, _sum: { volume: true } }),
+  const TAKE = 2000
+  const [itens, pendente, coberto, todasDatas, tabelaTotal] = await Promise.all([
+    prisma.coberturaPendente.findMany({ where, orderBy: { createdAt: "desc" }, take: TAKE }),
+    prisma.coberturaPendente.aggregate({ where: { ...mesWhere, status: "PENDENTE" }, _count: { id: true }, _sum: { volume: true } }),
+    prisma.coberturaPendente.aggregate({ where: { ...mesWhere, status: "COBERTO" }, _count: { id: true }, _sum: { volume: true } }),
+    prisma.coberturaPendente.findMany({ select: { dataDescarga: true } }),
+    prisma.coberturaPendente.count({ where }),
   ])
+
+  // Meses disponíveis (a partir da data de descarga) com contagem — para o seletor
+  const mesesMap = new Map<string, number>()
+  let semData = 0
+  for (const t of todasDatas) {
+    if (!t.dataDescarga) { semData++; continue }
+    const d = t.dataDescarga
+    const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
+    mesesMap.set(k, (mesesMap.get(k) ?? 0) + 1)
+  }
+  const meses = [...mesesMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([m, count]) => ({ mes: m, count }))
 
   return NextResponse.json({
     itens,
     pendente: { count: pendente._count.id, volume: pendente._sum.volume ?? 0 },
     coberto: { count: coberto._count.id, volume: coberto._sum.volume ?? 0 },
+    meses,
+    semData,
+    tabelaTotal,
+    truncado: itens.length < tabelaTotal,
   })
 }
 
