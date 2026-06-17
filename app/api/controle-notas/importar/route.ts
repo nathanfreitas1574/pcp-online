@@ -10,6 +10,7 @@ const ALIASES: Record<string, string[]> = {
   usuario:        ["nome", "usuario", "operador"],
   numero:         ["numero", "numeracao", "romaneio", "num romaneio", "numero romaneio"],
   cliente:        ["cliente", "entidade", "cliente entidade", "nome entidade"],
+  filial:         ["filial", "matriz", "matriz filial", "matriz/filial", "unidade", "loja"],
   codigoOperacao: ["codigo", "cod operacao", "operacao", "tipo operacao", "cod"],
   descricao:      ["descricao", "lancamento", "evento"],
   numeroNF:       ["numero nf", "num nf", "nota fiscal", "numero nota", "nf"],
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (best < 3) return NextResponse.json({ error: "Cabeçalho não reconhecido." }, { status: 400 })
   const get = (row: unknown[], f: string) => { const i = headerMap[f]; return i === undefined ? null : row[i] }
 
-  type Reg = { data: Date | null; usuario: string | null; numero: string; cliente: string | null; tipo: string; codigoOperacao: string | null; descricao: string | null; numeroNF: string | null; motivoErro: string | null }
+  type Reg = { data: Date | null; usuario: string | null; numero: string; cliente: string | null; filial: string | null; tipo: string; codigoOperacao: string | null; descricao: string | null; numeroNF: string | null; motivoErro: string | null }
   const regs: Reg[] = []
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i]
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
       usuario: cleanText(get(row, "usuario")),
       numero,
       cliente: cleanText(get(row, "cliente")),
+      filial: cleanText(get(row, "filial")),
       tipo: tipoDe(codigoOperacao, descricao),
       codigoOperacao, descricao,
       numeroNF: cleanText(get(row, "numeroNF")),
@@ -73,18 +75,20 @@ export async function POST(req: NextRequest) {
     : new Set<string>()
   const alerta = (r: Reg) => r.tipo === "CANCELAMENTO" && candidatosNF(r.numeroNF || r.numero).some(c => noContabil.has(c))
 
-  // Dedup: ignora os que já existem (por número + NF + tipo) e repetidos no próprio arquivo
-  const chave = (numero: string, numeroNF: string | null, tipo: string) =>
-    `${(numero ?? "").trim()}|${(numeroNF ?? "").trim()}|${tipo}`
+  // Dedup: ignora só repetições EXATAS (número + NF + tipo + filial + dia) — não
+  // colapsa cancelamentos legítimos de datas/filiais diferentes com mesmo romaneio.
+  const ymd = (d: Date | null) => d ? new Date(d).toISOString().slice(0, 10) : ""
+  const chave = (numero: string, numeroNF: string | null, tipo: string, filial: string | null, data: Date | null) =>
+    `${(numero ?? "").trim()}|${(numeroNF ?? "").trim()}|${tipo}|${(filial ?? "").trim()}|${ymd(data)}`
   const existentes = new Set(
-    (await prisma.controleNota.findMany({ select: { numero: true, numeroNF: true, tipo: true } }))
-      .map(c => chave(c.numero, c.numeroNF, c.tipo)),
+    (await prisma.controleNota.findMany({ select: { numero: true, numeroNF: true, tipo: true, filial: true, data: true } }))
+      .map(c => chave(c.numero, c.numeroNF, c.tipo, c.filial, c.data)),
   )
   const noArquivo = new Set<string>()
 
   let criados = 0, alertas = 0, pulados = 0
   for (const r of regs) {
-    const k = chave(r.numero, r.numeroNF, r.tipo)
+    const k = chave(r.numero, r.numeroNF, r.tipo, r.filial, r.data)
     if (existentes.has(k) || noArquivo.has(k)) { pulados++; continue }
     noArquivo.add(k)
     const alertaContabil = alerta(r)

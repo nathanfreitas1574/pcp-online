@@ -1183,23 +1183,20 @@ model ControleNota {
   observacao     String?
   alertaContabil Boolean   @default(false)     // NF ainda lançada no contábil (não cancelada)
   criadoPorNome  String?
+  filial         String?                       // Matriz / Filial (separação)
 
-  // Cancelamento extemporâneo — aprovação Fiscal Interno + Financeiro (via link próprio)
-  aprovacaoToken        String?   @unique       // token do link de aprovação
-  statusAprovacao       String?                 // null (comum) | PENDENTE | APROVADO
-  aprovadoFiscal        Boolean   @default(false)
-  aprovadoFiscalPor     String?
-  aprovadoFiscalEm      DateTime?
-  aprovadoFinanceiro    Boolean   @default(false)
-  aprovadoFinanceiroPor String?
-  aprovadoFinanceiroEm  DateTime?
-  taxaCancelamento      Float?                  // taxa gerada ao aprovar (valor fixo)
-  procedimentos         String?                 // outros procedimentos / parecer
+  // Fluxo de Validação PCP (todos os tipos): AGUARDANDO → VALIDADO → CANCELADO (após conferir NF)
+  statusAprovacao String?  @default("AGUARDANDO")
+  validadoPor     String?                       // quem validou (PCP)
+  validadoEm      DateTime?
+  concluidoEm     DateTime?                      // quando confirmado (NF saiu do contábil)
+  procedimentos   String?                        // histórico/observações do procedimento
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   @@index([tipo])
+  @@index([filial])
   @@index([cliente])
   @@index([numero])
   @@index([statusAprovacao])

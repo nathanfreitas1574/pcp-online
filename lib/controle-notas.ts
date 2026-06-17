@@ -1,8 +1,5 @@
 // Regras do Controle de Notas Canceladas / Inutilizadas / Cancelamento Extemporâneo
 
-// 👉 Valor FIXO da taxa de cancelamento extemporâneo (R$). Altere aqui se mudar.
-export const TAXA_EXTEMP_FIXA = 150
-
 export const TIPOS = ["CANCELAMENTO", "INUTILIZACAO", "EXTEMPORANEO"] as const
 export type TipoNota = (typeof TIPOS)[number]
 
@@ -29,7 +26,12 @@ export function normalizaTipo(t: unknown): TipoNota {
   return "CANCELAMENTO"
 }
 
-// token do link de aprovação (32 hex). Web Crypto — funciona no server e no client.
-export function gerarToken(): string {
-  return globalThis.crypto.randomUUID().replace(/-/g, "")
+// Fluxo de Validação PCP: ao solicitar = AGUARDANDO → PCP valida = VALIDADO →
+// conferir NF no estoque (saiu = cancelada) = CANCELADO.
+export const STATUS = ["AGUARDANDO", "VALIDADO", "CANCELADO"] as const
+export type StatusNota = (typeof STATUS)[number]
+export const STATUS_LABEL: Record<string, string> = {
+  AGUARDANDO: "Aguardando validação",
+  VALIDADO: "Validado",
+  CANCELADO: "Cancelado",
 }
