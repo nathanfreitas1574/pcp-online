@@ -9,7 +9,7 @@ import {
   FileText, Users, LogOut, Download, Upload, BarChart2,
   Warehouse, Bell, Database, Calendar, Clock, Activity,
   FlaskConical, TrendingUp, Tv, ListOrdered, DollarSign, QrCode, Target,
-  Ship, Crosshair, ShieldAlert, PieChart, Receipt, History, Scale, GitCompareArrows, Boxes, ShieldQuestion, Droplets, Brush, FileX2, Gauge, ClipboardCheck, Factory,
+  Ship, Crosshair, ShieldAlert, PieChart, Receipt, History, GitCompareArrows, Boxes, ShieldQuestion, Droplets, Brush, FileX2, Gauge, ClipboardCheck, Factory,
 } from "lucide-react"
 
 type NavItem =
@@ -21,11 +21,10 @@ const nav: NavItem[] = [
   { href: "/executivo", label: "Dashboard Executivo", icon: PieChart },
   { href: "/plano-acao", label: "Plano de Ação", icon: Target },
   { section: "Recebimento" },
-  { href: "/recebimento", label: "Dashboard Recebimento", icon: Download },
+  { href: "/recebimento-controle", label: "Controle de Recebimento", icon: Download },
   { href: "/boxes", label: "Gestão de Box", icon: Box },
   { href: "/historico-boxes", label: "Histórico de Boxes", icon: History },
   { href: "/contratos", label: "Contratos TOTVS", icon: FileText },
-  { href: "/marcacoes", label: "Marcação de Veículos", icon: Scale },
   { href: "/conciliador", label: "Conciliador", icon: GitCompareArrows },
   { href: "/estoque-contabil", label: "Estoque Contábil", icon: Boxes },
   { href: "/coberturas", label: "Gerenciador de Coberturas", icon: ShieldQuestion },

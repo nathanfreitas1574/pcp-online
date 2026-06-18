@@ -1418,3 +1418,30 @@ model Ocorrencia {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 }
+
+// ─── CONTROLE DE RECEBIMENTO (programação mensal de descarga — manual) ────────
+model RecebimentoControle {
+  id               String    @id @default(cuid())
+  data             DateTime?                       // data prevista
+  ano              Int
+  mes              Int                              // 1-12
+  semana           Int?                             // semana do ano
+  unidade          String?   @default("ROO")
+  status           String?   @default("PREVISTO")   // PREVISTO | CONFIRMADO | REALIZADO | CANCELADO
+  cliente          String
+  produtoAbreviado String
+  tipoProduto      String?                          // GRANEL | EMBALADO
+  navio            String?
+  origem           String?
+  volumeProgramado Float     @default(0)
+  cancelado        Float     @default(0)
+  adicionado       Float     @default(0)
+  obs              String?
+  criadoPorNome    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([ano, mes])
+  @@index([cliente])
+  @@index([unidade])
+}
