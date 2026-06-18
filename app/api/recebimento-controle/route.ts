@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
       semana: Number(b.semana) || semana,
       unidade: b.unidade?.trim() || "ROO",
       status: b.status?.trim() || "PREVISTO",
+      numeroContrato: b.numeroContrato?.trim() || null,
       cliente: String(b.cliente ?? "").trim(),
       produtoAbreviado: String(b.produtoAbreviado ?? "").trim(),
       tipoProduto: b.tipoProduto?.trim() || null,

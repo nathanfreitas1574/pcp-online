@@ -15,7 +15,7 @@ const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ou
 
 type Item = {
   id: string; data: string | null; ano: number; mes: number; semana: number | null
-  unidade: string | null; status: string | null; cliente: string; produtoAbreviado: string
+  unidade: string | null; status: string | null; numeroContrato: string | null; cliente: string; produtoAbreviado: string
   tipoProduto: string | null; navio: string | null; origem: string | null
   volumeProgramado: number; cancelado: number; adicionado: number; obs: string | null
   confirmado: number; realizado: number; saldo: number
@@ -26,9 +26,10 @@ type Dados = {
   painel: { cotas: { confirmado: number; realizado: number; saldo: number }; porCliente: Grupo[]; porProduto: Grupo[]; porTipo: Grupo[]; realizadoDia: { dia: string; valor: number }[] }
   opcoes: { anos: number[]; unidades: string[]; tiposProduto: string[]; clientes: string[] }
 }
-const VAZIO = { data: "", unidade: "ROO", status: "PREVISTO", cliente: "", produtoAbreviado: "", tipoProduto: "GRANEL", navio: "", origem: "", volumeProgramado: "", cancelado: "", adicionado: "", obs: "" }
+const VAZIO = { numeroContrato: "", data: "", unidade: "ROO", status: "PREVISTO", cliente: "", produtoAbreviado: "", tipoProduto: "GRANEL", navio: "", origem: "", volumeProgramado: "", cancelado: "", adicionado: "", obs: "" }
+type CadOpt = { nome?: string; descricao?: string; abreviado: string | null }
 
-export default function RecebimentoControleClient({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: number }) {
+export default function RecebimentoControleClient({ anoAtual, mesAtual, clientesCad, produtosCad }: { anoAtual: number; mesAtual: number; clientesCad: CadOpt[]; produtosCad: CadOpt[] }) {
   const [ano, setAno] = useState(anoAtual)
   const [mes, setMes] = useState(mesAtual)
   const [unidade, setUnidade] = useState("")
@@ -58,8 +59,19 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual }: { anoA
   useEffect(() => { carregar() }, [carregar])
 
   function abrirNovo() { setForm({ ...VAZIO }); setEditId(null) }
+  // Busca contrato e auto-preenche cliente + produto (igual à Programação)
+  async function buscarContrato(numero: string) {
+    if (!numero.trim()) return
+    try {
+      const r = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(numero.trim())}`)
+      const d = await r.json()
+      const m = d.matches?.[0]
+      if (m) setForm((f: typeof form) => f ? { ...f, cliente: f.cliente || m.clienteNome, produtoAbreviado: f.produtoAbreviado || m.desProduto } : f)
+    } catch { /* silencioso */ }
+  }
   function abrirEdit(it: Item) {
     setForm({
+      numeroContrato: it.numeroContrato ?? "",
       data: it.data ? it.data.slice(0, 10) : "", unidade: it.unidade ?? "ROO", status: it.status ?? "PREVISTO",
       cliente: it.cliente, produtoAbreviado: it.produtoAbreviado, tipoProduto: it.tipoProduto ?? "", navio: it.navio ?? "",
       origem: it.origem ?? "", volumeProgramado: String(it.volumeProgramado || ""), cancelado: String(it.cancelado || ""),
@@ -176,7 +188,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual }: { anoA
             <table className="w-full text-xs">
               <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
                 <tr>
-                  {["Data", "Sem", "Unid", "Status", "Cliente", "Produto", "Tipo", "Navio", "Origem", "Prog.", "Canc.", "Adic.", "Confirm.", "Realiz.", "Saldo", "Obs", ""].map((h, i) => (
+                  {["Data", "Sem", "Unid", "Status", "Contr.", "Cliente", "Produto", "Tipo", "Navio", "Origem", "Prog.", "Canc.", "Adic.", "Confirm.", "Realiz.", "Saldo", "Obs", ""].map((h, i) => (
                     <th key={i} className={`px-2 py-2.5 font-semibold ${["Prog.", "Canc.", "Adic.", "Confirm.", "Realiz.", "Saldo"].includes(h) ? "text-right" : "text-left"}`}>{h}</th>
                   ))}
                 </tr>
@@ -188,6 +200,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual }: { anoA
                     <td className="px-2 py-1.5 text-center text-gray-500">{it.semana ?? "—"}</td>
                     <td className="px-2 py-1.5 text-gray-600">{it.unidade}</td>
                     <td className="px-2 py-1.5"><span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{it.status}</span></td>
+                    <td className="px-2 py-1.5 font-mono text-gray-500">{it.numeroContrato || "—"}</td>
                     <td className="px-2 py-1.5 font-medium text-gray-800 max-w-[120px] truncate" title={it.cliente}>{it.cliente}</td>
                     <td className="px-2 py-1.5 text-gray-700 max-w-[130px] truncate" title={it.produtoAbreviado}>{it.produtoAbreviado}</td>
                     <td className="px-2 py-1.5 text-gray-500">{it.tipoProduto || "—"}</td>
@@ -209,7 +222,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual }: { anoA
                   </tr>
                 ))}
                 {!loading && itens.length === 0 && (
-                  <tr><td colSpan={17} className="text-center py-12 text-gray-400">Nenhum recebimento em {MESES[mes - 1]}/{ano}. Clique em <strong>Adicionar</strong>.</td></tr>
+                  <tr><td colSpan={18} className="text-center py-12 text-gray-400">Nenhum recebimento em {MESES[mes - 1]}/{ano}. Clique em <strong>Adicionar</strong>.</td></tr>
                 )}
               </tbody>
             </table>
@@ -226,12 +239,15 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual }: { anoA
               <button onClick={() => setForm(null)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
             </div>
             <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Campo l="Contrato" span><input value={form.numeroContrato} onChange={e => setForm({ ...form, numeroContrato: e.target.value })} onBlur={e => buscarContrato(e.target.value)} className={inp + " font-mono"} placeholder="nº do contrato — auto-preenche cliente/produto" /></Campo>
               <Campo l="Data"><input type="date" value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} className={inp} /></Campo>
               <Campo l="Unidade"><input value={form.unidade} onChange={e => setForm({ ...form, unidade: e.target.value })} className={inp} /></Campo>
               <Campo l="Status"><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={inp}><option>PREVISTO</option><option>CONFIRMADO</option><option>REALIZADO</option><option>CANCELADO</option></select></Campo>
-              <Campo l="Cliente *" span><input value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} className={inp} /></Campo>
+              <Campo l="Cliente *" span><input list="rc-clientes" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} className={inp} /></Campo>
               <Campo l="Tipo"><select value={form.tipoProduto} onChange={e => setForm({ ...form, tipoProduto: e.target.value })} className={inp}><option value="GRANEL">Granel</option><option value="EMBALADO">Embalado</option><option value="">—</option></select></Campo>
-              <Campo l="Produto abreviado *" span><input value={form.produtoAbreviado} onChange={e => setForm({ ...form, produtoAbreviado: e.target.value })} className={inp} placeholder="ex: UREIA 46" /></Campo>
+              <Campo l="Produto abreviado *" span><input list="rc-produtos" value={form.produtoAbreviado} onChange={e => setForm({ ...form, produtoAbreviado: e.target.value })} className={inp} placeholder="ex: UREIA 46" /></Campo>
+              <datalist id="rc-clientes">{clientesCad.map((c, i) => <option key={i} value={c.nome}>{c.abreviado || c.nome}</option>)}</datalist>
+              <datalist id="rc-produtos">{produtosCad.map((p, i) => <option key={i} value={p.abreviado || p.descricao}>{p.descricao}</option>)}</datalist>
               <Campo l="Navio"><input value={form.navio} onChange={e => setForm({ ...form, navio: e.target.value })} className={inp} /></Campo>
               <Campo l="Origem"><input value={form.origem} onChange={e => setForm({ ...form, origem: e.target.value })} className={inp} placeholder="ex: Onno" /></Campo>
               <Campo l="Vol. programado"><input type="number" value={form.volumeProgramado} onChange={e => setForm({ ...form, volumeProgramado: e.target.value })} className={inp} /></Campo>

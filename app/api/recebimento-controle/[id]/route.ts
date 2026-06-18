@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const b = await req.json()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = {}
-  for (const k of ["unidade", "status", "cliente", "produtoAbreviado", "tipoProduto", "navio", "origem", "obs"]) {
+  for (const k of ["unidade", "status", "numeroContrato", "cliente", "produtoAbreviado", "tipoProduto", "navio", "origem", "obs"]) {
     if (b[k] !== undefined) data[k] = b[k] === "" ? null : b[k]
   }
   for (const k of ["volumeProgramado", "cancelado", "adicionado"]) {

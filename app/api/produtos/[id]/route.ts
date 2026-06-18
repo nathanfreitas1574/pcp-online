@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json()
   const produto = await prisma.produto.update({
     where: { id },
-    data: { codigo: body.codigo, descricao: body.descricao, unidade: body.unidade, ativo: body.ativo },
+    data: { codigo: body.codigo, descricao: body.descricao, abreviado: body.abreviado ?? undefined, unidade: body.unidade, ativo: body.ativo },
   })
   return NextResponse.json(produto)
 }

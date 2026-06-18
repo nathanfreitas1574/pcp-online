@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const body = await req.json()
   const cliente = await prisma.cliente.create({
-    data: { codigo: body.codigo, nome: body.nome, cnpj: body.cnpj || null },
+    data: { codigo: body.codigo, nome: body.nome, abreviado: body.abreviado || null, cnpj: body.cnpj || null },
   })
   return NextResponse.json(cliente, { status: 201 })
 }

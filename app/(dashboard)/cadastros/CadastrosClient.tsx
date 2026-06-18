@@ -3,8 +3,8 @@
 import { useState } from "react"
 import { Plus, Pencil, Trash2, Search, Package, Users, BoxIcon, Check, X, ArrowRightLeft, ChevronDown, ChevronRight, Pencil as PencilIcon, ListChecks, GripVertical, Shield, Type, Hash } from "lucide-react"
 
-type Produto  = { id: string; codigo: string; descricao: string; unidade: string; ativo: boolean }
-type Cliente  = { id: string; codigo: string; nome: string; cnpj: string | null; ativo: boolean }
+type Produto  = { id: string; codigo: string; descricao: string; abreviado: string | null; unidade: string; ativo: boolean }
+type Cliente  = { id: string; codigo: string; nome: string; abreviado: string | null; cnpj: string | null; ativo: boolean }
 type Box      = { id: string; codigo: string; descricao: string; localizacao: string; capacidade: number; ativo: boolean }
 type DePara   = {
   id: string
@@ -196,24 +196,25 @@ function ProdutosTab({ produtos: inicial }: { produtos: Produto[] }) {
   const [search, setSearch] = useState("")
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Produto | null>(null)
-  const [form, setForm] = useState({ codigo: "", descricao: "", unidade: "TON" })
+  const [form, setForm] = useState({ codigo: "", descricao: "", abreviado: "", unidade: "TON" })
   const [saving, setSaving] = useState(false)
 
   const filtered = produtos.filter(
     (p) =>
       p.codigo.toLowerCase().includes(search.toLowerCase()) ||
-      p.descricao.toLowerCase().includes(search.toLowerCase())
+      p.descricao.toLowerCase().includes(search.toLowerCase()) ||
+      (p.abreviado ?? "").toLowerCase().includes(search.toLowerCase())
   )
 
   function openNew() {
     setEditing(null)
-    setForm({ codigo: "", descricao: "", unidade: "TON" })
+    setForm({ codigo: "", descricao: "", abreviado: "", unidade: "TON" })
     setShowModal(true)
   }
 
   function openEdit(p: Produto) {
     setEditing(p)
-    setForm({ codigo: p.codigo, descricao: p.descricao, unidade: p.unidade })
+    setForm({ codigo: p.codigo, descricao: p.descricao, abreviado: p.abreviado ?? "", unidade: p.unidade })
     setShowModal(true)
   }
 
@@ -271,7 +272,7 @@ function ProdutosTab({ produtos: inicial }: { produtos: Produto[] }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>
-              {["Código", "Descrição", "Unidade", "Status", "Ações"].map((h) => (
+              {["Código", "Descrição", "Abreviado", "Unidade", "Status", "Ações"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-500">{h}</th>
               ))}
             </tr>
@@ -281,6 +282,7 @@ function ProdutosTab({ produtos: inicial }: { produtos: Produto[] }) {
               <tr key={p.id} className={`hover:bg-gray-50 ${!p.ativo ? "opacity-50" : ""}`}>
                 <td className="px-4 py-3 font-mono text-xs text-gray-600">{p.codigo}</td>
                 <td className="px-4 py-3 font-medium text-gray-800">{p.descricao}</td>
+                <td className="px-4 py-3 text-gray-600">{p.abreviado || <span className="text-gray-300">—</span>}</td>
                 <td className="px-4 py-3">
                   <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-medium">{p.unidade}</span>
                 </td>
@@ -300,7 +302,7 @@ function ProdutosTab({ produtos: inicial }: { produtos: Produto[] }) {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="py-10 text-center text-gray-400">Nenhum produto encontrado.</td></tr>
+              <tr><td colSpan={6} className="py-10 text-center text-gray-400">Nenhum produto encontrado.</td></tr>
             )}
           </tbody>
         </table>
@@ -343,6 +345,15 @@ function ProdutosTab({ produtos: inicial }: { produtos: Produto[] }) {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome abreviado</label>
+                <input
+                  value={form.abreviado}
+                  onChange={(e) => setForm((f) => ({ ...f, abreviado: e.target.value }))}
+                  placeholder="Ex: UREIA 46 (curto, p/ tabelas/relatórios)"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50">Cancelar</button>
                 <button type="submit" disabled={saving} className="flex-1 bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-800 disabled:opacity-60">
@@ -363,17 +374,18 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
   const [search, setSearch] = useState("")
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Cliente | null>(null)
-  const [form, setForm] = useState({ codigo: "", nome: "", cnpj: "" })
+  const [form, setForm] = useState({ codigo: "", nome: "", abreviado: "", cnpj: "" })
   const [saving, setSaving] = useState(false)
 
   const filtered = clientes.filter(
     (c) =>
       c.codigo.toLowerCase().includes(search.toLowerCase()) ||
-      c.nome.toLowerCase().includes(search.toLowerCase())
+      c.nome.toLowerCase().includes(search.toLowerCase()) ||
+      (c.abreviado ?? "").toLowerCase().includes(search.toLowerCase())
   )
 
-  function openNew() { setEditing(null); setForm({ codigo: "", nome: "", cnpj: "" }); setShowModal(true) }
-  function openEdit(c: Cliente) { setEditing(c); setForm({ codigo: c.codigo, nome: c.nome, cnpj: c.cnpj ?? "" }); setShowModal(true) }
+  function openNew() { setEditing(null); setForm({ codigo: "", nome: "", abreviado: "", cnpj: "" }); setShowModal(true) }
+  function openEdit(c: Cliente) { setEditing(c); setForm({ codigo: c.codigo, nome: c.nome, abreviado: c.abreviado ?? "", cnpj: c.cnpj ?? "" }); setShowModal(true) }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -410,13 +422,14 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
-            <tr>{["Código", "Nome", "CNPJ", "Status", "Ações"].map((h) => <th key={h} className="px-4 py-3 text-left font-medium text-gray-500">{h}</th>)}</tr>
+            <tr>{["Código", "Nome", "Abreviado", "CNPJ", "Status", "Ações"].map((h) => <th key={h} className="px-4 py-3 text-left font-medium text-gray-500">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {filtered.map((c) => (
               <tr key={c.id} className={`hover:bg-gray-50 ${!c.ativo ? "opacity-50" : ""}`}>
                 <td className="px-4 py-3 font-mono text-xs font-bold text-blue-700">{c.codigo}</td>
                 <td className="px-4 py-3 font-medium text-gray-800">{c.nome}</td>
+                <td className="px-4 py-3 text-gray-600">{c.abreviado || <span className="text-gray-300">—</span>}</td>
                 <td className="px-4 py-3 text-gray-500">{c.cnpj ?? "—"}</td>
                 <td className="px-4 py-3"><Badge ativo={c.ativo} /></td>
                 <td className="px-4 py-3">
@@ -427,7 +440,7 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={5} className="py-10 text-center text-gray-400">Nenhum cliente encontrado.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-gray-400">Nenhum cliente encontrado.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -450,6 +463,10 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo <span className="text-red-500">*</span></label>
                 <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} required placeholder="Ex: FERTALVO COMÉRCIO E SERVIÇOS" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome abreviado</label>
+                <input value={form.abreviado} onChange={(e) => setForm((f) => ({ ...f, abreviado: e.target.value }))} placeholder="Ex: FERTALVO (curto, p/ tabelas/relatórios)" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50">Cancelar</button>
