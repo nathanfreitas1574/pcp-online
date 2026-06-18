@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Package, TrendingUp, BarChart2, Target, Upload } from "lucide-react"
+import { Package, TrendingUp, BarChart2, Target, Upload, Search } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -39,13 +39,29 @@ export default function ExpedicaoClient({
 }) {
   const [aba, setAba] = useState<"contratos" | "registros" | "importar">("contratos")
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
+  const [busca, setBusca] = useState("")
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState("")
 
   const gap = totalRealizado - totalForecast
   const performance = totalCapacidade > 0 ? (totalRealizado / totalCapacidade) * 100 : 0
 
-  const contratosFiltrados = filtroStatus === "TODOS" ? contratos : contratos.filter((c) => c.status === filtroStatus)
+  const contratosFiltrados = contratos
+    .filter((c) => filtroStatus === "TODOS" || c.status === filtroStatus)
+    .filter((c) => {
+      const q = busca.toLowerCase()
+      return (
+        c.numero.toLowerCase().includes(q) ||
+        c.cliente.nome.toLowerCase().includes(q) ||
+        (c.produtoAbreviado ?? "").toLowerCase().includes(q) ||
+        (c.operacao ?? "").toLowerCase().includes(q)
+      )
+    })
+
+  const registrosFiltrados = registros.filter((r) => {
+    const q = busca.toLowerCase()
+    return r.clienteNome.toLowerCase().includes(q) || r.produto.toLowerCase().includes(q)
+  })
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -106,7 +122,7 @@ export default function ExpedicaoClient({
       {/* Contratos */}
       {aba === "contratos" && (
         <div>
-          <div className="flex gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             {["TODOS", "PROGRAMADO", "FINALIZADO", "CANCELADO"].map((s) => (
               <button key={s} onClick={() => setFiltroStatus(s)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
@@ -115,6 +131,16 @@ export default function ExpedicaoClient({
                 {s}
               </button>
             ))}
+            <div className="relative ml-auto">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar contrato, cliente, produto, operação..."
+                className="pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 w-64 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
@@ -159,7 +185,20 @@ export default function ExpedicaoClient({
 
       {/* Dia a Dia */}
       {aba === "registros" && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div>
+          <div className="flex items-center mb-3">
+            <div className="relative ml-auto">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar cliente, produto..."
+                className="pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 w-64 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
@@ -170,7 +209,7 @@ export default function ExpedicaoClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {registros.map((r) => (
+                {registrosFiltrados.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="px-3 py-2 text-gray-500 text-xs">
                       {format(new Date(r.data), "dd/MM/yy", { locale: ptBR })}
@@ -196,11 +235,12 @@ export default function ExpedicaoClient({
                     <td className="px-3 py-2 text-right text-gray-500">{r.capacidade.toLocaleString("pt-BR")}</td>
                   </tr>
                 ))}
-                {registros.length === 0 && (
+                {registrosFiltrados.length === 0 && (
                   <tr><td colSpan={9} className="py-10 text-center text-gray-400">Nenhum registro. Importe o Excel.</td></tr>
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       )}

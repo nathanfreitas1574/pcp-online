@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { AlertTriangle, AlertCircle, Info, CheckCircle, Bell, Plus } from "lucide-react"
+import { AlertTriangle, AlertCircle, Info, CheckCircle, Bell, Plus, Download } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -134,6 +134,12 @@ export default function AlertasClient({
               Marcar todos como lidos
             </button>
           )}
+          <button
+            onClick={() => window.open("/api/exportar/alertas", "_blank")}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+          >
+            <Download size={16} /> Excel
+          </button>
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Ship, Plus, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react"
+import { Ship, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Search } from "lucide-react"
 import { format, differenceInDays, isPast } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -31,6 +31,7 @@ export default function NaviosPage() {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState<string|null>(null)
   const [filtro, setFiltro] = useState("TODOS")
+  const [busca, setBusca] = useState("")
 
   useEffect(() => {
     fetch("/api/navios").then(r=>r.json()).then(d=>setNavios(d.navios??[])).finally(()=>setLoading(false))
@@ -70,8 +71,10 @@ export default function NaviosPage() {
   }
 
   const hoje = new Date()
+  const q = busca.toLowerCase()
   const visiveis = navios
     .filter(n => filtro==="TODOS" || n.status===filtro)
+    .filter(n => !q || [n.nome, n.clienteNome, n.produto, n.origem].some(c => (c??"").toLowerCase().includes(q)))
     .sort((a,b) => new Date(a.eta).getTime()-new Date(b.eta).getTime())
 
   const ativos = navios.filter(n=>n.status!=="CONCLUIDA"&&n.status!=="CANCELADA")
@@ -100,6 +103,12 @@ export default function NaviosPage() {
             <p className="text-xs text-gray-500 mt-0.5">{label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Busca */}
+      <div className="relative max-w-sm">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+        <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar por navio, cliente, produto ou origem…" className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
       </div>
 
       {/* Filtro */}

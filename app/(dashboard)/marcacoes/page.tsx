@@ -4,7 +4,13 @@ import MarcacoesClient from "./MarcacoesClient"
 export const dynamic = "force-dynamic"
 
 export default async function MarcacoesPage() {
-  const [clientes, produtos, transportadoras, agregadoOperacao] = await Promise.all([
+  const [safras, clientes, produtos, transportadoras, agregadoOperacao] = await Promise.all([
+    prisma.contratoArmazenagem.findMany({
+      where: { ativo: true, safra: { not: null } },
+      distinct: ["safra"],
+      select: { safra: true },
+      orderBy: { safra: "desc" },
+    }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, clienteDestino: { not: null } },
       distinct: ["clienteDestino"],
@@ -33,6 +39,7 @@ export default async function MarcacoesPage() {
 
   return (
     <MarcacoesClient
+      safras={safras.map(s => s.safra!).filter(Boolean)}
       clientes={clientes.map(c => c.clienteDestino!).filter(Boolean)}
       produtos={produtos.map(p => p.produto!).filter(Boolean)}
       transportadoras={transportadoras.map(t => t.transportadora!).filter(Boolean)}

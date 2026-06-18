@@ -30,6 +30,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   const [loading, setLoading] = useState(true)
   const [statusFiltro, setStatusFiltro] = useState("PENDENTE")
   const [busca, setBusca] = useState("")
+  const [cliente, setCliente] = useState("")
   const [mes, setMes] = useState("")   // "" = acumulado; "YYYY-MM" = mês
   const [meses, setMeses] = useState<{ mes: string; count: number }[]>([])
   const [semData, setSemData] = useState(0)       // registros sem data de descarga
@@ -52,6 +53,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     if (statusFiltro) qs.set("status", statusFiltro)
     if (busca) qs.set("busca", busca)
     if (mes) qs.set("mes", mes)
+    if (cliente) qs.set("cliente", cliente)
     const r = await fetch("/api/coberturas?" + qs.toString())
     const d = await r.json()
     setItens(d.itens ?? [])
@@ -62,7 +64,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     setTabelaTotal(d.tabelaTotal ?? (d.itens?.length ?? 0))
     setSel(new Set())
     setLoading(false)
-  }, [statusFiltro, busca, mes])
+  }, [statusFiltro, busca, mes, cliente])
   useEffect(() => { carregar() }, [carregar])
   // se o mês selecionado sumir da lista (ex.: após excluir todos), volta ao acumulado
   useEffect(() => { if (mes && meses.length && !meses.some(m => m.mes === mes)) setMes("") }, [meses, mes])
@@ -158,6 +160,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
     if (statusFiltro) qs.set("status", statusFiltro)
     if (busca) qs.set("busca", busca)
     if (mes) qs.set("mes", mes)
+    if (cliente) qs.set("cliente", cliente)
     window.open("/api/coberturas/export?" + qs.toString(), "_blank")
   }
 
@@ -280,6 +283,15 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
           <option value="">📅 Todos os meses (acumulado)</option>
           {meses.map(m => <option key={m.mes} value={m.mes}>{mesLabel(m.mes)} ({m.count})</option>)}
         </select>
+        <div className="relative min-w-[200px]">
+          <input list="cob-filtro-clientes" value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Filtrar por cliente…"
+            className={`border rounded-lg pl-3 pr-7 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 w-full ${cliente ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}
+            title="Filtrar por cliente" />
+          <datalist id="cob-filtro-clientes">{clientes.map(c => <option key={c} value={c} />)}</datalist>
+          {cliente && (
+            <button onClick={() => setCliente("")} className="absolute right-2 top-2.5 text-blue-400 hover:text-blue-700" title="Limpar cliente"><X size={13} /></button>
+          )}
+        </div>
         <div className="relative flex-1 min-w-[220px]">
           <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar romaneio, produto, cliente…"

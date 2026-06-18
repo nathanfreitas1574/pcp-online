@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, ClipboardList, Search, CheckCircle, AlertTriangle } from "lucide-react"
+import { Plus, ClipboardList, Search, CheckCircle, AlertTriangle, FileSpreadsheet } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -220,6 +220,12 @@ export default function InventarioClient({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.open(`/api/exportar/inventario?id=${selected.id}`, "_blank")}
+                    className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50"
+                  >
+                    <FileSpreadsheet size={13} /> Exportar Excel
+                  </button>
                   {temDivergencia && (
                     <span className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded-lg">
                       <AlertTriangle size={12} /> Divergências pendentes

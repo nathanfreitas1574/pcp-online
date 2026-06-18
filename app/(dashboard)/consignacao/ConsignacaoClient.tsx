@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, FileText } from "lucide-react"
+import { Plus, FileText, Search } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -46,6 +46,7 @@ export default function ConsignacaoClient({
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
+  const [busca, setBusca] = useState("")
   const [form, setForm] = useState({
     clienteId: "",
     numeroNF: "",
@@ -53,8 +54,13 @@ export default function ConsignacaoClient({
   })
   const [itens, setItens] = useState([{ produtoId: "", quantidade: "", valorUnitario: "" }])
 
-  const filtered =
-    filtroStatus === "TODOS" ? consignacoes : consignacoes.filter((c) => c.status === filtroStatus)
+  const filtered = consignacoes
+    .filter((c) => (filtroStatus === "TODOS" ? true : c.status === filtroStatus))
+    .filter(
+      (c) =>
+        c.numeroNF.toLowerCase().includes(busca.toLowerCase()) ||
+        c.cliente.nome.toLowerCase().includes(busca.toLowerCase())
+    )
 
   function addItem() {
     setItens((prev) => [...prev, { produtoId: "", quantidade: "", valorUnitario: "" }])
@@ -98,6 +104,17 @@ export default function ConsignacaoClient({
           <Plus size={16} />
           Nova Consignação
         </button>
+      </div>
+
+      <div className="relative mb-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por NF ou cliente..."
+          className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm"
+        />
       </div>
 
       <div className="flex gap-2 mb-4">

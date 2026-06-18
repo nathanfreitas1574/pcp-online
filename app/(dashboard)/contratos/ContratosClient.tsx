@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { Search, FileText, Upload, X, Package, Users, BarChart3, RefreshCw, Plus, Pencil, Save, Trash2 } from "lucide-react"
+import { Search, FileText, FileSpreadsheet, Upload, X, Package, Users, BarChart3, RefreshCw, Plus, Pencil, Save, Trash2 } from "lucide-react"
 import DrillBarChart from "@/components/DrillBarChart"
 
 const VAZIO: Partial<Contrato> = {
@@ -153,6 +153,32 @@ export default function ContratosClient({
     }
   }
 
+  // Exportar Excel — usa os filtros atuais (mesma rota server-side)
+  function exportarExcel() {
+    const p = new URLSearchParams()
+    if (busca)      p.set("busca",   busca)
+    if (clienteSel) p.set("cliente", clienteSel)
+    if (safraSel)   p.set("safra",   safraSel)
+    if (tabelaSel)  p.set("tabela",  tabelaSel)
+    if (dataIni)    p.set("dataInicio", dataIni)
+    if (dataFim)    p.set("dataFim",    dataFim)
+    window.open("/api/contratos/export?" + p.toString(), "_blank")
+  }
+
+  // Exportar PDF — print da lista filtrada (carregada em memória)
+  function exportarPDF() {
+    const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!))
+    const dtPt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR") : ""
+    const num = (n: number) => n > 0 ? n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : ""
+    const linhas = contratos.map(c => `<tr><td>${esc(c.numero)}</td><td>${esc(c.filial)}</td><td>${esc(c.clienteNome)}</td><td>${esc(c.desProduto)}</td><td>${esc(c.descTabela ?? "")}</td><td style="text-align:right">${num(c.qtdContratada)}</td><td>${esc(c.safra ?? "")}</td><td>${dtPt(c.dataCtr)}</td><td>${esc(c.stsAssinatura)}</td><td>${esc(c.stsEstoque)}</td></tr>`).join("")
+    const total = contratos.reduce((s, c) => s + c.qtdContratada, 0)
+    const html = `<html><head><meta charset="utf-8"><title>Contratos</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}tfoot td{font-weight:bold;background:#fafafa}</style></head><body><h1>Contratos de Armazenagem</h1><p>${contratos.length} contrato(s) &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>N&ordm;</th><th>Filial</th><th>Cliente</th><th>Produto</th><th>Tipo</th><th>Qtd Contrat.</th><th>Safra</th><th>Data</th><th>Sts.Assin</th><th>Sts.Estoq</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${num(total)}</td><td colspan="4"></td></tr></tfoot></table></body></html>`
+    const w = window.open("", "_blank")
+    if (!w) { alert("Permita pop-ups para exportar em PDF."); return }
+    w.document.write(html); w.document.close(); w.focus()
+    setTimeout(() => w.print(), 300)
+  }
+
   // Resumo por cliente (dos contratos carregados)
   const porCliente: Record<string, { count: number; qtd: number }> = {}
   for (const c of contratos) {
@@ -176,6 +202,14 @@ export default function ContratosClient({
           <p className="text-sm text-gray-500 mt-0.5">Contratos do TOTVS — armazenagem de fertilizantes, embalagens e lacres</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={exportarExcel} disabled={contratos.length === 0}
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para Excel">
+            <FileSpreadsheet size={15} className="text-green-600" /> Excel
+          </button>
+          <button onClick={exportarPDF} disabled={contratos.length === 0}
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para PDF (impressão)">
+            <FileText size={15} className="text-red-600" /> PDF
+          </button>
           <button onClick={() => { setEditando({ ...VAZIO }); setErroForm("") }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition">
             <Plus size={15} /> Novo Contrato

@@ -40,6 +40,7 @@ type Comparativo = {
 }
 
 type Props = {
+  safras: string[]
   clientes: string[]
   produtos: string[]
   transportadoras: string[]
@@ -59,11 +60,12 @@ function opBadge(op: string | null) {
   return "bg-gray-100 text-gray-600"
 }
 
-export default function MarcacoesClient({ clientes, produtos, transportadoras, agregadoOperacao }: Props) {
+export default function MarcacoesClient({ safras, clientes, produtos, transportadoras, agregadoOperacao }: Props) {
   const [tab, setTab] = useState<"lista" | "comparativo">("lista")
   const [marcacoes, setMarcacoes] = useState<Marcacao[]>([])
   const [comparativo, setComparativo] = useState<Comparativo[]>([])
   const [totaisComp, setTotaisComp] = useState({ contratado: 0, realizado: 0, veiculos: 0 })
+  const [safraComp, setSafraComp] = useState("")
   const [loading, setLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -97,11 +99,13 @@ export default function MarcacoesClient({ clientes, produtos, transportadoras, a
   }, [busca, operacao, cliente, produto, transportadora, dataInicio, dataFim])
 
   const carregarComparativo = useCallback(async () => {
-    const r = await fetch("/api/marcacoes/realizado")
+    const qs = new URLSearchParams()
+    if (safraComp) qs.set("safra", safraComp)
+    const r = await fetch("/api/marcacoes/realizado?" + qs.toString())
     const d = await r.json()
     setComparativo(d.comparativo ?? [])
     setTotaisComp(d.totais ?? { contratado: 0, realizado: 0, veiculos: 0 })
-  }, [])
+  }, [safraComp])
 
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => { if (tab === "comparativo") carregarComparativo() }, [tab, carregarComparativo])
@@ -328,6 +332,17 @@ export default function MarcacoesClient({ clientes, produtos, transportadoras, a
       ) : (
         /* ─── COMPARATIVO REALIZADO vs CONTRATADO ─────────────────────────── */
         <>
+          {/* Filtro de safra */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm mb-4 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-gray-500 text-sm font-medium">
+              <Filter size={15} /> Safra do contrato
+            </div>
+            <select value={safraComp} onChange={e => setSafraComp(e.target.value)} className={inp + " w-auto min-w-[180px]"}>
+              <option value="">Todas as safras</option>
+              {safras.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
               <div className="flex items-center gap-2 text-gray-500 text-xs font-medium mb-1"><Package size={14}/> Contratado total</div>

@@ -25,9 +25,10 @@ function Cronometro({ dtEntrada }: { dtEntrada: Date | string }) {
   return <span className={`font-mono font-bold text-lg ${cor}`}>{h > 0 ? `${h}h` : ""}{m}min</span>
 }
 
-export default function TmpClient({ ativos, historico, boxes, clientes, produtos }: {
+export default function TmpClient({ ativos, historico, boxes, clientes, produtos, tmpMedioHoje, concluidosHoje }: {
   ativos: TmpReg[]; historico: TmpReg[]
   boxes: Box[]; clientes: Cliente[]; produtos: Produto[]
+  tmpMedioHoje: number; concluidosHoje: number
 }) {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ placa: "", motorista: "", clienteNome: "", produto: "", localDescarga: "" })
@@ -48,8 +49,6 @@ export default function TmpClient({ ativos, historico, boxes, clientes, produtos
     setRegistros((p) => p.filter((r) => r.id !== id))
     window.location.reload()
   }
-
-  const tmpMedioHistorico = historico.filter((r) => r.tmpMinutos).reduce((s, r, _, a) => s + (r.tmpMinutos ?? 0) / a.length, 0)
 
   return (
     <div>
@@ -72,12 +71,12 @@ export default function TmpClient({ ativos, historico, boxes, clientes, produtos
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <p className="text-xs text-gray-500">TMP Médio Hoje</p>
-          <p className="text-3xl font-bold text-gray-800">{Math.round(tmpMedioHistorico)}min</p>
-          <p className="text-xs text-gray-400">baseado nos últimos {historico.length}</p>
+          <p className="text-3xl font-bold text-gray-800">{tmpMedioHoje}min</p>
+          <p className="text-xs text-gray-400">baseado em {concluidosHoje} concluído{concluidosHoje === 1 ? "" : "s"} hoje</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <p className="text-xs text-gray-500">Concluídos Hoje</p>
-          <p className="text-3xl font-bold text-green-700">{historico.length}</p>
+          <p className="text-3xl font-bold text-green-700">{concluidosHoje}</p>
           <p className="text-xs text-gray-400">registros</p>
         </div>
       </div>

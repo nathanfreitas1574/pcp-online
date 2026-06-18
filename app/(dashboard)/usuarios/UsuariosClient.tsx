@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, UserCheck, UserX } from "lucide-react"
+import { Plus, UserCheck, UserX, Search } from "lucide-react"
 
 type Usuario = { id: string; name: string; email: string; role: string; ativo: boolean; createdAt: Date | string }
 
@@ -17,6 +17,17 @@ export default function UsuariosClient({ usuarios }: { usuarios: Usuario[] }) {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "VIEWER" })
+  const [busca, setBusca] = useState("")
+  const [roleFiltro, setRoleFiltro] = useState("")
+  const [statusFiltro, setStatusFiltro] = useState<"ATIVOS" | "INATIVOS" | "TODOS">("ATIVOS")
+
+  const usuariosFiltrados = usuarios.filter((u) => {
+    if (statusFiltro === "ATIVOS" && !u.ativo) return false
+    if (statusFiltro === "INATIVOS" && u.ativo) return false
+    if (roleFiltro && u.role !== roleFiltro) return false
+    const q = busca.toLowerCase()
+    return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+  })
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -47,6 +58,43 @@ export default function UsuariosClient({ usuarios }: { usuarios: Usuario[] }) {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+          {([
+            { key: "ATIVOS", label: "Ativos" },
+            { key: "INATIVOS", label: "Inativos" },
+            { key: "TODOS", label: "Todos" },
+          ] as const).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setStatusFiltro(t.key)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${statusFiltro === t.key ? "bg-blue-700 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={roleFiltro}
+          onChange={(e) => setRoleFiltro(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Todos os perfis</option>
+          {Object.entries(ROLE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome ou email…"
+            className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
@@ -58,7 +106,14 @@ export default function UsuariosClient({ usuarios }: { usuarios: Usuario[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {usuarios.map((u) => (
+            {usuariosFiltrados.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                  Nenhum usuário encontrado.
+                </td>
+              </tr>
+            )}
+            {usuariosFiltrados.map((u) => (
               <tr key={u.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
                 <td className="px-4 py-3 text-gray-500">{u.email}</td>

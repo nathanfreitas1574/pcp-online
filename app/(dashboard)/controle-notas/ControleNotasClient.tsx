@@ -41,6 +41,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
   const [tipoF, setTipoF] = useState("")
   const [statusF, setStatusF] = useState("")
   const [filialF, setFilialF] = useState("")
+  const [clienteF, setClienteF] = useState("")
   const [mes, setMes] = useState("")
   const [busca, setBusca] = useState("")
   const [view, setView] = useState<"tabela" | "graficos">("tabela")
@@ -63,6 +64,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
     if (tipoF) qs.set("tipo", tipoF)
     if (statusF) qs.set("status", statusF)
     if (filialF) qs.set("filial", filialF)
+    if (clienteF) qs.set("cliente", clienteF)
     if (mes) qs.set("mes", mes)
     if (busca) qs.set("busca", busca)
     const r = await fetch("/api/controle-notas?" + qs.toString())
@@ -74,7 +76,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
     setMeses(d.meses ?? [])
     setFiliais(d.filiais ?? [])
     setLoading(false)
-  }, [tipoF, statusF, filialF, mes, busca])
+  }, [tipoF, statusF, filialF, clienteF, mes, busca])
   useEffect(() => { carregar() }, [carregar])
 
   function abrirNovo() { setForm({ ...VAZIO }); setEditId(null); setErro("") }
@@ -147,7 +149,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
   function exportar() {
     const qs = new URLSearchParams()
     if (tipoF) qs.set("tipo", tipoF); if (statusF) qs.set("status", statusF)
-    if (filialF) qs.set("filial", filialF); if (mes) qs.set("mes", mes); if (busca) qs.set("busca", busca)
+    if (filialF) qs.set("filial", filialF); if (clienteF) qs.set("cliente", clienteF); if (mes) qs.set("mes", mes); if (busca) qs.set("busca", busca)
     window.open("/api/controle-notas/export?" + qs.toString(), "_blank")
   }
 
@@ -234,6 +236,12 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
             <option value="">Todas as filiais</option>
             {filiais.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
+        )}
+        {clientes.length > 0 && (
+          <>
+            <input list="cn-filtro-clientes" value={clienteF} onChange={e => setClienteF(e.target.value)} placeholder="Todos os clientes" className={`border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${clienteF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200"}`} />
+            <datalist id="cn-filtro-clientes">{clientes.map(c => <option key={c} value={c} />)}</datalist>
+          </>
         )}
         <select value={mes} onChange={e => setMes(e.target.value)} className={`border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${mes ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200"}`}>
           <option value="">📅 Todos os meses</option>

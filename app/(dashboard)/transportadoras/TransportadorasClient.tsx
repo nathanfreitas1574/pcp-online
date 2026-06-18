@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { Plus, Truck, Pencil, Check, X } from "lucide-react"
+import { Plus, Truck, Pencil, Check, X, Search } from "lucide-react"
 
 type Transportadora = { id: string; codigo: string; nome: string; cnpj: string | null; contato: string | null; telefone: string | null; ativo: boolean }
 
@@ -10,6 +10,15 @@ export default function TransportadorasClient({ transportadoras: inicial }: { tr
   const [editing, setEditing] = useState<Transportadora | null>(null)
   const [form, setForm] = useState({ codigo: "", nome: "", cnpj: "", contato: "", telefone: "" })
   const [saving, setSaving] = useState(false)
+  const [busca, setBusca] = useState("")
+  const [statusFiltro, setStatusFiltro] = useState<"todas" | "ativas" | "inativas">("todas")
+
+  const listaFiltrada = lista.filter((t) => {
+    const q = busca.toLowerCase()
+    const matchBusca = !q || t.nome.toLowerCase().includes(q) || t.codigo.toLowerCase().includes(q) || (t.cnpj ?? "").toLowerCase().includes(q)
+    const matchStatus = statusFiltro === "todas" || (statusFiltro === "ativas" ? t.ativo : !t.ativo)
+    return matchBusca && matchStatus
+  })
 
   function openNew() { setEditing(null); setForm({ codigo: "", nome: "", cnpj: "", contato: "", telefone: "" }); setShowModal(true) }
   function openEdit(t: Transportadora) { setEditing(t); setForm({ codigo: t.codigo, nome: t.nome, cnpj: t.cnpj ?? "", contato: t.contato ?? "", telefone: t.telefone ?? "" }); setShowModal(true) }
@@ -36,13 +45,26 @@ export default function TransportadorasClient({ transportadoras: inicial }: { tr
           <Plus size={15} /> Nova Transportadora
         </button>
       </div>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar nome, código, CNPJ…"
+            className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select value={statusFiltro} onChange={e => setStatusFiltro(e.target.value as "todas" | "ativas" | "inativas")}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="todas">Todas</option>
+          <option value="ativas">Ativas</option>
+          <option value="inativas">Inativas</option>
+        </select>
+      </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>{["Código","Nome","CNPJ","Contato","Telefone","Status",""].map((h)=><th key={h} className="px-4 py-3 text-left font-medium text-gray-500 text-xs">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y">
-            {lista.map((t) => (
+            {listaFiltrada.map((t) => (
               <tr key={t.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-mono text-xs font-bold text-blue-700">{t.codigo}</td>
                 <td className="px-4 py-2.5 font-medium text-gray-800">{t.nome}</td>
@@ -59,7 +81,7 @@ export default function TransportadorasClient({ transportadoras: inicial }: { tr
                 </td>
               </tr>
             ))}
-            {lista.length === 0 && <tr><td colSpan={7} className="py-10 text-center text-gray-400">Nenhuma transportadora cadastrada.</td></tr>}
+            {listaFiltrada.length === 0 && <tr><td colSpan={7} className="py-10 text-center text-gray-400">{lista.length === 0 ? "Nenhuma transportadora cadastrada." : "Nenhuma transportadora encontrada."}</td></tr>}
           </tbody>
         </table>
       </div>

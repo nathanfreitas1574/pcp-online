@@ -15,12 +15,17 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const { tipo, descricao, local, boxId, foto, gravidade, responsavel, observacao } = await req.json()
+  const { tipo, descricao, local, boxId, boxCodigo, foto, gravidade, responsavel, observacao } = await req.json()
   if (!tipo || !descricao) return NextResponse.json({ error: "Tipo e descrição obrigatórios" }, { status: 400 })
+  let resolvedBoxId: string | null = boxId || null
+  if (!resolvedBoxId && boxCodigo) {
+    const box = await prisma.box.findFirst({ where: { codigo: boxCodigo } })
+    resolvedBoxId = box?.id ?? null
+  }
   const ocorrencia = await prisma.ocorrencia.create({
     data: {
       tipo, descricao, gravidade: gravidade ?? "MEDIA",
-      local: local || null, boxId: boxId || null,
+      local: local || null, boxId: resolvedBoxId,
       foto: foto || null, responsavel: responsavel || null,
       criadoPorId: session.user.id,
     },

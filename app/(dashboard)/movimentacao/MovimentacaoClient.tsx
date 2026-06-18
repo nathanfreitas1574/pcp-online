@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Truck } from "lucide-react"
+import { Plus, Truck, FileSpreadsheet } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -93,13 +93,22 @@ export default function MovimentacaoClient({
           <h2 className="text-2xl font-bold text-gray-800">Movimentação Interna</h2>
           <p className="text-gray-500 text-sm mt-1">Pré-programação PCP e controle de viagens</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-        >
-          <Plus size={16} />
-          Nova Movimentação
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.open("/api/exportar/movimentacoes", "_blank")}
+            className="flex items-center gap-2 bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            <FileSpreadsheet size={16} />
+            Exportar Excel
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            <Plus size={16} />
+            Nova Movimentação
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4">

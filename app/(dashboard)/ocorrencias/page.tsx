@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Shield, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Camera } from "lucide-react"
+import { Shield, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Camera, FileText } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -83,6 +83,16 @@ export default function OcorrenciasPage() {
   const abertas=ocorrencias.filter(o=>o.status==="ABERTA").length
   const criticas=ocorrencias.filter(o=>o.gravidade==="CRITICA"&&o.status!=="ENCERRADA").length
 
+  function exportarPDF() {
+    const esc=(s:unknown)=>String(s??"").replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]!))
+    const linhas=visiveis.map(o=>`<tr><td>${esc(format(new Date(o.createdAt),"dd/MM/yyyy HH:mm",{locale:ptBR}))}</td><td>${esc(TIPO_LABEL[o.tipo]??o.tipo)}</td><td>${esc(GRAV_CFG[o.gravidade].label)}</td><td>${esc(STATUS_CFG[o.status].label)}</td><td>${esc(o.descricao)}</td><td>${esc(o.local??"")}</td><td>${esc(o.box?.codigo??"")}</td><td>${esc(o.responsavel??"")}</td></tr>`).join("")
+    const html=`<html><head><meta charset="utf-8"><title>Ocorrências</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}</style></head><body><h1>Controle de Ocorrências</h1><p>${visiveis.length} ocorrência(s) &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>Data</th><th>Tipo</th><th>Gravidade</th><th>Status</th><th>Descrição</th><th>Local</th><th>Box</th><th>Responsável</th></tr></thead><tbody>${linhas}</tbody></table></body></html>`
+    const w=window.open("","_blank")
+    if(!w){alert("Permita pop-ups para exportar em PDF.");return}
+    w.document.write(html);w.document.close();w.focus()
+    setTimeout(()=>w.print(),300)
+  }
+
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -90,7 +100,10 @@ export default function OcorrenciasPage() {
           <div className="w-9 h-9 bg-red-600 rounded-xl flex items-center justify-center"><Shield size={18} className="text-white"/></div>
           <div><h1 className="font-bold text-gray-800 text-xl">Controle de Ocorrências</h1><p className="text-xs text-gray-500">Incidentes, avarias e não conformidades</p></div>
         </div>
-        <button onClick={()=>setShowForm(true)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-700 transition shadow-sm"><Plus size={15}/>Registrar Ocorrência</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={exportarPDF} disabled={visiveis.length===0} className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para PDF (impressão)"><FileText size={15} className="text-red-600"/>PDF</button>
+          <button onClick={()=>setShowForm(true)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-700 transition shadow-sm"><Plus size={15}/>Registrar Ocorrência</button>
+        </div>
       </div>
 
       {/* KPIs */}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Upload } from "lucide-react"
+import { Upload, Search } from "lucide-react"
 
 type VistoriaBox = {
   id: string; boxCodigo: string; boxTipo: string
@@ -61,6 +61,8 @@ export default function VistoriaClient({
 }) {
   const [aba, setAba] = useState<"mapa" | "tabela" | "importar">("mapa")
   const [tipoFiltro, setTipoFiltro] = useState("TODOS")
+  const [busca, setBusca] = useState("")
+  const [statusFiltro, setStatusFiltro] = useState<"TODOS" | "OCUPADOS" | "LIVRES">("TODOS")
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState("")
 
@@ -71,6 +73,19 @@ export default function VistoriaClient({
   const registrosFiltrados = tipoFiltro === "TODOS" ? registros
     : tipoFiltro === "ALVENARIA" ? alvenaria
     : tipoFiltro === "ESTRUTURADO" ? estruturado : varredura
+
+  const q = busca.toLowerCase()
+  const registrosExibidos = registrosFiltrados.filter((v) => {
+    const ocupado = v.statusBox !== "LIVRE"
+    if (statusFiltro === "OCUPADOS" && !ocupado) return false
+    if (statusFiltro === "LIVRES" && ocupado) return false
+    if (!q) return true
+    return (
+      v.boxCodigo.toLowerCase().includes(q) ||
+      (v.clienteNome ?? "").toLowerCase().includes(q) ||
+      (v.produto ?? "").toLowerCase().includes(q)
+    )
+  })
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -161,13 +176,37 @@ export default function VistoriaClient({
       {/* Tabela */}
       {aba === "tabela" && (
         <div>
-          <div className="flex gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-3">
             {["TODOS", "ALVENARIA", "ESTRUTURADO", "VARREDURA"].map((t) => (
               <button key={t} onClick={() => setTipoFiltro(t)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                   tipoFiltro === t ? "bg-blue-700 text-white" : "bg-white border border-gray-200 text-gray-600"
                 }`}>
                 {t}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por box, cliente ou produto..."
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {([
+              { id: "TODOS", label: "Todos" },
+              { id: "OCUPADOS", label: "Ocupados" },
+              { id: "LIVRES", label: "Livres" },
+            ] as const).map(({ id, label }) => (
+              <button key={id} onClick={() => setStatusFiltro(id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  statusFiltro === id ? "bg-blue-700 text-white" : "bg-white border border-gray-200 text-gray-600"
+                }`}>
+                {label}
               </button>
             ))}
           </div>
@@ -182,7 +221,7 @@ export default function VistoriaClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {registrosFiltrados.map((v) => (
+                  {registrosExibidos.map((v) => (
                     <tr key={v.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-bold text-gray-800">{v.boxCodigo}</td>
                       <td className="px-3 py-2 text-gray-500">{v.boxTipo}</td>
@@ -205,7 +244,7 @@ export default function VistoriaClient({
                       </td>
                     </tr>
                   ))}
-                  {registrosFiltrados.length === 0 && (
+                  {registrosExibidos.length === 0 && (
                     <tr><td colSpan={9} className="py-10 text-center text-gray-400">Nenhum registro.</td></tr>
                   )}
                 </tbody>

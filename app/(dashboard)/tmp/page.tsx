@@ -18,5 +18,30 @@ export default async function TmpPage() {
     take: 20,
   })
 
-  return <TmpClient ativos={ativos} historico={historico} boxes={boxes} clientes={clientes} produtos={produtos} />
+  // KPIs "Hoje": somente registros concluídos com saída a partir do início do dia atual
+  const inicioHoje = new Date()
+  inicioHoje.setHours(0, 0, 0, 0)
+
+  const concluidosHojeRegs = await prisma.tmpRegistro.findMany({
+    where: { status: "CONCLUIDO", dtSaida: { gte: inicioHoje } },
+    select: { tmpMinutos: true },
+  })
+
+  const concluidosHoje = concluidosHojeRegs.length
+  const comTmp = concluidosHojeRegs.filter((r) => r.tmpMinutos != null)
+  const tmpMedioHoje = comTmp.length
+    ? Math.round(comTmp.reduce((s, r) => s + (r.tmpMinutos ?? 0), 0) / comTmp.length)
+    : 0
+
+  return (
+    <TmpClient
+      ativos={ativos}
+      historico={historico}
+      boxes={boxes}
+      clientes={clientes}
+      produtos={produtos}
+      tmpMedioHoje={tmpMedioHoje}
+      concluidosHoje={concluidosHoje}
+    />
+  )
 }
