@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { normCliente, produtoMatch } from "@/lib/texto"
+import { clienteMatch, produtoMatch } from "@/lib/texto"
 import { diasDaSemana, ymd, ehCheckout, ehCarga, getSemanaAtual, DIA } from "@/lib/programacao"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -31,18 +31,18 @@ export async function GET(req: NextRequest) {
   const fim = new Date(Date.UTC(ano, 11, 31) + 8 * DIA)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-    select: { clienteDestino: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
   })
 
-  // Bucket por dia + operação(carga?) + cliente normalizado → lista (p/ casar produto)
-  const bucket = new Map<string, { produto: string | null; peso: number }[]>()
+  // Bucket por dia + operação(carga?) → lista (cliente/produto casam de forma flexível no laço)
+  const bucket = new Map<string, { cliente: string | null; produto: string | null; peso: number }[]>()
   for (const m of marcacoesRaw) {
     if (!m.dataCarregamento || !ehCheckout(m.status)) continue
     const carga = ehCarga(m.operacao)
     if (carga === null) continue
-    const key = `${ymd(new Date(m.dataCarregamento))}|${carga ? 1 : 0}|${normCliente(m.clienteDestino)}`
+    const key = `${ymd(new Date(m.dataCarregamento))}|${carga ? 1 : 0}`
     if (!bucket.has(key)) bucket.set(key, [])
-    bucket.get(key)!.push({ produto: m.produto, peso: m.pesoLiquido || 0 })
+    bucket.get(key)!.push({ cliente: m.clienteDestino || m.cliente, produto: m.produto, peso: m.pesoLiquido || 0 })
   }
 
   const porMes = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, prog: 0, real: 0 }))
@@ -54,16 +54,15 @@ export async function GET(req: NextRequest) {
     clientesSet.add(p.clienteNome); produtosSet.add(p.produto)
     const dias = diasDaSemana(ano, p.semana)
     const querCarga = p.tipo === "EXPEDICAO"
-    const cliKey = normCliente(p.clienteNome)
     for (let i = 0; i < 7; i++) {
       const progDia = (p[DIAS_KEYS[i]] as number) ?? 0
       const dia = dias[i]
       // dias de borda (semana 1/última) que caem em outro ano-calendário não contam aqui
       if (dia.getUTCFullYear() !== ano) continue
       const mesDia = dia.getUTCMonth() + 1
-      const lista = bucket.get(`${ymd(dia)}|${querCarga ? 1 : 0}|${cliKey}`) ?? []
+      const lista = bucket.get(`${ymd(dia)}|${querCarga ? 1 : 0}`) ?? []
       let realDia = 0
-      for (const m of lista) if (produtoMatch(m.produto, p.produto)) realDia += m.peso
+      for (const m of lista) if (clienteMatch(m.cliente, p.clienteNome) && produtoMatch(m.produto, p.produto)) realDia += m.peso
       // porMes acumula o ano inteiro (gráfico)
       porMes[mesDia - 1].prog += progDia
       porMes[mesDia - 1].real += realDia

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import ProgramacaoClient from "./ProgramacaoClient"
-import { normCliente, produtoMatch } from "@/lib/texto"
+import { clienteMatch, produtoMatch } from "@/lib/texto"
 import { DIA, ymd, ddMM, getSemanaAtual, semanasDoAno, diasDaSemana, ehCheckout } from "@/lib/programacao"
 
 export const dynamic = "force-dynamic"
@@ -37,7 +37,7 @@ export default async function ProgramacaoPage({
   const semanaFim = new Date(diasSemana[6].getTime() + DIA - 1)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: semanaIni, lte: semanaFim } },
-    select: { clienteDestino: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
   })
   const marcacoes = marcacoesRaw.filter(m => ehCheckout(m.status))
 
@@ -48,14 +48,13 @@ export default async function ProgramacaoPage({
   for (const prog of programacoes) {
     const arr = [0, 0, 0, 0, 0, 0, 0]
     const querCarga = prog.tipo === "EXPEDICAO"
-    const cliProg = normCliente(prog.clienteNome)
     for (const m of marcacoes) {
       if (!m.dataCarregamento) continue
       const op = (m.operacao || "").toUpperCase()
       const ehDescarga = op.includes("DESCARGA")
       const ehCarga = op.includes("CARGA") && !ehDescarga
       if (querCarga ? !ehCarga : !ehDescarga) continue
-      if (normCliente(m.clienteDestino) !== cliProg) continue
+      if (!clienteMatch(m.clienteDestino || m.cliente, prog.clienteNome)) continue
       if (!produtoMatch(m.produto, prog.produto)) continue
       const idx = idxPorData.get(ymd(new Date(m.dataCarregamento)))
       if (idx === undefined) continue

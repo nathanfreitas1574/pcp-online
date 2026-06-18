@@ -15,6 +15,23 @@ export function normCliente(s: string | null | undefined): string {
     .trim()
 }
 
+/**
+ * Casa nomes de cliente de sistemas diferentes (programação × marcação/contrato).
+ * O nome pode vir curto ("CIBRAFERTIL") ou completo ("CIBRAFERTIL COMPANHIA
+ * BRASILEIRA DE FERTILIZANTES"). Regra: iguais OU todas as palavras
+ * significativas (≥3 letras) do nome mais curto aparecem no nome mais longo.
+ */
+export function clienteMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normCliente(a), nb = normCliente(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  const ta = na.split(" ").filter(Boolean)
+  const tb = nb.split(" ").filter(Boolean)
+  const [curto, longo] = ta.length <= tb.length ? [ta, tb] : [tb, ta]
+  const signif = curto.filter(w => w.length >= 3)
+  return signif.length > 0 && signif.every(w => longo.includes(w))
+}
+
 // Palavras genéricas que não ajudam a distinguir produto
 const STOP_PRODUTO = new Set([
   "DE", "DA", "DO", "E", "BB", "KG", "TON", "PO", "BIG", "BAG", "GR", "MG",
