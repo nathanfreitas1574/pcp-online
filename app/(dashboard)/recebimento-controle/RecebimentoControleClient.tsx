@@ -239,6 +239,13 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual }: { anoA
               <Campo l="Adicionado"><input type="number" value={form.adicionado} onChange={e => setForm({ ...form, adicionado: e.target.value })} className={inp} /></Campo>
               <Campo l="Observação" span><input value={form.obs} onChange={e => setForm({ ...form, obs: e.target.value })} className={inp} /></Campo>
             </div>
+            {/* Preview ao vivo do Confirmado (= Programado + Adicionado − Cancelado) */}
+            <div className="mx-5 mb-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm">
+              <span className="text-gray-600 text-xs">Confirmado = Programado + Adicionado − Cancelado</span>
+              <span className="font-bold text-blue-700">
+                {fmt(Number(form.volumeProgramado) || 0)} + {fmt(Number(form.adicionado) || 0)} − {fmt(Number(form.cancelado) || 0)} = {fmt((Number(form.volumeProgramado) || 0) + (Number(form.adicionado) || 0) - (Number(form.cancelado) || 0))} t
+              </span>
+            </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 sticky bottom-0 bg-white">
               <button onClick={() => setForm(null)} className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">Cancelar</button>
               <button onClick={salvar} disabled={salvando} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"><Save size={15} /> {salvando ? "Salvando…" : "Salvar"}</button>
