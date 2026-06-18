@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Upload } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Upload, Calendar } from "lucide-react"
 
 type Quebra = {
   id: string; clienteNome: string; produto: string; classe: string | null
@@ -31,19 +32,29 @@ function BarHorizontal({ label, value, max, color = "green" }: { label: string; 
 }
 
 export default function BiEstoquesClient({
+  mes, mesLabel, meses,
   saldoInicial, entradas, saidas, saldoFinal, totalQuebras,
   porCliente, porProduto, quebras, insumos, movimentos,
 }: {
+  mes: string; mesLabel: string; meses: string[]
   saldoInicial: number; entradas: number; saidas: number; saldoFinal: number; totalQuebras: number
   porCliente: [string, number][]; porProduto: [string, number][]
   quebras: Quebra[]; insumos: Insumo[]; movimentos: Movimento[]
 }) {
+  const router = useRouter()
   const [aba, setAba] = useState<"resumo" | "quebras" | "insumos" | "importar">("resumo")
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState("")
 
   const maxCliente = porCliente[0]?.[1] ?? 1
   const maxProduto = porProduto[0]?.[1] ?? 1
+
+  const MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+  const labelMes = (m: string) => { const x = /^(\d{4})-(\d{2})$/.exec(m); return x ? `${MESES_PT[+x[2] - 1]}/${x[1]}` : m }
+
+  function irParaMes(m: string) {
+    router.push(`/bi-estoques?mes=${m}`)
+  }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -59,9 +70,18 @@ export default function BiEstoquesClient({
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">BI Estoques</h2>
-        <p className="text-gray-500 text-sm mt-1">Movimentação, saldos e quebras do período</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">BI Estoques</h2>
+          <p className="text-gray-500 text-sm mt-1">Movimentação, saldos e quebras de {mesLabel}</p>
+        </div>
+        <div className="flex items-center gap-1.5 text-sm text-gray-600">
+          <Calendar size={15} className="text-gray-400" />
+          <select value={mes} onChange={(e) => irParaMes(e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {meses.map((m) => <option key={m} value={m}>{labelMes(m)}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* KPIs */}

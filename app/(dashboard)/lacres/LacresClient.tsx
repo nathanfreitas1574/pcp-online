@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Plus, Lock, AlertTriangle, CheckCircle, ExternalLink, Pencil, Ban, X, Calendar, Eye, EyeOff } from "lucide-react"
-import { format, startOfDay, endOfDay, parseISO } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import ArmazemBoxSelect from "@/components/ArmazemBoxSelect"
 
@@ -42,20 +42,45 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
   const [dataInicio, setDataInicio]     = useState("")
   const [dataFim, setDataFim]           = useState("")
   const [mostrarInativos, setMostrarInativos] = useState(false)
+  const [refetching, setRefetching]     = useState(false)
 
-  // ── Filtros aplicados ──────────────────────────────────────────────────────
+  // ── Refetch server-side ao mudar datas/status/inativos ─────────────────────
+  // O filtro de data agora roda no banco (createdAt gte/lte), então datas
+  // antigas (fora dos últimos registros) também retornam resultados.
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    const params = new URLSearchParams()
+    if (dataInicio) params.set("inicio", dataInicio)
+    if (dataFim)    params.set("fim", dataFim)
+    // "Ver inativos" tem prioridade; senão usa o filtro de status selecionado
+    if (mostrarInativos)            params.set("status", "INATIVOS")
+    else if (filtroStatus !== "TODOS") params.set("status", filtroStatus)
+
+    let cancelado = false
+    setRefetching(true)
+    fetch(`/api/lacres?${params.toString()}`)
+      .then(res => (res.ok ? res.json() : Promise.reject(res)))
+      .then((data: Lacre[]) => { if (!cancelado) setLacres(data) })
+      .catch(() => { /* mantém a lista atual em caso de erro */ })
+      .finally(() => { if (!cancelado) setRefetching(false) })
+
+    return () => { cancelado = true }
+  }, [filtroStatus, dataInicio, dataFim, mostrarInativos])
+
+  // ── Filtro em memória (apenas refino visual sobre o que veio do servidor) ───
   const filtered = useMemo(() => {
     return lacres.filter((l) => {
       // Filtro de ativos/inativos
       if (!mostrarInativos && l.inativado) return false
       if (filtroStatus === "INATIVOS" && !l.inativado) return false
       if (filtroStatus !== "TODOS" && filtroStatus !== "INATIVOS" && l.status !== filtroStatus) return false
-      const dt = new Date(l.createdAt)
-      if (dataInicio && dt < startOfDay(parseISO(dataInicio))) return false
-      if (dataFim   && dt > endOfDay(parseISO(dataFim)))    return false
       return true
     })
-  }, [lacres, filtroStatus, dataInicio, dataFim, mostrarInativos])
+  }, [lacres, filtroStatus, mostrarInativos])
 
   // ── Abrir modal novo ───────────────────────────────────────────────────────
   function openNovo() {
@@ -210,7 +235,9 @@ export default function LacresClient({ lacres: initialLacres, boxes }: { lacres:
           {mostrarInativos ? <EyeOff size={13} /> : <Eye size={13} />}
           {mostrarInativos ? "Ocultar inativos" : "Ver inativos"}
         </button>
-        <span className="ml-auto text-xs text-gray-400">{filtered.length} registro(s)</span>
+        <span className="ml-auto text-xs text-gray-400">
+          {refetching ? "Atualizando…" : `${filtered.length} registro(s)`}
+        </span>
       </div>
 
       {/* Tabela */}

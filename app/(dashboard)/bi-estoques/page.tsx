@@ -1,10 +1,28 @@
 import { prisma } from "@/lib/prisma"
+import { mesRange, mesLabel } from "@/lib/cobertura"
 import BiEstoquesClient from "./BiEstoquesClient"
 
-export default async function BiEstoquesPage() {
+export const dynamic = "force-dynamic"
+
+export default async function BiEstoquesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>
+}) {
+  const sp = await searchParams
   const hoje = new Date()
-  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-  const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1)
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`
+  const mes = mesRange(sp.mes) ? sp.mes! : mesAtual
+  const range = mesRange(mes)!
+  const inicio = range.gte
+  const fim = range.lt
+
+  // Lista de meses recentes para o seletor (mês atual + 11 anteriores)
+  const meses = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  })
+  if (!meses.includes(mes)) meses.unshift(mes)
 
   const [snapshots, quebras, insumos, movimentos] = await Promise.all([
     prisma.estoqueSnapshot.findMany({
@@ -58,6 +76,9 @@ export default async function BiEstoquesPage() {
 
   return (
     <BiEstoquesClient
+      mes={mes}
+      mesLabel={mesLabel(mes)}
+      meses={meses}
       saldoInicial={saldoInicial}
       entradas={entradas}
       saidas={saidas}

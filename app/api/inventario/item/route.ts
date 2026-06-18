@@ -8,11 +8,17 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
 
+  const boxId = body.boxId || null
+  const boxCodigo = boxId ? (await prisma.box.findUnique({ where: { id: boxId }, select: { codigo: true } }))?.codigo ?? null : null
+
   const item = await prisma.inventarioItem.create({
     data: {
       inventarioId: body.inventarioId,
       produtoId: body.produtoId,
       usuarioId: body.usuarioId ?? session.user.id,
+      boxId,
+      boxCodigo,
+      clienteNome: body.clienteNome || null,
       qtdSistema: body.qtdSistema,
       qtdContada: body.qtdContada,
       diferenca: body.diferenca,

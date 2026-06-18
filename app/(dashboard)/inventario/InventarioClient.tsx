@@ -7,6 +7,8 @@ import { ptBR } from "date-fns/locale"
 
 type InventarioItem = {
   id: string
+  boxCodigo: string | null
+  clienteNome: string | null
   qtdSistema: number
   qtdContada: number
   diferenca: number
@@ -276,12 +278,12 @@ export default function InventarioClient({
                   <tbody className="divide-y divide-gray-50">
                     {itensFiltrados.map((it) => (
                       <tr key={it.id} className={it.diferenca !== 0 && !it.ajustado ? "bg-red-50" : it.ajustado ? "bg-green-50" : "hover:bg-gray-50"}>
-                        <td className="px-3 py-2.5 font-mono text-xs text-gray-500">—</td>
+                        <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{it.boxCodigo || "—"}</td>
                         <td className="px-3 py-2.5">
                           <p className="font-medium text-gray-800 text-xs">{it.produto.codigo}</p>
                           <p className="text-gray-500 text-xs">{it.produto.descricao}</p>
                         </td>
-                        <td className="px-3 py-2.5 text-xs text-gray-500">—</td>
+                        <td className="px-3 py-2.5 text-xs text-gray-500">{it.clienteNome || "—"}</td>
                         <td className="px-3 py-2.5 text-xs text-center text-gray-500">{it.produto.unidade}</td>
                         <td className="px-3 py-2.5 text-right text-gray-600">{it.qtdSistema.toLocaleString("pt-BR")}</td>
                         <td className="px-3 py-2.5 text-right font-medium text-gray-800">{it.qtdContada.toLocaleString("pt-BR")}</td>

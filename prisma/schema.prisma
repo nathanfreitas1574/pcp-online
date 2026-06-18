@@ -270,6 +270,9 @@ model InventarioItem {
   inventarioId String
   produtoId    String
   usuarioId    String
+  boxId        String?
+  boxCodigo    String?
+  clienteNome  String?
   qtdSistema   Float
   qtdContada   Float
   diferenca    Float   @default(0)

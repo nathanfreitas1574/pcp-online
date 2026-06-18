@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { DollarSign, Plus, Trash2, TrendingDown, Package, Wrench, Users, MoreHorizontal } from "lucide-react"
+import { DollarSign, Plus, Trash2, TrendingDown, Package, Wrench, Users, MoreHorizontal, FileSpreadsheet, FileText } from "lucide-react"
 
 type Custo = {
   id: string; data: string; mes: string; tipo: string; descricao: string
@@ -74,6 +74,46 @@ export default function CustosClient({
     setCustos(prev => prev.filter(c => c.id !== id))
   }
 
+  // rótulo legível do período/tipo (p/ nome de arquivo e cabeçalho)
+  const tipoLabel = (v: string) => TIPOS.find(t => t.value === v)?.label ?? v
+  const periodoLabel = mesFiltro === "TODOS"
+    ? "Todos os meses"
+    : new Date(mesFiltro + "-01").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+
+  // Excel — exporta a lista JÁ FILTRADA na tela (xlsx no client)
+  async function exportarExcel() {
+    if (filtrados.length === 0) return
+    const XLSX = await import("xlsx")
+    const linhas = filtrados.map(c => ({
+      "Data": new Date(c.data).toLocaleDateString("pt-BR"),
+      "Tipo": tipoLabel(c.tipo),
+      "Descrição": c.descricao,
+      "Armazém": c.armazemNome ?? "Geral",
+      "Valor (R$)": c.valor,
+    }))
+    const ws = XLSX.utils.json_to_sheet(linhas)
+    const wb = XLSX.utils.book_new()
+    const aba = periodoLabel.replace(/[\\/:?*[\]]/g, "-").slice(0, 31)
+    XLSX.utils.book_append_sheet(wb, ws, aba)
+    const sufixo = mesFiltro === "TODOS" ? new Date().toISOString().slice(0, 10) : mesFiltro
+    XLSX.writeFile(wb, `custos_${sufixo}.xlsx`)
+  }
+
+  // PDF — abre janela, escreve HTML e imprime (padrão do projeto)
+  function exportarPDF() {
+    if (filtrados.length === 0) return
+    const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!))
+    const brl = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+    const linhas = filtrados.map(c => `<tr><td>${esc(new Date(c.data).toLocaleDateString("pt-BR"))}</td><td>${esc(tipoLabel(c.tipo))}</td><td>${esc(c.descricao)}</td><td>${esc(c.armazemNome ?? "Geral")}</td><td style="text-align:right">${brl(c.valor)}</td></tr>`).join("")
+    const total = filtrados.reduce((s, c) => s + c.valor, 0)
+    const tituloTipo = tipoFiltro === "TODOS" ? "" : ` — ${esc(tipoLabel(tipoFiltro))}`
+    const html = `<html><head><meta charset="utf-8"><title>Custo Operacional</title><style>body{font-family:Arial,sans-serif;font-size:11px;padding:18px;color:#111}h1{font-size:16px;margin:0}p{color:#555;margin:4px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}th{background:#f3f4f6}tfoot td{font-weight:bold;background:#fafafa}</style></head><body><h1>Custo Operacional — ${esc(periodoLabel)}${tituloTipo}</h1><p>${filtrados.length} lançamento(s) &middot; ${new Date().toLocaleString("pt-BR")}</p><table><thead><tr><th>Data</th><th>Tipo</th><th>Descri&ccedil;&atilde;o</th><th>Armaz&eacute;m</th><th style="text-align:right">Valor</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="4">Total</td><td style="text-align:right">${brl(total)}</td></tr></tfoot></table></body></html>`
+    const w = window.open("", "_blank")
+    if (!w) { alert("Permita pop-ups para exportar em PDF."); return }
+    w.document.write(html); w.document.close(); w.focus()
+    setTimeout(() => w.print(), 300)
+  }
+
   return (
     <div className="space-y-5 pb-10">
 
@@ -85,10 +125,20 @@ export default function CustosClient({
           </h2>
           <p className="text-gray-500 text-sm mt-0.5">Custo/tonelada · Controle de despesas operacionais</p>
         </div>
-        <button onClick={() => setForm(v => !v)}
-          className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-          <Plus size={15} /> Lançar Custo
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={exportarExcel} disabled={filtrados.length === 0}
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para Excel">
+            <FileSpreadsheet size={15} className="text-green-600" /> Excel
+          </button>
+          <button onClick={exportarPDF} disabled={filtrados.length === 0}
+            className="flex items-center gap-1.5 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition" title="Exportar para PDF (impressão)">
+            <FileText size={15} className="text-red-600" /> PDF
+          </button>
+          <button onClick={() => setForm(v => !v)}
+            className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+            <Plus size={15} /> Lançar Custo
+          </button>
+        </div>
       </div>
 
       {/* Breakdown por tipo */}
