@@ -1,10 +1,70 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   BarChart2, Box, Truck, TrendingUp, TrendingDown, AlertTriangle,
   Ship, Package, DollarSign, ClipboardCheck, Lock, CheckCircle2,
-  XCircle, Clock,
+  XCircle, Clock, Target,
 } from "lucide-react"
+
+// ── Metas do mês (meta × realizado) ──────────────────────────────────────────
+const META_TIPOS = ["OCUPACAO_BOXES", "VOLUME_RECEBIDO", "TMP_MEDIO", "VISTORIAS_DIA", "CAMINHOES_DIA"] as const
+const META_CFG: Record<string, { label: string; un: string; maior: boolean }> = {
+  OCUPACAO_BOXES:  { label: "Ocupação", un: "%", maior: true },
+  VOLUME_RECEBIDO: { label: "Volume recebido", un: "t", maior: true },
+  TMP_MEDIO:       { label: "TMP médio", un: "min", maior: false },
+  VISTORIAS_DIA:   { label: "Vistorias/dia", un: "", maior: true },
+  CAMINHOES_DIA:   { label: "Caminhões/dia", un: "", maior: true },
+}
+function semaforoMeta(real: number, meta: number, maior: boolean) {
+  if (!meta) return { cor: "text-gray-500", bg: "bg-gray-50", pct: 0 }
+  const pct = (real / meta) * 100
+  const ok = maior ? pct >= 90 : pct <= 110
+  const warn = maior ? pct >= 70 : pct <= 130
+  if (ok) return { cor: "text-green-700", bg: "bg-green-50", pct }
+  if (warn) return { cor: "text-amber-700", bg: "bg-amber-50", pct }
+  return { cor: "text-red-700", bg: "bg-red-50", pct }
+}
+function MetasSection({ mes }: { mes: string }) {
+  const mNum = Number(mes.slice(5, 7)), aNum = Number(mes.slice(0, 4))
+  const [metas, setMetas] = useState<Record<string, number>>({})
+  const [real, setReal] = useState<Record<string, number>>({})
+  const [temMeta, setTemMeta] = useState(true)
+  useEffect(() => {
+    let alive = true
+    Promise.all([
+      fetch(`/api/metas?mes=${mNum}&ano=${aNum}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/metas/realizados?mes=${mNum}&ano=${aNum}`).then(r => r.json()).catch(() => ({ realizados: {} })),
+    ]).then(([metasArr, realObj]) => {
+      if (!alive) return
+      const mm: Record<string, number> = {}
+      ;(Array.isArray(metasArr) ? metasArr : []).forEach((x: { tipo: string; valor: number }) => { mm[x.tipo] = x.valor })
+      setMetas(mm); setReal(realObj?.realizados ?? {}); setTemMeta(Object.keys(mm).length > 0)
+    })
+    return () => { alive = false }
+  }, [mNum, aNum])
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2"><Target size={15} className="text-blue-600" /> Metas do Mês</h3>
+        <a href="/metas" className="text-xs text-blue-600 hover:underline">definir metas →</a>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {META_TIPOS.map(t => {
+          const meta = metas[t] ?? 0, r = real[t] ?? 0, s = semaforoMeta(r, meta, META_CFG[t].maior)
+          return (
+            <div key={t} className={`rounded-xl border border-gray-100 p-3 ${s.bg}`}>
+              <p className="text-[11px] text-gray-500 font-medium mb-1">{META_CFG[t].label}</p>
+              <p className={`text-lg font-bold ${s.cor}`}>{r.toLocaleString("pt-BR")}<span className="text-xs font-medium text-gray-400"> {META_CFG[t].un}</span></p>
+              <p className="text-[11px] text-gray-400">meta {meta ? meta.toLocaleString("pt-BR") : "—"}{meta ? ` · ${Math.round(s.pct)}%` : ""}</p>
+            </div>
+          )
+        })}
+      </div>
+      {!temMeta && <p className="text-xs text-gray-400 mt-3">Nenhuma meta definida para {mes} — <a href="/metas" className="text-blue-600 hover:underline">defina em Metas</a>.</p>}
+    </div>
+  )
+}
 
 type KPIs = {
   totalBoxes: number; totalCap: number; totalVol: number; pctOcupacao: number
@@ -137,6 +197,9 @@ export default function ExecutivoClient({
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <BarraOcupacao pct={kpis.pctOcupacao} />
       </div>
+
+      {/* ── Metas do mês (meta × realizado) ── */}
+      <MetasSection mes={kpis.mes} />
 
       {/* ── Linha 3: Gráficos e listas ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
