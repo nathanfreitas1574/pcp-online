@@ -1,9 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
 
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
@@ -21,6 +19,14 @@ type Registro = {
   orcado: number; forecast: number; realizado: number; capacidade: number
 }
 
+// linha da aba "Realizado" (vinda da Marcação de Veículos)
+type RealRow = {
+  numero: string; data: string; ymd: string; contrato: string | null
+  cliente: string; produto: string; tipoProduto: string | null
+  operacao: string | null; linha: string | null; turno: string | null
+  realizado: number; observacao: string
+}
+
 const LINHA_COLORS: Record<string, string> = {
   NAVE: "bg-blue-100 text-blue-700",
   "BAG MÓVEL": "bg-green-100 text-green-700",
@@ -30,7 +36,7 @@ const LINHA_COLORS: Record<string, string> = {
 }
 
 export default function ExpedicaoClient({
-  contratos, registros, totalForecast, totalRealizado, totalOrcado, totalCapacidade, aderencia,
+  contratos, registros: _registros, totalForecast, totalRealizado, totalOrcado, totalCapacidade, aderencia,
 }: {
   contratos: Contrato[]
   registros: Registro[]
@@ -50,6 +56,39 @@ export default function ExpedicaoClient({
   const [addNum, setAddNum] = useState("")
   const [adding, setAdding] = useState(false)
   const [addMsg, setAddMsg] = useState("")
+
+  // Aba "Realizado" — dados vêm da Marcação de Veículos (CHECKOUT · CARGA)
+  const [realMes, setRealMes] = useState(() => {
+    const h = new Date()
+    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}`
+  })
+  const [realRows, setRealRows] = useState<RealRow[]>([])
+  const [realTotal, setRealTotal] = useState(0)
+  const [realLoading, setRealLoading] = useState(false)
+
+  useEffect(() => {
+    if (aba !== "registros") return
+    setRealLoading(true)
+    fetch(`/api/expedicao/realizado?mes=${realMes}`)
+      .then((r) => r.json())
+      .then((d) => { setRealRows(d.rows ?? []); setRealTotal(d.totalRealizado ?? 0) })
+      .catch(() => {})
+      .finally(() => setRealLoading(false))
+  }, [aba, realMes])
+
+  async function salvarObs(numero: string, observacao: string) {
+    const anterior = realRows.find((r) => r.numero === numero)?.observacao ?? ""
+    setRealRows((prev) => prev.map((r) => (r.numero === numero ? { ...r, observacao } : r)))
+    const ok = await fetch("/api/expedicao/realizado", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ marcacaoNumero: numero, observacao }),
+    }).then((r) => r.ok).catch(() => false)
+    if (!ok) {
+      // reverte a observação se o salvamento falhar
+      setRealRows((prev) => prev.map((r) => (r.numero === numero ? { ...r, observacao: anterior } : r)))
+      alert("Falha ao salvar a observação. Tente novamente.")
+    }
+  }
 
   const gap = totalRealizado - totalForecast
   const performance = totalCapacidade > 0 ? (totalRealizado / totalCapacidade) * 100 : 0
@@ -82,9 +121,13 @@ export default function ExpedicaoClient({
       )
     })
 
-  const registrosFiltrados = registros.filter((r) => {
+  const realFiltrados = realRows.filter((r) => {
     const q = busca.toLowerCase()
-    return r.clienteNome.toLowerCase().includes(q) || r.produto.toLowerCase().includes(q)
+    return (
+      r.cliente.toLowerCase().includes(q) ||
+      r.produto.toLowerCase().includes(q) ||
+      (r.contrato ?? "").toLowerCase().includes(q)
+    )
   })
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -131,7 +174,7 @@ export default function ExpedicaoClient({
       <div className="flex gap-2 mb-4">
         {[
           { id: "contratos", label: "Contratos" },
-          { id: "registros", label: "Dia a Dia" },
+          { id: "registros", label: "Realizado" },
           { id: "importar", label: "Importar Excel" },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => { setAba(id as typeof aba); setBusca("") }}
@@ -238,17 +281,24 @@ export default function ExpedicaoClient({
         </div>
       )}
 
-      {/* Dia a Dia */}
+      {/* Realizado — vem da Marcação de Veículos (CHECKOUT · CARGA) */}
       {aba === "registros" && (
         <div>
-          <div className="flex items-center mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <input type="month" value={realMes} onChange={(e) => setRealMes(e.target.value)}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            <span className="text-xs font-medium text-gray-500">
+              {realLoading ? "Carregando…" : `${realFiltrados.length} carregamento(s) · `}
+              {!realLoading && <span className="text-green-700 font-semibold">{realTotal.toLocaleString("pt-BR")} t</span>}
+            </span>
+            <span className="text-xs text-gray-400 hidden sm:inline">tipo/operação vêm do <strong>Contrato de Expedição</strong> casado por cliente + produto</span>
             <div className="relative ml-auto">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar cliente, produto..."
+                placeholder="Buscar contrato, cliente, produto..."
                 className="pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 w-64 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
@@ -258,19 +308,20 @@ export default function ExpedicaoClient({
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  {["Data", "Cliente", "Produto", "Linha", "Operação", "Turno", "Forecast", "Realizado", "Capacidade"].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>
+                  {["Data", "Contrato", "Cliente", "Produto", "Tipo Operação", "Operação", "Linha", "Turno", "Realizado (t)", "Observação"].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {registrosFiltrados.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 text-gray-500 text-xs">
-                      {format(new Date(r.data), "dd/MM/yy", { locale: ptBR })}
-                    </td>
-                    <td className="px-3 py-2 font-medium text-gray-800">{r.clienteNome}</td>
+                {realFiltrados.map((r) => (
+                  <tr key={`${realMes}-${r.numero}`} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{r.data}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-700">{r.contrato ?? "—"}</td>
+                    <td className="px-3 py-2 font-medium text-gray-800">{r.cliente}</td>
                     <td className="px-3 py-2 text-gray-600">{r.produto}</td>
+                    <td className="px-3 py-2 text-gray-600 text-xs">{r.tipoProduto ?? "—"}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{r.operacao ?? "—"}</td>
                     <td className="px-3 py-2">
                       {r.linha && (
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${LINHA_COLORS[r.linha] ?? "bg-gray-100 text-gray-600"}`}>
@@ -278,20 +329,25 @@ export default function ExpedicaoClient({
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-gray-500">{r.operacao ?? "—"}</td>
                     <td className="px-3 py-2 text-center">
                       <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                         r.turno === "A" ? "bg-yellow-100 text-yellow-700" :
                         r.turno === "B" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
                       }`}>{r.turno ?? "—"}</span>
                     </td>
-                    <td className="px-3 py-2 text-right">{r.forecast.toLocaleString("pt-BR")}</td>
-                    <td className="px-3 py-2 text-right font-medium text-green-700">{r.realizado.toLocaleString("pt-BR")}</td>
-                    <td className="px-3 py-2 text-right text-gray-500">{r.capacidade.toLocaleString("pt-BR")}</td>
+                    <td className="px-3 py-2 text-right font-medium text-green-700 whitespace-nowrap">{r.realizado.toLocaleString("pt-BR")}</td>
+                    <td className="px-2 py-1.5">
+                      <input key={`${realMes}-${r.numero}-${r.observacao}`} defaultValue={r.observacao} placeholder="—"
+                        onBlur={(e) => { if (e.target.value !== r.observacao) salvarObs(r.numero, e.target.value) }}
+                        className="w-44 text-xs border border-transparent hover:border-gray-200 focus:border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                    </td>
                   </tr>
                 ))}
-                {registrosFiltrados.length === 0 && (
-                  <tr><td colSpan={9} className="py-10 text-center text-gray-400">Nenhum registro. Importe o Excel.</td></tr>
+                {!realLoading && realFiltrados.length === 0 && (
+                  <tr><td colSpan={10} className="py-10 text-center text-gray-400">Nenhum carregamento (CHECKOUT · CARGA) neste mês.</td></tr>
+                )}
+                {realLoading && (
+                  <tr><td colSpan={10} className="py-10 text-center text-gray-400">Carregando…</td></tr>
                 )}
               </tbody>
             </table>

@@ -494,6 +494,15 @@ model ExpedicaoCapacidade {
   @@unique([ano, mes, linha])
 }
 
+// Observação editável por carregamento realizado (chaveada pelo nº da marcação — estável em reimports)
+model ExpedicaoObs {
+  id             String   @id @default(cuid())
+  marcacaoNumero String   @unique
+  observacao     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 // ─── BI ESTOQUES ──────────────────────────────────────────────────────────────
 
 model EstoqueSnapshot {
