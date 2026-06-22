@@ -110,7 +110,7 @@ export default function ExpedicaoClient({
           { id: "registros", label: "Dia a Dia" },
           { id: "importar", label: "Importar Excel" },
         ].map(({ id, label }) => (
-          <button key={id} onClick={() => setAba(id as typeof aba)}
+          <button key={id} onClick={() => { setAba(id as typeof aba); setBusca("") }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               aba === id ? "bg-blue-700 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}>

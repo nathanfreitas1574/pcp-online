@@ -3,12 +3,13 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight, History } from "lucide-react"
+import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight, History, Search, X } from "lucide-react"
 import ProgramacaoGraficos from "./ProgramacaoGraficos"
 import { DIA, ddMM, domingoDaSemana } from "@/lib/programacao"
 
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
+const VIS = [1, 2, 3, 4, 5, 6] as const // dias exibidos: Seg..Sáb (domingo = índice 0, fora da programação)
 const TOL = 0.95 // atende com 95% do programado
 const pad = (n: number) => String(n).padStart(2, "0")
 
@@ -50,6 +51,7 @@ export default function ProgramacaoClient({
   const [buscandoCtr, setBuscandoCtr] = useState(false)
   const [ctrInfo, setCtrInfo] = useState<string>("")
   const [view, setView] = useState<"tabela" | "graficos">("tabela")
+  const [busca, setBusca] = useState("")
 
   const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
 
@@ -84,22 +86,30 @@ export default function ProgramacaoClient({
     setBuscandoCtr(false)
   }
 
-  const filtradas = rows.filter((r) => r.tipo === tipo)
+  const filtradas = rows.filter((r) =>
+    r.tipo === tipo &&
+    (!busca || `${r.numeroContrato ?? ""} ${r.clienteNome} ${r.produto} ${r.boxCodigo ?? ""}`.toLowerCase().includes(busca.toLowerCase()))
+  )
+  // arrays de 7 posições (índice 0 = Dom, ignorado na exibição/soma)
   const totaisDia = DIAS_KEYS.map((d) => filtradas.reduce((s, r) => s + (r[d] ?? 0), 0))
-  const totalGeral = totaisDia.reduce((s, v) => s + v, 0)
+  const totalGeral = VIS.reduce((s, i) => s + totaisDia[i], 0)
   const realizadoDia = DIAS_KEYS.map((_, i) => filtradas.reduce((s, r) => s + (realDe(r.id)[i] ?? 0), 0))
-  const realizadoGeral = realizadoDia.reduce((s, v) => s + v, 0)
+  const realizadoGeral = VIS.reduce((s, i) => s + realizadoDia[i], 0)
   const fmt1 = (n: number) => n ? n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : ""
+
+  // total/realizado da LINHA sem domingo
+  const totalLinha = (row: Prog) => VIS.reduce((s, i) => s + (row[DIAS_KEYS[i]] ?? 0), 0)
+  const realTotalLinha = (id: string) => { const r = realDe(id); return VIS.reduce((s, i) => s + (r[i] ?? 0), 0) }
 
   function ytd(prog: Prog) {
     const real = realDe(prog.id)
     let p = 0, r = 0
-    for (let i = 0; i <= elapsedIdx; i++) { p += prog[DIAS_KEYS[i]] ?? 0; r += real[i] ?? 0 }
+    for (const i of VIS) { if (i <= elapsedIdx) { p += prog[DIAS_KEYS[i]] ?? 0; r += real[i] ?? 0 } }
     return { p, r }
   }
   const ytdGeral = (() => {
     let p = 0, r = 0
-    for (let i = 0; i <= elapsedIdx; i++) { p += totaisDia[i]; r += realizadoDia[i] }
+    for (const i of VIS) { if (i <= elapsedIdx) { p += totaisDia[i]; r += realizadoDia[i] } }
     return { p, r }
   })()
 
@@ -166,8 +176,9 @@ export default function ProgramacaoClient({
               <select value={semana} onChange={(e) => irParaSemana(Number(e.target.value))}
                 className="border border-gray-200 rounded-lg px-2 py-1 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {Array.from({ length: maxSemana }, (_, i) => i + 1).map((s) => {
-                  const dom = domingoDaSemana(ano, s); const sab = new Date(dom.getTime() + 6 * DIA)
-                  return <option key={s} value={s}>Semana {s} — {ddMM(dom)} a {ddMM(sab)}</option>
+                  const dom = domingoDaSemana(ano, s)
+                  const seg = new Date(dom.getTime() + DIA); const sab = new Date(dom.getTime() + 6 * DIA)
+                  return <option key={s} value={s}>Semana {s} — {ddMM(seg)} a {ddMM(sab)}</option>
                 })}
               </select>
               <span className="text-gray-400">/ {ano}</span>
@@ -216,6 +227,16 @@ export default function ProgramacaoClient({
       )}
 
       {view === "tabela" && (<>
+      {/* Filtro — isola um cliente/produto/contrato p/ enviar a programação da semana */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="relative flex-1 max-w-md">
+          <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Filtrar por cliente, produto, contrato ou box…"
+            className="w-full border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          {busca && <button onClick={() => setBusca("")} className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-700"><X size={15} /></button>}
+        </div>
+        {busca && <span className="text-xs text-gray-500">{filtradas.length} linha(s)</span>}
+      </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -225,10 +246,10 @@ export default function ProgramacaoClient({
                 <th className="px-3 py-3 text-left font-medium min-w-24">Box</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Cliente</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Produto</th>
-                {dias.map((d, i) => (
+                {VIS.map((i) => (
                   <th key={i} className={`px-2 py-3 text-center font-medium min-w-20 ${passou(i) ? "" : "opacity-80"}`}>
                     <div>{DIAS[i]}</div>
-                    <div className="text-xs opacity-70 font-normal">{d.label}</div>
+                    <div className="text-xs opacity-70 font-normal">{dias[i].label}</div>
                     <div className="text-[9px] opacity-60 font-normal mt-0.5">prog / real</div>
                   </th>
                 ))}
@@ -241,7 +262,8 @@ export default function ProgramacaoClient({
             <tbody className="divide-y divide-gray-50">
               {filtradas.map((row) => {
                 const real = realDe(row.id)
-                const realTotal = real.reduce((s, v) => s + v, 0)
+                const realTotal = realTotalLinha(row.id)
+                const totalRow = totalLinha(row)
                 const y = ytd(row)
                 return (
                 <tr key={row.id} className="hover:bg-blue-50/30">
@@ -256,7 +278,8 @@ export default function ProgramacaoClient({
                   </td>
                   <td className="px-3 py-2 font-medium text-gray-800 text-xs">{row.clienteNome}</td>
                   <td className="px-3 py-2 text-gray-600 text-xs">{row.produto}</td>
-                  {DIAS_KEYS.map((d, i) => {
+                  {VIS.map((i) => {
+                    const d = DIAS_KEYS[i]
                     const e = estiloDia(row[d] ?? 0, real[i], passou(i))
                     return (
                     <td key={d} className="px-1 py-1 align-top">
@@ -270,18 +293,18 @@ export default function ProgramacaoClient({
                     </td>
                     )
                   })}
-                  <td className="px-3 py-2 text-center font-bold text-gray-800 align-top">{row.total.toLocaleString("pt-BR")}</td>
+                  <td className="px-3 py-2 text-center font-bold text-gray-800 align-top">{totalRow.toLocaleString("pt-BR")}</td>
                   <td className="px-3 py-2 text-center align-top"><CelulaYTD p={y.p} r={y.r} /></td>
                   <td className="px-3 py-2 text-center align-top">
-                    <span className={`text-xs font-bold ${realTotal >= row.total && row.total > 0 ? "text-green-600" : realTotal > 0 ? "text-amber-600" : "text-gray-400"}`}>
+                    <span className={`text-xs font-bold ${realTotal >= totalRow && totalRow > 0 ? "text-green-600" : realTotal > 0 ? "text-amber-600" : "text-gray-400"}`}>
                       {realTotal > 0 ? fmt1(realTotal) : "—"}
                     </span>
-                    {row.total > 0 && (<div className="text-[10px] text-gray-400">{Math.round((realTotal / row.total) * 100)}%</div>)}
+                    {totalRow > 0 && (<div className="text-[10px] text-gray-400">{Math.round((realTotal / totalRow) * 100)}%</div>)}
                   </td>
                   <td className="px-3 py-2 text-center align-top">
                     {(() => {
-                      const saldo = row.total - realTotal
-                      if (row.total === 0 && realTotal === 0) return <span className="text-gray-300 text-xs">—</span>
+                      const saldo = totalRow - realTotal
+                      if (totalRow === 0 && realTotal === 0) return <span className="text-gray-300 text-xs">—</span>
                       if (Math.abs(saldo) < 0.05) return <span className="text-green-600 text-xs font-bold" title="Programado atingido">✓ 0</span>
                       if (saldo > 0) return <span className="text-gray-500 text-xs font-medium" title="Falta realizar">{fmt1(saldo)}</span>
                       return <span className="text-amber-600 text-xs font-bold" title="Ultrapassou o programado">▲ +{fmt1(-saldo)}</span>
@@ -320,7 +343,7 @@ export default function ProgramacaoClient({
                       className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none" />
                     <datalist id="produtos-list">{produtos.map((p) => <option key={p.id} value={p.descricao}>{p.codigo}</option>)}</datalist>
                   </td>
-                  {DIAS_KEYS.map((d) => <td key={d} className="px-1 py-2"><div className="w-full h-7 bg-gray-100 rounded" /></td>)}
+                  {VIS.map((i) => <td key={i} className="px-1 py-2"><div className="w-full h-7 bg-gray-100 rounded" /></td>)}
                   <td className="px-2 py-2">
                     <button onClick={adicionarLinha} disabled={saving === "nova"}
                       className="flex items-center gap-1 bg-blue-700 text-white px-2 py-1.5 rounded text-xs font-medium hover:bg-blue-800 disabled:opacity-60">
@@ -332,14 +355,15 @@ export default function ProgramacaoClient({
                 </tr>
               )}
               {addMode && ctrInfo && (
-                <tr className="bg-blue-50"><td colSpan={15} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
+                <tr className="bg-blue-50"><td colSpan={14} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
               )}
 
               {/* Linha de totais */}
               {filtradas.length > 0 && (
                 <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
                   <td colSpan={4} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
-                  {totaisDia.map((t, i) => {
+                  {VIS.map((i) => {
+                    const t = totaisDia[i]
                     const e = estiloDia(t, realizadoDia[i], passou(i))
                     return (
                     <td key={i} className="px-2 py-2.5 text-center text-xs align-top">
@@ -364,8 +388,8 @@ export default function ProgramacaoClient({
               )}
 
               {filtradas.length === 0 && !addMode && (
-                <tr><td colSpan={15} className="py-12 text-center text-gray-400">
-                  Nenhuma programação para a semana {semana}. Clique em &quot;Adicionar linha&quot; para começar.
+                <tr><td colSpan={14} className="py-12 text-center text-gray-400">
+                  {busca ? "Nenhuma linha para esse filtro." : <>Nenhuma programação para a semana {semana}. Clique em &quot;Adicionar linha&quot; para começar.</>}
                 </td></tr>
               )}
             </tbody>

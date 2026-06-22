@@ -33,7 +33,7 @@ function MetasSection({ mes }: { mes: string }) {
   useEffect(() => {
     let alive = true
     Promise.all([
-      fetch(`/api/metas?mes=${mNum}&ano=${aNum}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/metas?mes=${mNum}&ano=${aNum}`).then(r => r.json()).then(d => Array.isArray(d) ? d : (d?.metas ?? [])).catch(() => []),
       fetch(`/api/metas/realizados?mes=${mNum}&ano=${aNum}`).then(r => r.json()).catch(() => ({ realizados: {} })),
     ]).then(([metasArr, realObj]) => {
       if (!alive) return

@@ -313,7 +313,7 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
                       : <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded">Inutilização</span>}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">
-                    {n.numeroNF || "—"}
+                    {n.numeroNF || n.numero || "—"}
                     {n.alertaContabil && <span className="ml-1 text-amber-600" title="NF ainda lançada no contábil"><AlertTriangle size={12} className="inline" /></span>}
                   </td>
                   <td className="px-3 py-2">

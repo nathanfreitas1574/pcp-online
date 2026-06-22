@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     "Tipo": TIPO_LABEL[c.tipo] ?? c.tipo,
     "Código": c.codigoOperacao ?? "",
     "Descrição": c.descricao ?? "",
-    "Nº NF": c.numeroNF ?? "",
+    "Nº NF": c.numeroNF || c.numero,
     "Motivo": c.motivoErro ?? "",
     "Alerta contábil": c.alertaContabil ? "SIM — NF ainda no contábil" : "",
     "Status": STATUS_LABEL[c.statusAprovacao ?? ""] ?? (c.statusAprovacao ?? ""),

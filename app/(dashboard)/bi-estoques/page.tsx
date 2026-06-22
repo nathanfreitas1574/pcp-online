@@ -30,6 +30,7 @@ export default async function BiEstoquesPage({
       orderBy: [{ clienteNome: "asc" }, { produto: "asc" }],
     }),
     prisma.quebra.findMany({
+      where: { data: { gte: inicio, lt: fim } },
       take: 50,
       orderBy: { createdAt: "desc" },
       include: { cliente: { select: { nome: true } } },
