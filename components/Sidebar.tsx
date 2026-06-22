@@ -36,7 +36,7 @@ const nav: NavItem[] = [
   { href: "/fila", label: "Fila de Caminhões", icon: ListOrdered },
   { href: "/transportadoras", label: "Transportadoras", icon: Truck },
   { section: "Expedição" },
-  { href: "/expedicao", label: "Dashboard Expedição", icon: Upload },
+  { href: "/expedicao", label: "Controle de Expedição", icon: Upload },
   { href: "/consignacao", label: "Consignação NF", icon: FileText },
   { href: "/controle-notas", label: "Notas Canceladas", icon: FileX2 },
   { section: "Planejamento" },

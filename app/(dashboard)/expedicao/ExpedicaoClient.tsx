@@ -1,9 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Package, TrendingUp, BarChart2, Target, Upload, Search } from "lucide-react"
+import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+
+const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
+const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
 
 type Contrato = {
   id: string; numero: string; operacao: string | null; produtoAbreviado: string | null
@@ -42,12 +45,33 @@ export default function ExpedicaoClient({
   const [busca, setBusca] = useState("")
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState("")
+  const [rows, setRows] = useState<Contrato[]>(contratos)
+  const [mesF, setMesF] = useState("")
+  const [addNum, setAddNum] = useState("")
+  const [adding, setAdding] = useState(false)
+  const [addMsg, setAddMsg] = useState("")
 
   const gap = totalRealizado - totalForecast
   const performance = totalCapacidade > 0 ? (totalRealizado / totalCapacidade) * 100 : 0
+  const mesesContrato = [...new Set(rows.map((c) => c.mes).filter(Boolean) as string[])].sort()
 
-  const contratosFiltrados = contratos
+  async function salvarContratoCampo(id: string, campo: "tipoProduto" | "operacao", valor: string) {
+    setRows((prev) => prev.map((c) => c.id === id ? { ...c, [campo]: valor || null } : c))
+    await fetch(`/api/expedicao/contrato/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [campo]: valor }) })
+  }
+  async function adicionarContrato() {
+    if (!addNum.trim()) return
+    setAdding(true); setAddMsg("")
+    const r = await fetch("/api/expedicao/contrato", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ numero: addNum.trim() }) })
+    const d = await r.json()
+    setAdding(false)
+    if (r.ok) { setRows((prev) => [d, ...prev]); setAddNum(""); setAddMsg(`✓ Contrato ${d.numero} — ${d.cliente.nome} adicionado.`) }
+    else setAddMsg(`✕ ${d.error ?? "Erro ao adicionar."}`)
+  }
+
+  const contratosFiltrados = rows
     .filter((c) => filtroStatus === "TODOS" || c.status === filtroStatus)
+    .filter((c) => !mesF || c.mes === mesF)
     .filter((c) => {
       const q = busca.toLowerCase()
       return (
@@ -79,8 +103,8 @@ export default function ExpedicaoClient({
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Dashboard Expedição</h2>
-        <p className="text-gray-500 text-sm mt-1">Controle de carregamento e performance</p>
+        <h2 className="text-2xl font-bold text-gray-800">Controle de Expedição</h2>
+        <p className="text-gray-500 text-sm mt-1">Contratos (TOTVS), realizado da Marcação, orçado, forecast e capacidade</p>
       </div>
 
       {/* KPIs */}
@@ -122,6 +146,18 @@ export default function ExpedicaoClient({
       {/* Contratos */}
       {aba === "contratos" && (
         <div>
+          {/* Adicionar contrato só pelo número (resto vem do TOTVS) */}
+          <div className="flex flex-wrap items-center gap-2 mb-3 bg-blue-50 border border-blue-100 rounded-xl p-3">
+            <span className="text-xs font-semibold text-blue-700">Adicionar contrato:</span>
+            <input value={addNum} onChange={(e) => setAddNum(e.target.value)} onKeyDown={(e) => e.key === "Enter" && adicionarContrato()}
+              placeholder="nº do contrato" className="w-40 text-sm border border-blue-300 rounded-lg px-3 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            <button onClick={adicionarContrato} disabled={adding}
+              className="flex items-center gap-1.5 bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-60">
+              <Plus size={14} /> {adding ? "Buscando TOTVS…" : "Adicionar"}
+            </button>
+            <span className="text-xs text-gray-500">cliente e produto vêm do <strong>Contratos TOTVS</strong></span>
+            {addMsg && <span className={`text-xs font-medium ml-1 ${addMsg.startsWith("✓") ? "text-green-600" : "text-red-600"}`}>{addMsg} <button onClick={() => setAddMsg("")}><X size={11} className="inline" /></button></span>}
+          </div>
           <div className="flex flex-wrap items-center gap-2 mb-3">
             {["TODOS", "PROGRAMADO", "FINALIZADO", "CANCELADO"].map((s) => (
               <button key={s} onClick={() => setFiltroStatus(s)}
@@ -131,6 +167,13 @@ export default function ExpedicaoClient({
                 {s}
               </button>
             ))}
+            {mesesContrato.length > 0 && (
+              <select value={mesF} onChange={(e) => setMesF(e.target.value)}
+                className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${mesF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+                <option value="">Todos os meses</option>
+                {mesesContrato.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
             <div className="relative ml-auto">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -158,8 +201,20 @@ export default function ExpedicaoClient({
                       <td className="px-3 py-2 font-mono text-xs text-gray-700">{c.numero}</td>
                       <td className="px-3 py-2 font-medium text-gray-800">{c.cliente.nome}</td>
                       <td className="px-3 py-2 text-gray-600">{c.produtoAbreviado ?? "—"}</td>
-                      <td className="px-3 py-2 text-gray-500">{c.tipoProduto ?? "—"}</td>
-                      <td className="px-3 py-2 text-gray-500">{c.operacao ?? "—"}</td>
+                      <td className="px-2 py-2">
+                        <select value={c.tipoProduto ?? ""} onChange={(e) => salvarContratoCampo(c.id, "tipoProduto", e.target.value)}
+                          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                          <option value="">—</option>
+                          {TIPOS_OPERACAO.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-2">
+                        <select value={c.operacao ?? ""} onChange={(e) => salvarContratoCampo(c.id, "operacao", e.target.value)}
+                          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                          <option value="">—</option>
+                          {OPERACOES.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </td>
                       <td className="px-3 py-2 text-right font-medium">{c.volProgramado.toLocaleString("pt-BR")}</td>
                       <td className="px-3 py-2 text-right text-green-700 font-medium">{c.realizado.toLocaleString("pt-BR")}</td>
                       <td className={`px-3 py-2 text-right font-medium ${c.saldo < 0 ? "text-red-600" : "text-gray-700"}`}>
