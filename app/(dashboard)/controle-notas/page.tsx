@@ -4,14 +4,16 @@ import ControleNotasClient from "./ControleNotasClient"
 export const dynamic = "force-dynamic"
 
 export default async function ControleNotasPage() {
-  const [clientes, usuarios] = await Promise.all([
-    prisma.controleNota.findMany({ where: { cliente: { not: null } }, distinct: ["cliente"], select: { cliente: true }, orderBy: { cliente: "asc" }, take: 200 }),
+  const [clientesCad, usuarios, motivosCad] = await Promise.all([
+    prisma.cliente.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { nome: true } }),
     prisma.controleNota.findMany({ where: { usuario: { not: null } }, distinct: ["usuario"], select: { usuario: true }, orderBy: { usuario: "asc" }, take: 200 }),
+    prisma.motivoCancelamento.findMany({ where: { ativo: true }, orderBy: [{ ordem: "asc" }, { descricao: "asc" }], select: { descricao: true } }),
   ])
   return (
     <ControleNotasClient
-      clientes={clientes.map(c => c.cliente!).filter(Boolean)}
+      clientes={clientesCad.map(c => c.nome).filter(Boolean)}
       usuarios={usuarios.map(u => u.usuario!).filter(Boolean)}
+      motivos={motivosCad.map(m => m.descricao)}
     />
   )
 }

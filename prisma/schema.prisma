@@ -1451,3 +1451,13 @@ model RecebimentoControle {
   @@index([cliente])
   @@index([unidade])
 }
+
+// ─── MOTIVOS DE CANCELAMENTO / INUTILIZAÇÃO (lista padrão — Cadastros) ────────
+model MotivoCancelamento {
+  id        String   @id @default(cuid())
+  descricao String   @unique
+  ativo     Boolean  @default(true)
+  ordem     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -15,7 +15,7 @@ type Nota = {
   motivoErro: string | null; observacao: string | null; alertaContabil: boolean; filial: string | null
   statusAprovacao: string | null; validadoPor: string | null; validadoEm: string | null; concluidoEm: string | null
 }
-type Props = { clientes: string[]; usuarios: string[] }
+type Props = { clientes: string[]; usuarios: string[]; motivos: string[] }
 
 const dt = (s: string | null) => s ? new Date(s).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—"
 const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -30,7 +30,7 @@ function StatusBadge({ s }: { s: string | null }) {
   return <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded"><Clock size={12} /> Aguardando</span>
 }
 
-export default function ControleNotasClient({ clientes, usuarios }: Props) {
+export default function ControleNotasClient({ clientes, usuarios, motivos }: Props) {
   const [itens, setItens] = useState<Nota[]>([])
   const [porTipo, setPorTipo] = useState<{ tipo: string; count: number }[]>([])
   const [porStatus, setPorStatus] = useState({ AGUARDANDO: 0, VALIDADO: 0, CANCELADO: 0 })
@@ -388,12 +388,9 @@ export default function ControleNotasClient({ clientes, usuarios }: Props) {
                 <datalist id="cn-clientes">{clientes.map(c => <option key={c} value={c} />)}</datalist>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo do erro</label>
-                <select value={form.motivoErro} onChange={e => setForm({ ...form, motivoErro: e.target.value })} className={inp}>
-                  <option value="">—</option>
-                  <option value="ERRO OPERACIONAL">Erro operacional</option>
-                  <option value="ERRO SISTEMA">Erro de sistema</option>
-                </select>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Motivo do erro <a href="/cadastros" target="_blank" className="text-blue-500 hover:underline font-normal">+ cadastrar</a></label>
+                <input list="cn-motivos" value={form.motivoErro} onChange={e => setForm({ ...form, motivoErro: e.target.value })} className={inp} placeholder="selecione ou escreva…" />
+                <datalist id="cn-motivos">{motivos.map(m => <option key={m} value={m} />)}</datalist>
               </div>
               <div className="col-span-2"><label className="block text-xs font-semibold text-gray-600 mb-1">Observação</label><textarea value={form.observacao} onChange={e => setForm({ ...form, observacao: e.target.value })} rows={2} className={inp} /></div>
             </div>

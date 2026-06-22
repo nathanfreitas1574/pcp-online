@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Pencil, Trash2, Search, Package, Users, BoxIcon, Check, X, ArrowRightLeft, ChevronDown, ChevronRight, Pencil as PencilIcon, ListChecks, GripVertical, Shield, Type, Hash } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, Package, Users, BoxIcon, Check, X, ArrowRightLeft, ChevronDown, ChevronRight, Pencil as PencilIcon, ListChecks, GripVertical, Shield, Type, Hash, Ban } from "lucide-react"
 
 type Produto  = { id: string; codigo: string; descricao: string; abreviado: string | null; unidade: string; ativo: boolean }
 type Cliente  = { id: string; codigo: string; nome: string; abreviado: string | null; cnpj: string | null; ativo: boolean }
@@ -15,7 +15,65 @@ type DePara   = {
   produto: { id: string; codigo: string; descricao: string; unidade: string }
 }
 
-type Tab = "produtos" | "clientes" | "boxes" | "depara" | "checklist"
+type Motivo = { id: string; descricao: string; ativo: boolean; ordem: number }
+type Tab = "produtos" | "clientes" | "boxes" | "depara" | "checklist" | "motivos"
+
+// ─── Motivos de Cancelamento ──────────────────────────────────────────────────
+function MotivosTab({ motivos: inicial }: { motivos: Motivo[] }) {
+  const [motivos, setMotivos] = useState(inicial)
+  const [novo, setNovo] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState("")
+  const inp = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+
+  async function adicionar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!novo.trim()) return
+    setSaving(true); setErro("")
+    const res = await fetch("/api/motivos-cancelamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ descricao: novo }) })
+    const d = await res.json()
+    setSaving(false)
+    if (res.ok) { setMotivos(prev => [...prev, d]); setNovo("") }
+    else setErro(d.error ?? "Erro ao adicionar")
+  }
+  async function inativar(id: string, ativo: boolean) {
+    if (ativo) { await fetch(`/api/motivos-cancelamento/${id}`, { method: "DELETE" }); setMotivos(prev => prev.map(m => m.id === id ? { ...m, ativo: false } : m)) }
+    else { await fetch(`/api/motivos-cancelamento/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: true }) }); setMotivos(prev => prev.map(m => m.id === id ? { ...m, ativo: true } : m)) }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">Lista padrão de motivos usada no <strong>Controle de Notas Canceladas / Inutilizadas</strong>. Mantém os nomes consistentes em um único lugar.</p>
+      <form onSubmit={adicionar} className="flex gap-2 flex-wrap items-end bg-blue-50 border border-blue-100 rounded-xl p-4">
+        <div className="flex-1 min-w-48">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Novo motivo</label>
+          <input value={novo} onChange={e => { setNovo(e.target.value); setErro("") }} placeholder="Ex: ERRO DE DIGITAÇÃO" className={`${inp} w-full uppercase`} />
+        </div>
+        <button type="submit" disabled={saving} className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-60"><Plus size={15} /> {saving ? "…" : "Adicionar"}</button>
+        {erro && <p className="text-xs text-red-600 w-full">{erro}</p>}
+      </form>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b"><tr>{["Motivo", "Status", "Ações"].map(h => <th key={h} className="px-4 py-3 text-left font-medium text-gray-500">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-gray-50">
+            {motivos.map(m => (
+              <tr key={m.id} className={`hover:bg-gray-50 ${!m.ativo ? "opacity-50" : ""}`}>
+                <td className="px-4 py-3 font-medium text-gray-800">{m.descricao}</td>
+                <td className="px-4 py-3"><Badge ativo={m.ativo} /></td>
+                <td className="px-4 py-3">
+                  <button onClick={() => inativar(m.id, m.ativo)} className={`p-1.5 rounded-lg ${m.ativo ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`} title={m.ativo ? "Inativar" : "Reativar"}>
+                    {m.ativo ? <Trash2 size={14} /> : <Check size={14} />}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {motivos.length === 0 && <tr><td colSpan={3} className="py-10 text-center text-gray-400">Nenhum motivo cadastrado.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
 
 type ChecklistItemType = { id: string; pergunta: string; tipo: string; obrigatorio: boolean; bloqueante: boolean; ordem: number }
 type ChecklistTemplateType = { id: string; nome: string; descricao: string | null; ativo: boolean; itens: ChecklistItemType[] }
@@ -945,12 +1003,13 @@ function AddAliasInline({ produtoId, onAdd }: { produtoId: string; onAdd: (d: De
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
-export default function CadastrosClient({ produtos, clientes, boxes, depara, checklists }: {
+export default function CadastrosClient({ produtos, clientes, boxes, depara, checklists, motivos }: {
   produtos: Produto[]
   clientes: Cliente[]
   boxes: Box[]
   depara: DePara[]
   checklists: ChecklistTemplateType[]
+  motivos: Motivo[]
 }) {
   const [tab, setTab] = useState<Tab>("produtos")
 
@@ -960,6 +1019,7 @@ export default function CadastrosClient({ produtos, clientes, boxes, depara, che
     { id: "boxes"      as Tab, label: "Boxes",       icon: BoxIcon,        count: boxes.length },
     { id: "depara"     as Tab, label: "De/Para",     icon: ArrowRightLeft, count: depara.length },
     { id: "checklist"  as Tab, label: "Checklists",  icon: ListChecks,     count: checklists.length },
+    { id: "motivos"    as Tab, label: "Motivos",     icon: Ban,            count: motivos.filter((m) => m.ativo).length },
   ]
 
   return (
@@ -991,6 +1051,7 @@ export default function CadastrosClient({ produtos, clientes, boxes, depara, che
       {tab === "boxes"     && <BoxesTab boxes={boxes} />}
       {tab === "depara"    && <DeParaTab depara={depara} produtos={produtos} />}
       {tab === "checklist" && <ChecklistTab templates={checklists} />}
+      {tab === "motivos"   && <MotivosTab motivos={motivos} />}
     </div>
   )
 }

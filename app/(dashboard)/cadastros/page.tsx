@@ -4,7 +4,7 @@ import CadastrosClient from "./CadastrosClient"
 export const dynamic = "force-dynamic"
 
 export default async function CadastrosPage() {
-  const [produtos, clientes, boxes, depara, checklists] = await Promise.all([
+  const [produtos, clientes, boxes, depara, checklists, motivos] = await Promise.all([
     prisma.produto.findMany({ orderBy: { descricao: "asc" } }),
     prisma.cliente.findMany({ orderBy: { nome: "asc" } }),
     prisma.box.findMany({ where: { ativo: true }, orderBy: { codigo: "asc" } }),
@@ -17,11 +17,12 @@ export default async function CadastrosPage() {
       orderBy: { nome: "asc" },
       include: { itens: { orderBy: { ordem: "asc" } } },
     }),
+    prisma.motivoCancelamento.findMany({ orderBy: [{ ordem: "asc" }, { descricao: "asc" }] }),
   ])
   return (
     <CadastrosClient
       produtos={produtos} clientes={clientes} boxes={boxes}
-      depara={depara} checklists={checklists}
+      depara={depara} checklists={checklists} motivos={motivos}
     />
   )
 }
