@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   // Ocupação atual
   const totalCap = boxes.reduce((s, b) => s + b.capacidade, 0)
-  const totalVol = boxes.reduce((s, b) => s + (b.estoques[0]?.quantidade ?? 0), 0)
+  const totalVol = boxes.reduce((s, b) => s + b.estoques.reduce((a, e) => a + e.quantidade, 0), 0)
   const ocupacao = totalCap > 0 ? (totalVol / totalCap) * 100 : 0
 
   // Volume recebido no mês

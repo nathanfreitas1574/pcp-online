@@ -10,16 +10,18 @@ export default async function BoxInfoPage({ params }: { params: Promise<{ id: st
   const box = await prisma.box.findUnique({
     where: { id },
     include: {
-      estoques: { include: { produto: true }, orderBy: { quantidade: "desc" }, take: 1 },
+      estoques: { include: { produto: true }, orderBy: { quantidade: "desc" } },
       lacres: { orderBy: { createdAt: "desc" }, take: 1, include: { usuario: { select: { name: true } } } },
       historico: { orderBy: { createdAt: "desc" }, take: 5 },
     },
   })
   if (!box) notFound()
 
-  const vol = box.estoques[0]?.quantidade ?? 0
+  const vol = box.estoques.reduce((s, e) => s + e.quantidade, 0)
   const pct = box.capacidade > 0 ? (vol / box.capacidade) * 100 : 0
-  const produto = box.estoques[0]?.produto?.descricao
+  const produto = box.estoques.length > 1
+    ? `${box.estoques[0]?.produto?.descricao} +${box.estoques.length - 1}`
+    : box.estoques[0]?.produto?.descricao
   const lacre = box.lacres[0]
   const cor = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f97316" : pct >= 40 ? "#22c55e" : "#3b82f6"
   const agora = new Date()

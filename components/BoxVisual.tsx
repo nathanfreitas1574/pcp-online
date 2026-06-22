@@ -1,8 +1,18 @@
 "use client"
 
 import { useState } from "react"
+import { Plus, X, Trash2, Package } from "lucide-react"
 
 export type StatusUsoBox = "LIVRE" | "CONSUMO" | "PROGRAMADO" | "BLOQUEADO"
+
+export type BoxItemRow = {
+  produtoId: string
+  produto: string
+  cliente: string
+  quantidade: number
+  navio?: string
+  dataRecebimento?: string
+}
 
 export type BoxData = {
   id: string
@@ -19,6 +29,7 @@ export type BoxData = {
   ultimoLacre?: string | null
   statusUso?: StatusUsoBox | null
   obsBox?: string | null
+  itens?: BoxItemRow[]
 }
 
 // Configuração visual do semáforo de uso
@@ -38,18 +49,14 @@ function getLiquidColor(pct: number) {
 
 function BoxTank({
   pct,
-  capacidade,
-  volumeAtual,
   produto,
   cliente,
-  diasEstocado,
+  nItens,
 }: {
   pct: number
-  capacidade: number
-  volumeAtual: number
   produto: string | null
   cliente: string | null
-  diasEstocado?: number | null
+  nItens?: number
 }) {
   const clampedPct = Math.min(Math.max(pct, 0), 100)
   const { bg, wave, text } = getLiquidColor(clampedPct)
@@ -79,28 +86,14 @@ function BoxTank({
               fill={bg}
               opacity="0.8"
             >
-              <animateTransform
-                attributeName="transform"
-                type="translate"
-                from="-150 0"
-                to="0 0"
-                dur="2s"
-                repeatCount="indefinite"
-              />
+              <animateTransform attributeName="transform" type="translate" from="-150 0" to="0 0" dur="2s" repeatCount="indefinite" />
             </path>
             <path
               d="M0,10 C50,20 100,0 150,10 C200,20 250,0 300,10 L300,20 L0,20 Z"
               fill={wave}
               opacity="0.5"
             >
-              <animateTransform
-                attributeName="transform"
-                type="translate"
-                from="0 0"
-                to="-150 0"
-                dur="3s"
-                repeatCount="indefinite"
-              />
+              <animateTransform attributeName="transform" type="translate" from="0 0" to="-150 0" dur="3s" repeatCount="indefinite" />
             </path>
           </svg>
 
@@ -114,6 +107,11 @@ function BoxTank({
             {cliente && (
               <p className="text-xs text-center opacity-90 leading-tight mt-0.5" style={{ color: text }}>
                 {cliente.length > 14 ? cliente.substring(0, 14) + "…" : cliente}
+              </p>
+            )}
+            {nItens && nItens > 1 && (
+              <p className="text-[10px] text-center font-semibold mt-0.5 px-1.5 py-0.5 rounded-full bg-white/25" style={{ color: text }}>
+                +{nItens - 1} produto{nItens - 1 > 1 ? "s" : ""}
               </p>
             )}
           </div>
@@ -160,47 +158,87 @@ function BoxTank({
 export default function BoxVisual({
   box,
   onUpdate,
+  produtos = [],
+  clientes = [],
 }: {
   box: BoxData
   onUpdate?: (id: string, updates: Partial<BoxData>) => void
+  produtos?: string[]
+  clientes?: string[]
 }) {
-  const [editing, setEditing] = useState(false)
-  const [novoVol, setNovoVol] = useState(String(box.volumeAtual))
-  const [novoProduto, setNovoProduto] = useState(box.produto ?? "")
-  const [novoCliente, setNovoCliente] = useState(box.cliente ?? "")
-  const [novoNavio, setNovoNavio] = useState(box.navio ?? "")
-  const [novaData, setNovaData] = useState(
-    box.dataRecebimento ? new Date(box.dataRecebimento).toISOString().slice(0, 10) : ""
+  // Itens do box (vários produtos) — fonte única do volume
+  const [itens, setItens] = useState<BoxItemRow[]>(() =>
+    box.itens && box.itens.length
+      ? box.itens
+      : box.produto
+        ? [{ produtoId: "__legacy__", produto: box.produto, cliente: box.cliente ?? "", quantidade: box.volumeAtual }]
+        : []
   )
-  const [novaCapacidade, setNovaCapacidade] = useState(String(box.capacidade))
-  const [saving, setSaving] = useState(false)
-  // Estado local derivado do box para refletir edições sem reload
-  const [localVol,  setLocalVol]  = useState(box.volumeAtual)
-  const [localProd, setLocalProd] = useState(box.produto)
-  const [localCli,  setLocalCli]  = useState(box.cliente)
 
+  const [editing, setEditing] = useState(false)
+  const [showItens, setShowItens] = useState(false)
+  const [novaCapacidade, setNovaCapacidade] = useState(String(box.capacidade))
+  const [savingCap, setSavingCap] = useState(false)
+
+  // formulário de adicionar item
+  const [fProduto, setFProduto] = useState("")
+  const [fCliente, setFCliente] = useState("")
+  const [fQtd, setFQtd] = useState("")
+  const [addingItem, setAddingItem] = useState(false)
+
+  const localVol = itens.reduce((s, i) => s + i.quantidade, 0)
+  const primary = itens[0]
+  const localProd = primary?.produto ?? null
+  const localCli = primary?.cliente ?? null
   const pct = box.capacidade > 0 ? (localVol / box.capacidade) * 100 : 0
   const { bg } = getLiquidColor(pct)
 
-  async function handleSave() {
-    setSaving(true)
-    const vol = parseFloat(novoVol) || 0
+  function notify(next: BoxItemRow[]) {
+    const vol = next.reduce((s, i) => s + i.quantidade, 0)
+    onUpdate?.(box.id, { volumeAtual: vol, produto: next[0]?.produto ?? null, cliente: next[0]?.cliente ?? null })
+  }
+
+  async function salvarCapacidade() {
+    setSavingCap(true)
     const cap = parseFloat(novaCapacidade) || box.capacidade
     await fetch(`/api/boxes/${box.id}/estoque`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        volumeAtual: vol, produto: novoProduto, cliente: novoCliente, capacidade: cap,
-        navio: novoNavio, dataRecebimento: novaData || null,
-      }),
+      body: JSON.stringify({ capacidade: cap, volumeAtual: localVol }),
     })
-    setSaving(false)
+    setSavingCap(false)
     setEditing(false)
-    // Atualiza estado local IMEDIATAMENTE — sem recarregar a página
-    setLocalVol(vol)
-    setLocalProd(novoProduto || null)
-    setLocalCli(novoCliente || null)
-    onUpdate?.(box.id, { volumeAtual: vol, produto: novoProduto || null, cliente: novoCliente || null, navio: novoNavio || null })
+    onUpdate?.(box.id, { capacidade: cap })
+  }
+
+  async function adicionarItem() {
+    const produto = fProduto.trim()
+    if (!produto) return
+    setAddingItem(true)
+    const quantidade = parseFloat(fQtd) || 0
+    const cliente = fCliente.trim()
+    const res = await fetch(`/api/boxes/${box.id}/itens`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ produto, cliente, quantidade }),
+    }).then((r) => r.json()).catch(() => null)
+
+    const produtoId = res?.produtoId ?? `tmp_${produto.toLowerCase()}`
+    const next = (() => {
+      const idx = itens.findIndex((i) => i.produto.toLowerCase() === produto.toLowerCase())
+      const row: BoxItemRow = { produtoId, produto, cliente, quantidade }
+      if (idx >= 0) { const c = [...itens]; c[idx] = row; return c }
+      return [...itens, row]
+    })()
+    next.sort((a, b) => b.quantidade - a.quantidade)
+    setItens(next); notify(next)
+    setFProduto(""); setFCliente(""); setFQtd(""); setAddingItem(false)
+  }
+
+  async function removerItem(produtoId: string) {
+    await fetch(`/api/boxes/${box.id}/itens?produtoId=${encodeURIComponent(produtoId)}`, { method: "DELETE" })
+    const next = itens.filter((i) => i.produtoId !== produtoId)
+    setItens(next); notify(next)
   }
 
   const statusCfg = box.statusUso ? STATUS_USO_CFG[box.statusUso] : STATUS_USO_CFG.LIVRE
@@ -213,12 +251,21 @@ export default function BoxVisual({
           <h3 className="font-bold text-gray-800 text-base">{box.codigo}</h3>
           <p className="text-xs text-gray-400">{box.localizacao}</p>
         </div>
-        <button
-          onClick={() => setEditing(true)}
-          className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-blue-600 transition"
-        >
-          Editar
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setShowItens(true)}
+            title="Adicionar / gerenciar produtos"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition font-medium"
+          >
+            <Plus size={13} /> {itens.length || ""}
+          </button>
+          <button
+            onClick={() => { setNovaCapacidade(String(box.capacidade)); setEditing(true) }}
+            className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-blue-600 transition"
+          >
+            Editar
+          </button>
+        </div>
       </div>
 
       {/* Semáforo de uso */}
@@ -230,14 +277,7 @@ export default function BoxVisual({
 
       {/* Tank visual */}
       <div className="pl-6">
-        <BoxTank
-          pct={pct}
-          capacidade={box.capacidade}
-          volumeAtual={localVol}
-          produto={localProd}
-          cliente={localCli}
-          diasEstocado={box.diasEstocado}
-        />
+        <BoxTank pct={pct} produto={localProd} cliente={localCli} nItens={itens.length} />
       </div>
 
       {/* Stats */}
@@ -257,28 +297,17 @@ export default function BoxVisual({
         </div>
       </div>
 
-      {(localCli || box.navio || box.dataRecebimento) && (
-        <div className="grid grid-cols-3 gap-2 text-xs text-center">
-          {localCli && (
-            <div className="bg-gray-50 rounded-lg p-1.5">
-              <p className="text-gray-400">Cliente</p>
-              <p className="font-medium text-gray-700 truncate">{localCli}</p>
+      {/* Lista de produtos do box (chips) */}
+      {itens.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {itens.map((i) => (
+            <div key={i.produtoId} className="flex items-center gap-1.5 text-xs bg-gray-50 rounded-lg px-2 py-1">
+              <Package size={11} className="text-gray-400 shrink-0" />
+              <span className="font-medium text-gray-700 truncate flex-1">{i.produto}</span>
+              {i.cliente && <span className="text-gray-400 truncate max-w-20">{i.cliente}</span>}
+              <span className="font-semibold text-gray-600 tabular-nums shrink-0">{i.quantidade.toLocaleString("pt-BR")} t</span>
             </div>
-          )}
-          {box.navio && (
-            <div className="bg-gray-50 rounded-lg p-1.5">
-              <p className="text-gray-400">Navio</p>
-              <p className="font-medium text-gray-700 truncate">{box.navio}</p>
-            </div>
-          )}
-          {box.dataRecebimento && (
-            <div className="bg-gray-50 rounded-lg p-1.5">
-              <p className="text-gray-400">Recebido em</p>
-              <p className="font-medium text-gray-700 truncate">
-                {new Date(box.dataRecebimento).toLocaleDateString("pt-BR")}
-              </p>
-            </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -286,120 +315,106 @@ export default function BoxVisual({
         <p className="text-xs text-gray-400 text-center">{box.diasEstocado} dias estocado</p>
       )}
 
-      {/* Edit modal */}
+      {/* ── Modal gerenciar itens (vários produtos) ── */}
+      {showItens && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h4 className="font-bold text-gray-800 text-lg">Produtos do Box {box.codigo}</h4>
+              <button onClick={() => setShowItens(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">
+              {localVol.toLocaleString("pt-BR")} t de {box.capacidade.toLocaleString("pt-BR")} t · {pct.toFixed(0)}% ocupado
+            </p>
+
+            {/* lista atual */}
+            <div className="space-y-2 mb-4">
+              {itens.length === 0 && (
+                <p className="text-sm text-gray-400 italic text-center py-3">Nenhum produto. Adicione abaixo.</p>
+              )}
+              {itens.map((i) => (
+                <div key={i.produtoId} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                  <Package size={14} className="text-blue-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{i.produto}</p>
+                    {i.cliente && <p className="text-xs text-gray-500 truncate">{i.cliente}</p>}
+                  </div>
+                  <span className="text-sm font-bold text-gray-700 tabular-nums shrink-0">{i.quantidade.toLocaleString("pt-BR")} t</span>
+                  <button onClick={() => removerItem(i.produtoId)} title="Remover"
+                    className="text-gray-300 hover:text-red-600 shrink-0"><Trash2 size={15} /></button>
+                </div>
+              ))}
+            </div>
+
+            {/* adicionar */}
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Adicionar produto</p>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Produto</label>
+                <input list="bx-produtos" value={fProduto} onChange={(e) => setFProduto(e.target.value)}
+                  placeholder="Ex: UREIA 46%"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <datalist id="bx-produtos">{produtos.map((p) => <option key={p} value={p} />)}</datalist>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Cliente</label>
+                  <input list="bx-clientes" value={fCliente} onChange={(e) => setFCliente(e.target.value)}
+                    placeholder="Ex: FTO"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <datalist id="bx-clientes">{clientes.map((c) => <option key={c} value={c} />)}</datalist>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Quantidade (t)</label>
+                  <input type="number" min="0" step="0.1" value={fQtd} onChange={(e) => setFQtd(e.target.value)}
+                    placeholder="0"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <button onClick={adicionarItem} disabled={addingItem || !fProduto.trim()}
+                className="w-full flex items-center justify-center gap-1.5 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition">
+                <Plus size={15} /> {addingItem ? "Adicionando…" : "Adicionar produto"}
+              </button>
+              <p className="text-[11px] text-gray-400">Adicionar um produto já existente atualiza a quantidade dele.</p>
+            </div>
+
+            <button onClick={() => setShowItens(false)}
+              className="w-full mt-4 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50 transition">
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal editar capacidade ── */}
       {editing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
-            <h4 className="font-bold text-gray-800 mb-4 text-lg">Atualizar Box {box.codigo}</h4>
+            <h4 className="font-bold text-gray-800 mb-4 text-lg">Box {box.codigo}</h4>
 
-            {/* Mini preview while editing */}
             <div className="mb-4 pl-6">
-              <BoxTank
-                pct={(parseFloat(novaCapacidade) || box.capacidade) > 0 ? ((parseFloat(novoVol) || 0) / (parseFloat(novaCapacidade) || box.capacidade)) * 100 : 0}
-                capacidade={parseFloat(novaCapacidade) || box.capacidade}
-                volumeAtual={parseFloat(novoVol) || 0}
-                produto={novoProduto || null}
-                cliente={novoCliente || null}
-              />
+              <BoxTank pct={(parseFloat(novaCapacidade) || box.capacidade) > 0 ? (localVol / (parseFloat(novaCapacidade) || box.capacidade)) * 100 : 0}
+                produto={localProd} cliente={localCli} nItens={itens.length} />
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Capacidade do box (ton)</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="100"
-                  value={novaCapacidade}
-                  onChange={(e) => setNovaCapacidade(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Volume atual (ton)
-                  <span className="text-gray-400 font-normal ml-1">— capacidade: {(parseFloat(novaCapacidade) || box.capacidade).toLocaleString("pt-BR")} ton</span>
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max={parseFloat(novaCapacidade) || box.capacidade}
-                  step="0.1"
-                  value={novoVol}
-                  onChange={(e) => setNovoVol(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {/* Slider */}
-                <input
-                  type="range"
-                  min="0"
-                  max={parseFloat(novaCapacidade) || box.capacidade}
-                  step="100"
-                  value={parseFloat(novoVol) || 0}
-                  onChange={(e) => setNovoVol(e.target.value)}
-                  className="w-full mt-2 accent-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Produto</label>
-                <input
-                  type="text"
-                  value={novoProduto}
-                  onChange={(e) => setNovoProduto(e.target.value)}
-                  placeholder="Ex: UREIA 46%"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-                <input
-                  type="text"
-                  value={novoCliente}
-                  onChange={(e) => setNovoCliente(e.target.value)}
-                  placeholder="Ex: FTO"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Navio</label>
-                  <input
-                    type="text"
-                    value={novoNavio}
-                    onChange={(e) => setNovoNavio(e.target.value)}
-                    placeholder="Ex: MSC Lucinda"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Data recebimento</label>
-                  <input
-                    type="date"
-                    value={novaData}
-                    onChange={(e) => setNovaData(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Capacidade do box (ton)</label>
+              <input type="number" min="1" step="100" value={novaCapacidade}
+                onChange={(e) => setNovaCapacidade(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <p className="text-xs text-gray-400 mt-2">
+                Para incluir/remover produtos, use o botão <span className="font-semibold text-blue-600">+</span> no card.
+              </p>
             </div>
 
             <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => setEditing(false)}
-                className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50 transition"
-              >
+              <button onClick={() => setEditing(false)}
+                className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50 transition">
                 Cancelar
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-800 transition disabled:opacity-60"
-              >
-                {saving ? "Salvando…" : "Salvar"}
+              <button onClick={salvarCapacidade} disabled={savingCap}
+                className="flex-1 bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-800 transition disabled:opacity-60">
+                {savingCap ? "Salvando…" : "Salvar"}
               </button>
             </div>
           </div>

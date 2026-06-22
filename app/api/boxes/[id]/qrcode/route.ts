@@ -7,7 +7,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const box = await prisma.box.findUnique({
     where: { id },
     include: {
-      estoques: { include: { produto: true }, orderBy: { quantidade: "desc" }, take: 1 },
+      estoques: { include: { produto: true }, orderBy: { quantidade: "desc" } },
     },
   })
   if (!box) return NextResponse.json({ error: "Box não encontrado" }, { status: 404 })
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({
     box: { id: box.id, codigo: box.codigo, descricao: box.descricao, capacidade: box.capacidade },
-    estoque: box.estoques[0]?.quantidade ?? 0,
+    estoque: box.estoques.reduce((s, e) => s + e.quantidade, 0),
     produto: box.estoques[0]?.produto?.descricao ?? null,
     qrCode: qr,
     url,

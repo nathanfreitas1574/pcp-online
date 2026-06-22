@@ -56,18 +56,13 @@ export async function PATCH(
       navio: navio || null,
       dataRecebimento: dataRecebimento ? new Date(dataRecebimento) : null,
     }
-    // Upsert do estoque
+    // Upsert do estoque (um box pode ter VÁRIOS produtos — não apaga os demais)
     await prisma.estoque.upsert({
       where: { produtoId_boxId: { produtoId, boxId: id } },
       update: dadosEstoque,
       create: { produtoId, boxId: id, ...dadosEstoque },
     })
-
-    // Zerar outros estoques do box (um produto por box)
-    await prisma.estoque.deleteMany({
-      where: { boxId: id, produtoId: { not: produtoId } },
-    })
-  } else if (volumeAtual === 0) {
+  } else if (volumeAtual === 0 && body.esvaziarTudo) {
     // Esvaziar box
     await prisma.estoque.deleteMany({ where: { boxId: id } })
   }

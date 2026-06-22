@@ -4,14 +4,13 @@ import BoxesVisualClient from "./BoxesVisualClient"
 export const dynamic = "force-dynamic"
 
 export default async function BoxesPage() {
-  const [boxes, alertasAbertos, previsoes, navios, contabilAgg, coberturaAgg] = await Promise.all([
+  const [boxes, alertasAbertos, previsoes, navios, contabilAgg, coberturaAgg, produtosCad, clientesCad] = await Promise.all([
     prisma.box.findMany({
       where: { ativo: true },
       include: {
         estoques: {
           include: { produto: true },
           orderBy: { quantidade: "desc" },
-          take: 1,
         },
         lacres: {
           orderBy: { createdAt: "desc" },
@@ -46,6 +45,9 @@ export default async function BoxesPage() {
     prisma.estoqueContabil.aggregate({ where: { armazem: "10" }, _sum: { saldo: true } }),
     // cobertura pendente (descarregado sem NF) — explica o gap físico − contábil
     prisma.coberturaPendente.aggregate({ where: { status: "PENDENTE" }, _sum: { volume: true }, _count: { id: true } }),
+    // listas mestre p/ os datalists do "+" (adicionar item ao box)
+    prisma.produto.findMany({ where: { ativo: true }, select: { descricao: true, abreviado: true }, orderBy: { descricao: "asc" } }),
+    prisma.cliente.findMany({ where: { ativo: true }, select: { nome: true, abreviado: true }, orderBy: { nome: "asc" } }),
   ])
 
   // Mapa boxId → contagem de alertas abertos
@@ -61,22 +63,33 @@ export default async function BoxesPage() {
 
   const boxesData = boxes.map((b) => {
     const prev = previsaoPorBox.get(b.id)
+    // um box pode ter VÁRIOS produtos → volume = soma; "principal" = o maior (estoques[0])
+    const volumeTotal = b.estoques.reduce((s, e) => s + e.quantidade, 0)
+    const itens = b.estoques.map((e) => ({
+      produtoId: e.produtoId,
+      produto: e.produto?.descricao ?? "",
+      cliente: e.clienteNome ?? "",
+      quantidade: e.quantidade,
+      navio: e.navio ?? "",
+      dataRecebimento: e.dataRecebimento ? e.dataRecebimento.toISOString().slice(0, 10) : "",
+    }))
     return {
       id: b.id,
       codigo: b.codigo,
       descricao: b.descricao,
       localizacao: b.localizacao,
       capacidade: b.capacidade,
-      volumeAtual: b.estoques[0]?.quantidade ?? 0,
+      volumeAtual: volumeTotal,
       produto: b.estoques[0]?.produto?.descricao ?? null,
       cliente: b.estoques[0]?.clienteNome ?? null,
       navio: b.estoques[0]?.navio ?? null,
       dataRecebimento: b.estoques[0]?.dataRecebimento ?? null,
+      itens,
       ultimoLacre: b.lacres[0]?.status ?? null,
       codigoLacre: b.lacres[0]?.codigoLacre ?? null,
-      movimentadoHoje: b.estoques[0]
-        ? new Date(b.estoques[0].updatedAt).toDateString() === new Date().toDateString()
-        : false,
+      movimentadoHoje: b.estoques.some(
+        (e) => new Date(e.updatedAt).toDateString() === new Date().toDateString()
+      ),
       alertasAbertos: alertasPorBox.get(b.id) ?? 0,
       armazemId: b.armazem?.id ?? null,
       armazemCodigo: b.armazem?.codigo ?? null,
@@ -132,6 +145,8 @@ export default async function BoxesPage() {
       }))}
       contabilGranel={contabilAgg._sum.saldo != null ? Math.round(contabilAgg._sum.saldo) : null}
       coberturaPendente={{ volume: Math.round(coberturaAgg._sum.volume ?? 0), count: coberturaAgg._count.id }}
+      produtosCad={[...new Set(produtosCad.flatMap(p => [p.descricao, p.abreviado].filter(Boolean) as string[]))]}
+      clientesCad={[...new Set(clientesCad.flatMap(c => [c.nome, c.abreviado].filter(Boolean) as string[]))]}
     />
   )
 }

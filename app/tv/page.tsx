@@ -8,18 +8,19 @@ export default async function PainelTVPage() {
   const [boxes, alertasAbertos, tmpAtivos] = await Promise.all([
     prisma.box.findMany({
       where: { ativo: true },
-      include: { estoques: { include: { produto: true }, orderBy: { quantidade: "desc" }, take: 1 } },
+      include: { estoques: { include: { produto: true }, orderBy: { quantidade: "desc" } } },
       orderBy: { codigo: "asc" },
     }),
     prisma.alerta.count({ where: { status: "ABERTO" } }),
     prisma.tmpRegistro.findMany({ where: { status: "EM_ANDAMENTO" }, orderBy: { dtEntrada: "asc" } }),
   ])
 
+  const volBox = (b: { estoques: { quantidade: number }[] }) => b.estoques.reduce((s, e) => s + e.quantidade, 0)
   const totalCap = boxes.reduce((s, b) => s + b.capacidade, 0)
-  const totalVol = boxes.reduce((s, b) => s + (b.estoques[0]?.quantidade ?? 0), 0)
+  const totalVol = boxes.reduce((s, b) => s + volBox(b), 0)
   const pctGeral = totalCap > 0 ? ((totalVol / totalCap) * 100).toFixed(1) : "0.0"
-  const boxesCriticos = boxes.filter((b) => b.capacidade > 0 && (b.estoques[0]?.quantidade ?? 0) / b.capacidade >= 0.9)
-  const boxesOcupados = boxes.filter((b) => (b.estoques[0]?.quantidade ?? 0) > 0)
+  const boxesCriticos = boxes.filter((b) => b.capacidade > 0 && volBox(b) / b.capacidade >= 0.9)
+  const boxesOcupados = boxes.filter((b) => volBox(b) > 0)
   const agora = new Date()
 
   return (
@@ -76,7 +77,7 @@ export default async function PainelTVPage() {
         <h2>Boxes — {boxesOcupados.length} ocupados de {boxes.length}</h2>
         <div className="boxes">
           {boxes.map((box)=>{
-            const vol = box.estoques[0]?.quantidade??0
+            const vol = box.estoques.reduce((s,e)=>s+e.quantidade,0)
             const pct = box.capacidade>0?(vol/box.capacidade)*100:0
             const prod = box.estoques[0]?.produto?.descricao
             const cor = pct>=90?"#ef4444":pct>=70?"#f97316":pct>=40?"#22c55e":"#3b82f6"

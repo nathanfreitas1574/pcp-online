@@ -21,7 +21,7 @@ export default async function ExecutivoPage() {
     // Ocupação geral
     prisma.box.findMany({
       where: { ativo: true },
-      include: { estoques: { orderBy: { quantidade: "desc" }, take: 1, include: { produto: true } } },
+      include: { estoques: { orderBy: { quantidade: "desc" }, include: { produto: true } } },
     }),
     // Alertas críticos abertos
     prisma.alerta.findMany({
@@ -82,9 +82,10 @@ export default async function ExecutivoPage() {
   // Calcular KPIs de boxes
   const totalBoxes     = boxes.length
   const totalCap       = boxes.reduce((s, b) => s + b.capacidade, 0)
-  const totalVol       = boxes.reduce((s, b) => s + (b.estoques[0]?.quantidade ?? 0), 0)
-  const boxesLivres    = boxes.filter(b => (b.estoques[0]?.quantidade ?? 0) === 0).length
-  const boxesCriticos  = boxes.filter(b => b.capacidade > 0 && (b.estoques[0]?.quantidade ?? 0) / b.capacidade >= 0.9).length
+  const volBox = (b: { estoques: { quantidade: number }[] }) => b.estoques.reduce((s, e) => s + e.quantidade, 0)
+  const totalVol       = boxes.reduce((s, b) => s + volBox(b), 0)
+  const boxesLivres    = boxes.filter(b => volBox(b) === 0).length
+  const boxesCriticos  = boxes.filter(b => b.capacidade > 0 && volBox(b) / b.capacidade >= 0.9).length
   const boxesBloqueados = boxes.filter(b => (b as { statusLiberacao?: string }).statusLiberacao === "BLOQUEADO").length
   const pctOcupacao    = totalCap > 0 ? (totalVol / totalCap) * 100 : 0
 

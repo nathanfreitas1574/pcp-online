@@ -262,6 +262,8 @@ export default function BoxesVisualClient({
   naviosDisponiveis = [],
   contabilGranel = null,
   coberturaPendente = null,
+  produtosCad = [],
+  clientesCad = [],
 }: {
   boxes: BoxItem[]
   totalCapacidade: number
@@ -272,6 +274,8 @@ export default function BoxesVisualClient({
   naviosDisponiveis?: { id: string; nome: string; eta: string; produto?: string | null; clienteNome?: string | null }[]
   contabilGranel?: number | null
   coberturaPendente?: { volume: number; count: number } | null
+  produtosCad?: string[]
+  clientesCad?: string[]
 }) {
   const [visao, setVisao] = useState<"MAPA" | "GRADE" | "LINHA">("MAPA")
   const [estruturaSel, setEstruturaSel] = useState<string | null>(null)
@@ -388,6 +392,8 @@ export default function BoxesVisualClient({
               {box.previsao && <PrevisaoSinal previsao={box.previsao} />}
               <BoxVisual
                 box={box}
+                produtos={produtosCad}
+                clientes={clientesCad}
                 onUpdate={(id, upd) => handleBoxUpdate(id, upd as Partial<BoxItem>)}
               />
             </div>
