@@ -503,6 +503,19 @@ model ExpedicaoObs {
   updatedAt      DateTime @updatedAt
 }
 
+// Forecast mensal de volume por cliente (o que o cliente diz que vai fazer)
+model ExpedicaoForecast {
+  id          String   @id @default(cuid())
+  ano         Int
+  mes         Int
+  clienteNome String
+  forecast    Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ano, mes, clienteNome])
+}
+
 // ─── BI ESTOQUES ──────────────────────────────────────────────────────────────
 
 model EstoqueSnapshot {

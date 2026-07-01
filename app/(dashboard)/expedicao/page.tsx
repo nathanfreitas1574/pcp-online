@@ -16,7 +16,7 @@ export default async function ExpedicaoPage() {
       take: 200,
       orderBy: { data: "desc" },
     }),
-    prisma.expedicaoOrcado.findMany({ where: { ano } }),
+    prisma.expedicaoOrcado.findMany({ where: { ano, clienteNome: "GERAL" } }),
     prisma.expedicaoCapacidade.findMany({ where: { ano } }),
   ])
 

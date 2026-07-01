@@ -5,6 +5,7 @@ import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X } from 
 
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 
 type Contrato = {
   id: string; numero: string; operacao: string | null; produtoAbreviado: string | null
@@ -46,7 +47,7 @@ export default function ExpedicaoClient({
   totalCapacidade: number
   aderencia: number
 }) {
-  const [aba, setAba] = useState<"contratos" | "registros" | "importar">("contratos")
+  const [aba, setAba] = useState<"contratos" | "registros" | "orcado" | "forecast" | "importar">("contratos")
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
   const [busca, setBusca] = useState("")
   const [uploading, setUploading] = useState(false)
@@ -88,6 +89,76 @@ export default function ExpedicaoClient({
       setRealRows((prev) => prev.map((r) => (r.numero === numero ? { ...r, observacao: anterior } : r)))
       alert("Falha ao salvar a observação. Tente novamente.")
     }
+  }
+
+  // ── Aba Orçado (anual, mês a mês — meta da diretoria) ──
+  const anoAtual = new Date().getFullYear()
+  const [orcAno, setOrcAno] = useState(anoAtual)
+  const [orcMeses, setOrcMeses] = useState<{ mes: number; orcado: number }[]>([])
+  const [orcTotal, setOrcTotal] = useState(0)
+  const [orcLoading, setOrcLoading] = useState(false)
+
+  useEffect(() => {
+    if (aba !== "orcado") return
+    setOrcLoading(true)
+    fetch(`/api/expedicao/orcado?ano=${orcAno}`)
+      .then((r) => r.json())
+      .then((d) => { setOrcMeses(d.meses ?? []); setOrcTotal(d.total ?? 0) })
+      .catch(() => {})
+      .finally(() => setOrcLoading(false))
+  }, [aba, orcAno])
+
+  async function salvarOrcado(mes: number, orcado: number) {
+    setOrcMeses((prev) => {
+      const next = prev.map((m) => (m.mes === mes ? { ...m, orcado } : m))
+      setOrcTotal(next.reduce((s, m) => s + m.orcado, 0))
+      return next
+    })
+    await fetch("/api/expedicao/orcado", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ano: orcAno, mes, orcado }),
+    }).catch(() => {})
+  }
+
+  // ── Aba Forecast (por cliente/mês) ──
+  const [fcAno, setFcAno] = useState(anoAtual)
+  const [fcMes, setFcMes] = useState(new Date().getMonth() + 1)
+  const [fcRows, setFcRows] = useState<{ clienteNome: string; forecast: number; realizado: number; desvio: number | null }[]>([])
+  const [fcTotForecast, setFcTotForecast] = useState(0)
+  const [fcTotRealizado, setFcTotRealizado] = useState(0)
+  const [fcClientes, setFcClientes] = useState<string[]>([])
+  const [fcLoading, setFcLoading] = useState(false)
+  const [fcNovoCliente, setFcNovoCliente] = useState("")
+
+  useEffect(() => {
+    if (aba !== "forecast") return
+    setFcLoading(true)
+    fetch(`/api/expedicao/forecast?ano=${fcAno}&mes=${fcMes}`)
+      .then((r) => r.json())
+      .then((d) => { setFcRows(d.rows ?? []); setFcTotForecast(d.totalForecast ?? 0); setFcTotRealizado(d.totalRealizado ?? 0); setFcClientes(d.clientes ?? []) })
+      .catch(() => {})
+      .finally(() => setFcLoading(false))
+  }, [aba, fcAno, fcMes])
+
+  async function salvarForecast(clienteNome: string, forecast: number) {
+    setFcRows((prev) => {
+      const next = prev.map((r) => (r.clienteNome === clienteNome
+        ? { ...r, forecast, desvio: forecast > 0 ? ((r.realizado - forecast) / forecast) * 100 : null }
+        : r))
+      setFcTotForecast(next.reduce((s, r) => s + r.forecast, 0))
+      return next
+    })
+    await fetch("/api/expedicao/forecast", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ano: fcAno, mes: fcMes, clienteNome, forecast }),
+    }).catch(() => {})
+  }
+  function adicionarClienteForecast() {
+    const nome = fcNovoCliente.trim()
+    if (!nome) return
+    if (!fcRows.some((r) => r.clienteNome.toLowerCase() === nome.toLowerCase()))
+      setFcRows((prev) => [{ clienteNome: nome, forecast: 0, realizado: 0, desvio: null }, ...prev])
+    setFcNovoCliente("")
   }
 
   const gap = totalRealizado - totalForecast
@@ -175,6 +246,8 @@ export default function ExpedicaoClient({
         {[
           { id: "contratos", label: "Contratos" },
           { id: "registros", label: "Realizado" },
+          { id: "orcado", label: "Orçado" },
+          { id: "forecast", label: "Forecast" },
           { id: "importar", label: "Importar Excel" },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => { setAba(id as typeof aba); setBusca("") }}
@@ -352,6 +425,100 @@ export default function ExpedicaoClient({
               </tbody>
             </table>
           </div>
+          </div>
+        </div>
+      )}
+
+      {/* Orçado — anual, mês a mês (meta da diretoria) */}
+      {aba === "orcado" && (
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <label className="text-xs text-gray-500">Ano:</label>
+            <select value={orcAno} onChange={(e) => setOrcAno(Number(e.target.value))}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <span className="text-xs text-gray-500 ml-2">
+              Meta da diretoria por mês — <span className="font-semibold text-blue-700">{orcTotal.toLocaleString("pt-BR")} t</span> no ano
+              {orcLoading && <span className="text-gray-400 ml-2">carregando…</span>}
+            </span>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 max-w-2xl">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {orcMeses.map((m) => (
+                <div key={m.mes} className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 w-8">{MESES[m.mes - 1]}</span>
+                  <input key={`${orcAno}-${m.mes}-${m.orcado}`} type="number" min="0" step="10" defaultValue={m.orcado || ""} placeholder="0"
+                    onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== m.orcado) salvarOrcado(m.mes, v) }}
+                    className="flex-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forecast — por cliente/mês */}
+      {aba === "forecast" && (
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <select value={fcAno} onChange={(e) => setFcAno(Number(e.target.value))}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select value={fcMes} onChange={(e) => setFcMes(Number(e.target.value))}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+              {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
+            </select>
+            <span className="text-xs text-gray-500">
+              Forecast <span className="font-semibold text-blue-700">{fcTotForecast.toLocaleString("pt-BR")} t</span>
+              {" · "}Realizado <span className="font-semibold text-green-700">{fcTotRealizado.toLocaleString("pt-BR")} t</span> <span className="text-gray-400">(nave/bag)</span>
+              {fcLoading && <span className="text-gray-400 ml-2">carregando…</span>}
+            </span>
+            <div className="flex items-center gap-1 ml-auto">
+              <input list="fc-clientes" value={fcNovoCliente} onChange={(e) => setFcNovoCliente(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && adicionarClienteForecast()}
+                placeholder="+ cliente" className="w-40 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              <datalist id="fc-clientes">{fcClientes.map((c) => <option key={c} value={c} />)}</datalist>
+              <button onClick={adicionarClienteForecast} className="bg-blue-600 text-white rounded-lg px-2 py-1.5 hover:bg-blue-700"><Plus size={14} /></button>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    {["Cliente", "Forecast (t)", "Realizado (t)", "Desvio"].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {fcRows.map((r) => (
+                    <tr key={`${fcAno}-${fcMes}-${r.clienteNome}`} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-medium text-gray-800">{r.clienteNome}</td>
+                      <td className="px-2 py-1.5">
+                        <input key={`${fcAno}-${fcMes}-${r.clienteNome}-${r.forecast}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0"
+                          onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.forecast) salvarForecast(r.clienteNome, v) }}
+                          className="w-28 text-sm border border-gray-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium text-green-700">{r.realizado.toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 text-right">
+                        {r.desvio === null ? <span className="text-gray-300">—</span> : (
+                          <span className={`font-medium ${r.desvio >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {r.desvio >= 0 ? "+" : ""}{r.desvio.toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {!fcLoading && fcRows.length === 0 && (
+                    <tr><td colSpan={4} className="py-10 text-center text-gray-400">Sem forecast nem realizado neste mês. Adicione um cliente acima.</td></tr>
+                  )}
+                  {fcLoading && <tr><td colSpan={4} className="py-10 text-center text-gray-400">Carregando…</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
