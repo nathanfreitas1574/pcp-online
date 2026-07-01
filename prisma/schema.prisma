@@ -487,11 +487,12 @@ model ExpedicaoCapacidade {
   id         String   @id @default(cuid())
   ano        Int
   mes        Int
-  linha      String
+  linha      String                 // equipamento: NAVE, BAG MÓVEL, PRODUTO ACABADO, GRANEL, COMPACTADOR
+  turno      String   @default("A") // A, B, C
   capacidade Float    @default(0)
   createdAt  DateTime @default(now())
 
-  @@unique([ano, mes, linha])
+  @@unique([ano, mes, linha, turno])
 }
 
 // Observação editável por carregamento realizado (chaveada pelo nº da marcação — estável em reimports)

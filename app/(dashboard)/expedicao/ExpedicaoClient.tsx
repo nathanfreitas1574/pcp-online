@@ -32,6 +32,8 @@ const LINHA_COLORS: Record<string, string> = {
   NAVE: "bg-blue-100 text-blue-700",
   "BAG MÓVEL": "bg-green-100 text-green-700",
   GRANEL: "bg-yellow-100 text-yellow-700",
+  "PRODUTO ACABADO": "bg-emerald-100 text-emerald-700",
+  COMPACTADOR: "bg-orange-100 text-orange-700",
   EMBEGADO: "bg-purple-100 text-purple-700",
   VARREDURA: "bg-gray-100 text-gray-600",
 }
@@ -47,7 +49,7 @@ export default function ExpedicaoClient({
   totalCapacidade: number
   aderencia: number
 }) {
-  const [aba, setAba] = useState<"contratos" | "registros" | "orcado" | "forecast" | "importar">("contratos")
+  const [aba, setAba] = useState<"contratos" | "registros" | "orcado" | "forecast" | "capacidade" | "importar">("contratos")
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
   const [busca, setBusca] = useState("")
   const [uploading, setUploading] = useState(false)
@@ -161,6 +163,49 @@ export default function ExpedicaoClient({
     setFcNovoCliente("")
   }
 
+  // ── Aba Capacidade (equipamento × turno A/B/C) ──
+  type CapRow = { linha: string; turnos: Record<string, number>; total: number }
+  const [capAno, setCapAno] = useState(anoAtual)
+  const [capMes, setCapMes] = useState(new Date().getMonth() + 1)
+  const [capRows, setCapRows] = useState<CapRow[]>([])
+  const [capTurnos, setCapTurnos] = useState<string[]>(["A", "B", "C"])
+  const [capTotaisTurno, setCapTotaisTurno] = useState<Record<string, number>>({})
+  const [capTotalGeral, setCapTotalGeral] = useState(0)
+  const [capLoading, setCapLoading] = useState(false)
+
+  useEffect(() => {
+    if (aba !== "capacidade") return
+    setCapLoading(true)
+    fetch(`/api/expedicao/capacidade?ano=${capAno}&mes=${capMes}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setCapRows(d.rows ?? [])
+        setCapTurnos(d.turnos ?? ["A", "B", "C"])
+        setCapTotaisTurno(d.totaisTurno ?? {})
+        setCapTotalGeral(d.totalGeral ?? 0)
+      })
+      .catch(() => {})
+      .finally(() => setCapLoading(false))
+  }, [aba, capAno, capMes])
+
+  async function salvarCapacidade(linha: string, turno: string, capacidade: number) {
+    setCapRows((prev) => {
+      const next = prev.map((r) => {
+        if (r.linha !== linha) return r
+        const turnos = { ...r.turnos, [turno]: capacidade }
+        const total = capTurnos.reduce((s, t) => s + (turnos[t] ?? 0), 0)
+        return { ...r, turnos, total }
+      })
+      setCapTotalGeral(next.reduce((s, r) => s + r.total, 0))
+      setCapTotaisTurno(Object.fromEntries(capTurnos.map((t) => [t, next.reduce((s, r) => s + (r.turnos[t] ?? 0), 0)])))
+      return next
+    })
+    await fetch("/api/expedicao/capacidade", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ano: capAno, mes: capMes, linha, turno, capacidade }),
+    }).catch(() => {})
+  }
+
   const gap = totalRealizado - totalForecast
   const performance = totalCapacidade > 0 ? (totalRealizado / totalCapacidade) * 100 : 0
   const mesesContrato = [...new Set(rows.map((c) => c.mes).filter(Boolean) as string[])].sort()
@@ -248,6 +293,7 @@ export default function ExpedicaoClient({
           { id: "registros", label: "Realizado" },
           { id: "orcado", label: "Orçado" },
           { id: "forecast", label: "Forecast" },
+          { id: "capacidade", label: "Capacidade" },
           { id: "importar", label: "Importar Excel" },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => { setAba(id as typeof aba); setBusca("") }}
@@ -448,7 +494,7 @@ export default function ExpedicaoClient({
               {orcMeses.map((m) => (
                 <div key={m.mes} className="flex items-center gap-2">
                   <span className="text-xs font-medium text-gray-500 w-8">{MESES[m.mes - 1]}</span>
-                  <input key={`${orcAno}-${m.mes}-${m.orcado}`} type="number" min="0" step="10" defaultValue={m.orcado || ""} placeholder="0"
+                  <input key={`${orcAno}-${m.mes}`} type="number" min="0" step="10" defaultValue={m.orcado || ""} placeholder="0"
                     onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== m.orcado) salvarOrcado(m.mes, v) }}
                     className="flex-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-200" />
                 </div>
@@ -498,7 +544,7 @@ export default function ExpedicaoClient({
                     <tr key={`${fcAno}-${fcMes}-${r.clienteNome}`} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-medium text-gray-800">{r.clienteNome}</td>
                       <td className="px-2 py-1.5">
-                        <input key={`${fcAno}-${fcMes}-${r.clienteNome}-${r.forecast}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0"
+                        <input key={`${fcAno}-${fcMes}-${r.clienteNome}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0"
                           onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.forecast) salvarForecast(r.clienteNome, v) }}
                           className="w-28 text-sm border border-gray-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
                       </td>
@@ -520,6 +566,74 @@ export default function ExpedicaoClient({
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Capacidade — equipamento × turno (A/B/C) */}
+      {aba === "capacidade" && (
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <select value={capAno} onChange={(e) => setCapAno(Number(e.target.value))}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select value={capMes} onChange={(e) => setCapMes(Number(e.target.value))}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+              {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
+            </select>
+            <span className="text-xs text-gray-500 ml-2">
+              Capacidade fixa por equipamento e turno — <span className="font-semibold text-blue-700">{capTotalGeral.toLocaleString("pt-BR")} t</span> total
+              {capLoading && <span className="text-gray-400 ml-2">carregando…</span>}
+            </span>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden max-w-3xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">Equipamento</th>
+                    {capTurnos.map((t) => (
+                      <th key={t} className="px-3 py-2 text-center font-medium text-gray-500">Turno {t}</th>
+                    ))}
+                    <th className="px-3 py-2 text-right font-medium text-gray-500">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {capRows.map((r) => (
+                    <tr key={r.linha} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-medium text-gray-800">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${LINHA_COLORS[r.linha] ?? "bg-gray-100 text-gray-600"}`}>{r.linha}</span>
+                      </td>
+                      {capTurnos.map((t) => (
+                        <td key={t} className="px-2 py-1.5 text-center">
+                          <input key={`${capAno}-${capMes}-${r.linha}-${t}`} type="number" min="0" step="10"
+                            defaultValue={r.turnos[t] || ""} placeholder="0"
+                            onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (r.turnos[t] ?? 0)) salvarCapacidade(r.linha, t, v) }}
+                            className="w-24 text-sm border border-gray-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-right font-semibold text-gray-700">{r.total.toLocaleString("pt-BR")}</td>
+                    </tr>
+                  ))}
+                  {capRows.length === 0 && !capLoading && (
+                    <tr><td colSpan={capTurnos.length + 2} className="py-10 text-center text-gray-400">Carregando equipamentos…</td></tr>
+                  )}
+                </tbody>
+                {capRows.length > 0 && (
+                  <tfoot className="bg-gray-50 border-t">
+                    <tr>
+                      <td className="px-3 py-2 font-semibold text-gray-600">Total</td>
+                      {capTurnos.map((t) => (
+                        <td key={t} className="px-3 py-2 text-center font-semibold text-gray-700">{(capTotaisTurno[t] ?? 0).toLocaleString("pt-BR")}</td>
+                      ))}
+                      <td className="px-3 py-2 text-right font-bold text-blue-700">{capTotalGeral.toLocaleString("pt-BR")}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-2 max-w-3xl">Valores em toneladas por turno. O total é a capacidade instalada do equipamento no mês.</p>
         </div>
       )}
 
