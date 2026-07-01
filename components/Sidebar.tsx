@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Box, Lock, ClipboardList, Truck,
   FileText, Users, LogOut, Download, Upload, BarChart2,
   Warehouse, Bell, Database, Calendar, Clock, Activity,
-  FlaskConical, TrendingUp, Tv, ListOrdered, DollarSign, QrCode, Target,
+  FlaskConical, TrendingUp, Tv, DollarSign, QrCode, Target,
   Ship, Crosshair, ShieldAlert, PieChart, Receipt, History, GitCompareArrows, Boxes, ShieldQuestion, Droplets, Brush, FileX2, Gauge, ClipboardCheck, Factory, Scale,
 } from "lucide-react"
 
@@ -32,9 +32,6 @@ const nav: NavItem[] = [
   { href: "/armazens", label: "Gestão de Armazéns", icon: Warehouse },
   { href: "/planta", label: "Planta do Armazém", icon: Factory },
   { href: "/lacres", label: "Lacres", icon: Lock },
-  { href: "/tmp", label: "TMP Caminhões", icon: Clock },
-  { href: "/fila", label: "Fila de Caminhões", icon: ListOrdered },
-  { href: "/transportadoras", label: "Transportadoras", icon: Truck },
   { section: "Expedição" },
   { href: "/expedicao", label: "Controle de Expedição", icon: Upload },
   { href: "/consignacao", label: "Consignação NF", icon: FileText },
