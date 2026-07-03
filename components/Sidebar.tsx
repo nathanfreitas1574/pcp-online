@@ -88,7 +88,7 @@ export default function Sidebar() {
         {nav.map((item, i) => {
           if ("section" in item) {
             return (
-              <p key={i} className="px-3 pt-3 pb-0.5 text-xs font-semibold text-blue-400 uppercase tracking-wider">
+              <p key={i} className="px-3 pt-4 pb-1 mt-1 text-xs font-bold text-amber-300 uppercase tracking-wider border-t border-blue-800/60">
                 {item.section}
               </p>
             )

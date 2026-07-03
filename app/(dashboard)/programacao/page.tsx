@@ -19,7 +19,7 @@ export default async function ProgramacaoPage({
   const [programacoes, boxes, clientes, produtos] = await Promise.all([
     prisma.programacaoSemanal.findMany({
       where: { ano, semana },
-      orderBy: [{ clienteNome: "asc" }, { produto: "asc" }],
+      orderBy: [{ ordem: "asc" }, { clienteNome: "asc" }, { produto: "asc" }],
       include: { box: { select: { codigo: true } } },
     }),
     prisma.box.findMany({ where: { ativo: true }, orderBy: { codigo: "asc" }, select: { id: true, codigo: true } }),

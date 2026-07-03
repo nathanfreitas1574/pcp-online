@@ -685,6 +685,7 @@ model ProgramacaoSemanal {
   total       Float    @default(0)
   realizado   Float    @default(0)
   tipo        String   @default("RECEBIMENTO")
+  ordem       Int      @default(0)   // ordem manual das linhas (arrastar)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

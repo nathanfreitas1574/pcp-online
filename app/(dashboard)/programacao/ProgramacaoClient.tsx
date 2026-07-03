@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight, History, Search, X } from "lucide-react"
+import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight, History, Search, X, GripVertical, Trash2 } from "lucide-react"
 import ProgramacaoGraficos from "./ProgramacaoGraficos"
 import { DIA, ddMM, domingoDaSemana } from "@/lib/programacao"
 
@@ -52,6 +52,8 @@ export default function ProgramacaoClient({
   const [ctrInfo, setCtrInfo] = useState<string>("")
   const [view, setView] = useState<"tabela" | "graficos">("tabela")
   const [busca, setBusca] = useState("")
+  const [dragId, setDragId] = useState<string | null>(null)   // linha sendo arrastada
+  const [handleId, setHandleId] = useState<string | null>(null) // linha com arraste habilitado (pelo handle)
 
   const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
 
@@ -160,6 +162,39 @@ export default function ProgramacaoClient({
     setCtrInfo(""); setAddMode(false); setSaving(null)
   }
 
+  async function excluirLinha(id: string) {
+    if (!confirm("Excluir esta linha da programação?")) return
+    setRows((prev) => prev.filter((r) => r.id !== id))
+    await fetch(`/api/programacao/${id}`, { method: "DELETE" }).catch(() => {})
+  }
+
+  async function excluirProgramacao() {
+    const doTipo = rows.filter((r) => r.tipo === tipo)
+    if (doTipo.length === 0) return
+    const nome = tipo === "RECEBIMENTO" ? "Recebimento" : "Expedição"
+    if (!confirm(`Excluir TODA a programação de ${nome} da semana ${semana}/${ano}? (${doTipo.length} linha(s))`)) return
+    setRows((prev) => prev.filter((r) => r.tipo !== tipo))
+    await fetch(`/api/programacao?ano=${ano}&semana=${semana}&tipo=${tipo}`, { method: "DELETE" }).catch(() => {})
+  }
+
+  // arrastar linha (reordena e persiste a ordem do tipo atual)
+  function soltarEm(targetId: string) {
+    if (!dragId || dragId === targetId) { setDragId(null); setHandleId(null); return }
+    setRows((prev) => {
+      const arr = [...prev]
+      const from = arr.findIndex((r) => r.id === dragId)
+      const to = arr.findIndex((r) => r.id === targetId)
+      if (from < 0 || to < 0) return prev
+      const [moved] = arr.splice(from, 1)
+      arr.splice(to, 0, moved)
+      const ids = arr.filter((r) => r.tipo === tipo).map((r) => r.id)
+      fetch("/api/programacao/reorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) }).catch(() => {})
+      return arr
+    })
+    setDragId(null); setHandleId(null)
+  }
+  const podeArrastar = !busca // arrastar só sem filtro ativo
+
   const ehSemanaAtual = elapsedIdx >= 0 && elapsedIdx < 6
   const semanaFutura = elapsedIdx < 0
 
@@ -219,6 +254,12 @@ export default function ProgramacaoClient({
               <Plus size={15} /> Adicionar linha
             </button>
           )}
+          {view === "tabela" && rows.some((r) => r.tipo === tipo) && (
+            <button onClick={excluirProgramacao} title="Excluir toda a programação desta semana/tipo"
+              className="flex items-center gap-2 border border-red-200 text-red-600 bg-red-50 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-100">
+              <Trash2 size={15} /> Excluir programação
+            </button>
+          )}
         </div>
       </div>
 
@@ -232,7 +273,7 @@ export default function ProgramacaoClient({
         <div className="relative flex-1 max-w-md">
           <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Filtrar por cliente, produto, contrato ou box…"
-            className="w-full border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            className="w-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 dark:placeholder-gray-400" />
           {busca && <button onClick={() => setBusca("")} className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-700"><X size={15} /></button>}
         </div>
         {busca && <span className="text-xs text-gray-500">{filtradas.length} linha(s)</span>}
@@ -242,6 +283,7 @@ export default function ProgramacaoClient({
           <table className="w-full text-sm">
             <thead className="bg-gray-800 text-white">
               <tr>
+                <th className="px-2 py-3 text-center font-medium w-14">#</th>
                 <th className="px-3 py-3 text-left font-medium min-w-20">Contrato</th>
                 <th className="px-3 py-3 text-left font-medium min-w-24">Box</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Cliente</th>
@@ -260,13 +302,31 @@ export default function ProgramacaoClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtradas.map((row) => {
+              {filtradas.map((row, idx) => {
                 const real = realDe(row.id)
                 const realTotal = realTotalLinha(row.id)
                 const totalRow = totalLinha(row)
                 const y = ytd(row)
                 return (
-                <tr key={row.id} className="hover:bg-blue-50/30">
+                <tr key={row.id}
+                  draggable={handleId === row.id}
+                  onDragStart={() => setDragId(row.id)}
+                  onDragOver={(e) => { if (dragId) e.preventDefault() }}
+                  onDrop={() => soltarEm(row.id)}
+                  onDragEnd={() => { setDragId(null); setHandleId(null) }}
+                  className={`hover:bg-blue-50/30 ${dragId === row.id ? "opacity-40" : ""} ${dragId && dragId !== row.id ? "border-t-2 border-t-transparent hover:border-t-blue-400" : ""}`}>
+                  <td className="px-2 py-2">
+                    <div className="flex items-center justify-center gap-1 text-gray-400">
+                      {podeArrastar && (
+                        <span title="Arrastar para reordenar" className="cursor-grab active:cursor-grabbing" onMouseDown={() => setHandleId(row.id)}>
+                          <GripVertical size={13} className="text-gray-300 hover:text-gray-500" />
+                        </span>
+                      )}
+                      <span className="text-xs font-medium text-gray-500 tabular-nums">{idx + 1}</span>
+                      <button onClick={() => excluirLinha(row.id)} title="Excluir linha"
+                        className="text-gray-300 hover:text-red-600"><Trash2 size={12} /></button>
+                    </div>
+                  </td>
                   <td className="px-3 py-2"><span className="font-mono text-xs text-gray-600">{row.numeroContrato ?? "—"}</span></td>
                   <td className="px-2 py-2">
                     <select value={row.boxId ?? ""} onChange={(e) => salvarBox(row, e.target.value)}
@@ -317,6 +377,7 @@ export default function ProgramacaoClient({
               {/* Linha de nova entrada */}
               {addMode && (
                 <tr className="bg-blue-50">
+                  <td className="px-2 py-2 text-center text-gray-300"><Plus size={13} className="mx-auto" /></td>
                   <td className="px-2 py-2">
                     <input value={novaLinha.numeroContrato} placeholder="Nº contr."
                       onChange={(e) => setNovaLinha((p) => ({ ...p, numeroContrato: e.target.value }))}
@@ -355,13 +416,13 @@ export default function ProgramacaoClient({
                 </tr>
               )}
               {addMode && ctrInfo && (
-                <tr className="bg-blue-50"><td colSpan={14} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
+                <tr className="bg-blue-50"><td colSpan={15} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
               )}
 
               {/* Linha de totais */}
               {filtradas.length > 0 && (
                 <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
-                  <td colSpan={4} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
+                  <td colSpan={5} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
                   {VIS.map((i) => {
                     const t = totaisDia[i]
                     const e = estiloDia(t, realizadoDia[i], passou(i))
@@ -388,7 +449,7 @@ export default function ProgramacaoClient({
               )}
 
               {filtradas.length === 0 && !addMode && (
-                <tr><td colSpan={14} className="py-12 text-center text-gray-400">
+                <tr><td colSpan={15} className="py-12 text-center text-gray-400">
                   {busca ? "Nenhuma linha para esse filtro." : <>Nenhuma programação para a semana {semana}. Clique em &quot;Adicionar linha&quot; para começar.</>}
                 </td></tr>
               )}
