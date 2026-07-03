@@ -694,6 +694,23 @@ model ProgramacaoSemanal {
   @@unique([ano, semana, clienteNome, produto, tipo])
 }
 
+// ─── PROGRAMAÇÃO DO VIRA (movimentação interna box → box) ─────────────────────
+model ViraProgramacao {
+  id          String   @id @default(cuid())
+  prioridade  Int      @default(0)
+  data        DateTime
+  clienteNome String?
+  produto     String?
+  boxOrigem   String?
+  boxDestino  String?
+  volume      String?                    // "TODO VOLUME DO AZ" ou nº — texto livre
+  turno       String?
+  obs         String?
+  status      String   @default("PROGRAMADO") // PROGRAMADO | EM ANDAMENTO | CONCLUIDO | CANCELADO
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 // ─── HISTÓRICO DO BOX ─────────────────────────────────────────────────────────
 
 model HistoricoBox {
