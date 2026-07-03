@@ -504,17 +504,18 @@ model ExpedicaoObs {
   updatedAt      DateTime @updatedAt
 }
 
-// Forecast mensal de volume por cliente (o que o cliente diz que vai fazer)
+// Forecast de volume por cliente/tipo, lançado por DATA (o que o cliente diz que vai fazer)
+// tipo: ENVASE | GRANEL | ... — usado p/ puxar o realizado pelo tipo de operação
 model ExpedicaoForecast {
   id          String   @id @default(cuid())
-  ano         Int
-  mes         Int
+  data        DateTime            // dia do forecast (lançamento diário; mensal = dia 1)
   clienteNome String
+  tipo        String   @default("ENVASE")
   forecast    Float    @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([ano, mes, clienteNome])
+  @@unique([data, clienteNome, tipo])
 }
 
 // ─── BI ESTOQUES ──────────────────────────────────────────────────────────────

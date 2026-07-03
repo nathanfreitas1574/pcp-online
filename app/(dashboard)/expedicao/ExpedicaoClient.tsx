@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X } from "lucide-react"
+import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight } from "lucide-react"
+import { getSemanaAtual, semanasDoAno } from "@/lib/programacao"
 
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
@@ -122,37 +123,58 @@ export default function ExpedicaoClient({
     }).catch(() => {})
   }
 
-  // ── Aba Forecast (por cliente/mês) ──
+  // ── Aba Forecast (por cliente/tipo, lançado por data) ──
+  type FcRow = { clienteNome: string; forecast: number; realizado: number; desvio: number | null }
+  const [fcGran, setFcGran] = useState<"ano" | "mes" | "semana">("mes")
   const [fcAno, setFcAno] = useState(anoAtual)
   const [fcMes, setFcMes] = useState(new Date().getMonth() + 1)
-  const [fcRows, setFcRows] = useState<{ clienteNome: string; forecast: number; realizado: number; desvio: number | null }[]>([])
+  const [fcSemana, setFcSemana] = useState(() => getSemanaAtual().semana)
+  const [fcTipo, setFcTipo] = useState("ENVASE")
+  const [fcRows, setFcRows] = useState<FcRow[]>([])
   const [fcTotForecast, setFcTotForecast] = useState(0)
   const [fcTotRealizado, setFcTotRealizado] = useState(0)
   const [fcClientes, setFcClientes] = useState<string[]>([])
+  const [fcTipos, setFcTipos] = useState<string[]>(["ENVASE", "GRANEL"])
+  const [fcLabel, setFcLabel] = useState("")
   const [fcLoading, setFcLoading] = useState(false)
   const [fcNovoCliente, setFcNovoCliente] = useState("")
+  // modal diário
+  const [fcDiasCliente, setFcDiasCliente] = useState<string | null>(null)
+  const [fcDias, setFcDias] = useState<{ dia: number; dow: number; forecast: number }[]>([])
+  const [fcDiasLoading, setFcDiasLoading] = useState(false)
+  const [fcExplodir, setFcExplodir] = useState("")
 
-  useEffect(() => {
-    if (aba !== "forecast") return
+  const fcEditavel = fcGran === "mes" && fcTipo !== "TODOS"
+
+  function carregarForecast() {
     setFcLoading(true)
-    fetch(`/api/expedicao/forecast?ano=${fcAno}&mes=${fcMes}`)
+    const qs = new URLSearchParams({ gran: fcGran, ano: String(fcAno), mes: String(fcMes), semana: String(fcSemana), tipo: fcTipo })
+    fetch(`/api/expedicao/forecast?${qs}`)
       .then((r) => r.json())
-      .then((d) => { setFcRows(d.rows ?? []); setFcTotForecast(d.totalForecast ?? 0); setFcTotRealizado(d.totalRealizado ?? 0); setFcClientes(d.clientes ?? []) })
+      .then((d) => {
+        setFcRows(d.rows ?? []); setFcTotForecast(d.totalForecast ?? 0); setFcTotRealizado(d.totalRealizado ?? 0)
+        setFcClientes(d.clientes ?? []); setFcTipos(d.tipos ?? ["ENVASE", "GRANEL"]); setFcLabel(d.label ?? "")
+      })
       .catch(() => {})
       .finally(() => setFcLoading(false))
-  }, [aba, fcAno, fcMes])
+  }
+  useEffect(() => {
+    if (aba !== "forecast") return
+    carregarForecast()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, fcGran, fcAno, fcMes, fcSemana, fcTipo])
 
-  async function salvarForecast(clienteNome: string, forecast: number) {
+  async function salvarForecastMes(clienteNome: string, valor: number) {
     setFcRows((prev) => {
       const next = prev.map((r) => (r.clienteNome === clienteNome
-        ? { ...r, forecast, desvio: forecast > 0 ? ((r.realizado - forecast) / forecast) * 100 : null }
+        ? { ...r, forecast: valor, desvio: valor > 0 ? ((r.realizado - valor) / valor) * 100 : null }
         : r))
       setFcTotForecast(next.reduce((s, r) => s + r.forecast, 0))
       return next
     })
     await fetch("/api/expedicao/forecast", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ano: fcAno, mes: fcMes, clienteNome, forecast }),
+      body: JSON.stringify({ escopo: "mes", ano: fcAno, mes: fcMes, clienteNome, tipo: fcTipo, forecast: valor }),
     }).catch(() => {})
   }
   function adicionarClienteForecast() {
@@ -162,6 +184,31 @@ export default function ExpedicaoClient({
       setFcRows((prev) => [{ clienteNome: nome, forecast: 0, realizado: 0, desvio: null }, ...prev])
     setFcNovoCliente("")
   }
+
+  // modal diário (explosão / lançamento por dia)
+  function abrirDias(clienteNome: string) {
+    setFcDiasCliente(clienteNome); setFcDiasLoading(true); setFcDias([]); setFcExplodir("")
+    const qs = new URLSearchParams({ modo: "dias", ano: String(fcAno), mes: String(fcMes), cliente: clienteNome, tipo: fcTipo === "TODOS" ? "ENVASE" : fcTipo })
+    fetch(`/api/expedicao/forecast?${qs}`).then((r) => r.json()).then((d) => setFcDias(d.dias ?? [])).catch(() => {}).finally(() => setFcDiasLoading(false))
+  }
+  async function salvarDia(dia: number, valor: number) {
+    setFcDias((prev) => prev.map((d) => (d.dia === dia ? { ...d, forecast: valor } : d)))
+    await fetch("/api/expedicao/forecast", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ escopo: "dia", ano: fcAno, mes: fcMes, dia, clienteNome: fcDiasCliente, tipo: fcTipo === "TODOS" ? "ENVASE" : fcTipo, forecast: valor }),
+    }).catch(() => {})
+  }
+  async function explodirMes() {
+    if (!fcDiasCliente) return
+    const total = Number(fcExplodir) || 0
+    await fetch("/api/expedicao/forecast", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ano: fcAno, mes: fcMes, clienteNome: fcDiasCliente, tipo: fcTipo === "TODOS" ? "ENVASE" : fcTipo, total }),
+    }).catch(() => {})
+    abrirDias(fcDiasCliente)
+  }
+  function fecharDias() { setFcDiasCliente(null); carregarForecast() }
+  const fcDiasTotal = fcDias.reduce((s, d) => s + d.forecast, 0)
 
   // ── Aba Capacidade (equipamento × turno A/B/C) ──
   type CapRow = { linha: string; turnos: Record<string, number>; total: number }
@@ -504,22 +551,50 @@ export default function ExpedicaoClient({
         </div>
       )}
 
-      {/* Forecast — por cliente/mês */}
+      {/* Forecast — por cliente/tipo, lançado por data */}
       {aba === "forecast" && (
         <div>
+          {/* controles: granularidade + período + tipo */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              {(["ano", "mes", "semana"] as const).map((g) => (
+                <button key={g} onClick={() => setFcGran(g)}
+                  className={`px-3 py-1.5 text-xs font-medium transition ${fcGran === g ? "bg-blue-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                  {g === "ano" ? "Ano" : g === "mes" ? "Mês" : "Semana"}
+                </button>
+              ))}
+            </div>
             <select value={fcAno} onChange={(e) => setFcAno(Number(e.target.value))}
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
               {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
-            <select value={fcMes} onChange={(e) => setFcMes(Number(e.target.value))}
-              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
-              {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
-            </select>
+            {fcGran !== "ano" && (
+              <select value={fcMes} onChange={(e) => setFcMes(Number(e.target.value))}
+                className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
+              </select>
+            )}
+            {fcGran === "semana" && (
+              <div className="flex items-center gap-1 text-xs">
+                <button onClick={() => setFcSemana((s) => Math.max(1, s - 1))} className="p-1 rounded hover:bg-gray-100 text-gray-500"><ChevronLeft size={14} /></button>
+                <span className="text-gray-600 min-w-8 text-center font-medium">S{fcSemana}</span>
+                <button onClick={() => setFcSemana((s) => Math.min(semanasDoAno(fcAno), s + 1))} className="p-1 rounded hover:bg-gray-100 text-gray-500"><ChevronRight size={14} /></button>
+              </div>
+            )}
+            {/* tipo */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden ml-1">
+              {[...fcTipos, "TODOS"].map((t) => (
+                <button key={t} onClick={() => setFcTipo(t)}
+                  className={`px-3 py-1.5 text-xs font-medium transition ${fcTipo === t ? "bg-emerald-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                  {t === "ENVASE" ? "Envase" : t === "GRANEL" ? "Granel" : t === "TODOS" ? "Todos" : t}
+                </button>
+              ))}
+            </div>
             <span className="text-xs text-gray-500">
-              Forecast <span className="font-semibold text-blue-700">{fcTotForecast.toLocaleString("pt-BR")} t</span>
-              {" · "}Realizado <span className="font-semibold text-green-700">{fcTotRealizado.toLocaleString("pt-BR")} t</span> <span className="text-gray-400">(nave/bag)</span>
-              {fcLoading && <span className="text-gray-400 ml-2">carregando…</span>}
+              <span className="text-gray-400">{fcLabel} · </span>
+              F <span className="font-semibold text-blue-700">{fcTotForecast.toLocaleString("pt-BR")} t</span>
+              {" · "}R <span className="font-semibold text-green-700">{fcTotRealizado.toLocaleString("pt-BR")} t</span>
+              {fcLoading && <span className="text-gray-400 ml-1">carregando…</span>}
             </span>
             <div className="flex items-center gap-1 ml-auto">
               <input list="fc-clientes" value={fcNovoCliente} onChange={(e) => setFcNovoCliente(e.target.value)}
@@ -529,24 +604,33 @@ export default function ExpedicaoClient({
               <button onClick={adicionarClienteForecast} className="bg-blue-600 text-white rounded-lg px-2 py-1.5 hover:bg-blue-700"><Plus size={14} /></button>
             </div>
           </div>
+          {!fcEditavel && (
+            <p className="text-[11px] text-gray-400 mb-2">
+              Edição de forecast só na granularidade <strong>Mês</strong> com um tipo selecionado (não em Todos). Aqui é só visualização/soma do período.
+            </p>
+          )}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Cliente", "Forecast (t)", "Realizado (t)", "Desvio"].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">{h}</th>
+                    {["Cliente", "Forecast (t)", "Realizado (t)", "Desvio", ""].map((h, i) => (
+                      <th key={i} className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {fcRows.map((r) => (
-                    <tr key={`${fcAno}-${fcMes}-${r.clienteNome}`} className="hover:bg-gray-50">
+                    <tr key={`${fcGran}-${fcAno}-${fcMes}-${fcSemana}-${fcTipo}-${r.clienteNome}`} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-medium text-gray-800">{r.clienteNome}</td>
                       <td className="px-2 py-1.5">
-                        <input key={`${fcAno}-${fcMes}-${r.clienteNome}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0"
-                          onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.forecast) salvarForecast(r.clienteNome, v) }}
-                          className="w-28 text-sm border border-gray-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                        {fcEditavel ? (
+                          <input key={`${fcAno}-${fcMes}-${fcTipo}-${r.clienteNome}-${r.forecast}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0"
+                            onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.forecast) salvarForecastMes(r.clienteNome, v) }}
+                            className="w-28 text-sm border border-gray-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                        ) : (
+                          <span className="text-gray-700 pr-2">{r.forecast.toLocaleString("pt-BR")}</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right font-medium text-green-700">{r.realizado.toLocaleString("pt-BR")}</td>
                       <td className="px-3 py-2 text-right">
@@ -556,16 +640,65 @@ export default function ExpedicaoClient({
                           </span>
                         )}
                       </td>
+                      <td className="px-3 py-2 text-right">
+                        {fcEditavel && (
+                          <button onClick={() => abrirDias(r.clienteNome)} title="Lançar por dia / explodir"
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 ml-auto">
+                            <CalendarDays size={13} /> dias
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {!fcLoading && fcRows.length === 0 && (
-                    <tr><td colSpan={4} className="py-10 text-center text-gray-400">Sem forecast nem realizado neste mês. Adicione um cliente acima.</td></tr>
+                    <tr><td colSpan={5} className="py-10 text-center text-gray-400">Sem forecast nem realizado neste período. Adicione um cliente acima.</td></tr>
                   )}
-                  {fcLoading && <tr><td colSpan={4} className="py-10 text-center text-gray-400">Carregando…</td></tr>}
+                  {fcLoading && <tr><td colSpan={5} className="py-10 text-center text-gray-400">Carregando…</td></tr>}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {/* Modal diário (explosão / lançamento por dia) */}
+          {fcDiasCliente && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-bold text-gray-800 text-lg">Forecast diário — {fcDiasCliente}</h4>
+                  <button onClick={fecharDias} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                </div>
+                <p className="text-xs text-gray-400 mb-3">
+                  {MESES[fcMes - 1]}/{fcAno} · tipo <strong>{fcTipo === "TODOS" ? "ENVASE" : fcTipo}</strong> · total <span className="font-semibold text-blue-700">{fcDiasTotal.toLocaleString("pt-BR")} t</span>
+                </p>
+
+                {/* explodir */}
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg p-2.5 mb-3">
+                  <Zap size={15} className="text-amber-500 shrink-0" />
+                  <span className="text-xs text-gray-600">Explodir total do mês nos dias úteis:</span>
+                  <input type="number" min="0" step="10" value={fcExplodir} onChange={(e) => setFcExplodir(e.target.value)}
+                    placeholder="total t" className="w-24 text-sm border border-amber-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-amber-300" />
+                  <button onClick={explodirMes} className="bg-amber-500 text-white rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-amber-600">Explodir</button>
+                </div>
+
+                {fcDiasLoading ? (
+                  <p className="text-sm text-gray-400 text-center py-6">Carregando dias…</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {fcDias.map((d) => (
+                      <div key={d.dia} className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ${d.dow === 0 ? "bg-red-50" : "bg-gray-50"}`}>
+                        <span className={`text-xs w-6 ${d.dow === 0 ? "text-red-500 font-semibold" : "text-gray-500"}`}>{String(d.dia).padStart(2, "0")}</span>
+                        <input key={`${fcAno}-${fcMes}-${fcDiasCliente}-${d.dia}-${d.forecast}`} type="number" min="0" step="10" defaultValue={d.forecast || ""} placeholder="0"
+                          onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== d.forecast) salvarDia(d.dia, v) }}
+                          className="flex-1 w-full text-xs border border-gray-200 rounded px-1.5 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button onClick={fecharDias} className="w-full mt-4 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50 transition">Fechar</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
