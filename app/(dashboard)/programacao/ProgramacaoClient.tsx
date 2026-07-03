@@ -177,19 +177,20 @@ export default function ProgramacaoClient({
     await fetch(`/api/programacao?ano=${ano}&semana=${semana}&tipo=${tipo}`, { method: "DELETE" }).catch(() => {})
   }
 
-  // arrastar linha (reordena e persiste a ordem do tipo atual)
+  // arrastar linha (reordena SÓ dentro do tipo atual e persiste)
   function soltarEm(targetId: string) {
     if (!dragId || dragId === targetId) { setDragId(null); setHandleId(null); return }
     setRows((prev) => {
-      const arr = [...prev]
-      const from = arr.findIndex((r) => r.id === dragId)
-      const to = arr.findIndex((r) => r.id === targetId)
+      const doTipo = prev.filter((r) => r.tipo === tipo)
+      const outros = prev.filter((r) => r.tipo !== tipo)
+      const from = doTipo.findIndex((r) => r.id === dragId)
+      const to = doTipo.findIndex((r) => r.id === targetId)
       if (from < 0 || to < 0) return prev
-      const [moved] = arr.splice(from, 1)
-      arr.splice(to, 0, moved)
-      const ids = arr.filter((r) => r.tipo === tipo).map((r) => r.id)
+      const [moved] = doTipo.splice(from, 1)
+      doTipo.splice(to, 0, moved)
+      const ids = doTipo.map((r) => r.id)
       fetch("/api/programacao/reorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) }).catch(() => {})
-      return arr
+      return [...outros, ...doTipo]
     })
     setDragId(null); setHandleId(null)
   }
