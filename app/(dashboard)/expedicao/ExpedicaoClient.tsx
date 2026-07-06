@@ -45,7 +45,7 @@ const LINHA_COLORS: Record<string, string> = {
 }
 
 export default function ExpedicaoClient({
-  contratos, registros: _registros, totalForecast, totalRealizado, totalOrcado, totalCapacidade, aderencia,
+  contratos, registros: _registros, totalForecast: _totalForecast, totalRealizado: _totalRealizado, totalOrcado: _totalOrcado, totalCapacidade, aderencia: _aderencia,
 }: {
   contratos: Contrato[]
   registros: Registro[]
@@ -798,7 +798,7 @@ export default function ExpedicaoClient({
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Cliente", "Forecast (t)", "Realizado (t)", "Desvio", ""].map((h, i) => (
+                    {["Cliente", "Forecast (t)", "Realizado (t)", "Desvio (% · t)", ""].map((h, i) => (
                       <th key={i} className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -818,11 +818,20 @@ export default function ExpedicaoClient({
                       </td>
                       <td className="px-3 py-2 text-right font-medium text-green-700">{r.realizado.toLocaleString("pt-BR")}</td>
                       <td className="px-3 py-2 text-right">
-                        {r.desvio === null ? <span className="text-gray-300">—</span> : (
-                          <span className={`font-medium ${r.desvio >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            {r.desvio >= 0 ? "+" : ""}{r.desvio.toFixed(1)}%
-                          </span>
-                        )}
+                        {(() => {
+                          const volDif = Math.round((r.realizado - r.forecast) * 100) / 100
+                          const pos = volDif >= 0
+                          return (
+                            <div className="leading-tight">
+                              {r.desvio === null
+                                ? <span className="text-gray-300 text-xs">—</span>
+                                : <span className={`font-medium ${r.desvio >= 0 ? "text-green-600" : "text-red-600"}`}>{r.desvio >= 0 ? "+" : ""}{r.desvio.toFixed(1)}%</span>}
+                              <div className={`text-[10px] ${pos ? "text-green-600/80" : "text-red-600/80"}`}>
+                                {pos ? "+" : ""}{volDif.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} t
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </td>
                       <td className="px-3 py-2 text-right">
                         {fcEditavel && (
