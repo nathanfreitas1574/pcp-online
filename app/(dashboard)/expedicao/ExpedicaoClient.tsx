@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight } from "lucide-react"
 import { getSemanaAtual, semanasDoAno } from "@/lib/programacao"
+import BiExpedicao from "./BiExpedicao"
 
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
@@ -55,7 +56,7 @@ export default function ExpedicaoClient({
   totalCapacidade: number
   aderencia: number
 }) {
-  const [aba, setAba] = useState<"contratos" | "registros" | "diadia" | "orcado" | "forecast" | "capacidade" | "importar">("contratos")
+  const [aba, setAba] = useState<"contratos" | "registros" | "diadia" | "orcado" | "forecast" | "capacidade" | "bi" | "importar">("contratos")
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
   const [busca, setBusca] = useState("")
   const [uploading, setUploading] = useState(false)
@@ -411,6 +412,7 @@ export default function ExpedicaoClient({
           { id: "orcado", label: "Orçado" },
           { id: "forecast", label: "Forecast" },
           { id: "capacidade", label: "Capacidade" },
+          { id: "bi", label: "📊 BI" },
           { id: "importar", label: "Importar Excel" },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => { setAba(id as typeof aba); setBusca("") }}
@@ -962,6 +964,9 @@ export default function ExpedicaoClient({
           <p className="text-xs text-gray-400 mt-2 max-w-3xl">Valores em toneladas por turno. O total é a capacidade instalada do equipamento no mês.</p>
         </div>
       )}
+
+      {/* BI — Dashboard Expedição */}
+      {aba === "bi" && <BiExpedicao />}
 
       {/* Importar */}
       {aba === "importar" && (

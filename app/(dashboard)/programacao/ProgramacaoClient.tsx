@@ -11,6 +11,15 @@ const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
 const VIS = [1, 2, 3, 4, 5, 6] as const // dias exibidos: Seg..Sáb (domingo = índice 0, fora da programação)
 const TOL = 0.95 // atende com 95% do programado
+
+// cores das linhas de produção (vêm do Controle de Expedição)
+const LINHA_PROD_COLORS: Record<string, string> = {
+  "MISTURA 1": "bg-purple-100 text-purple-700",
+  "MISTURA 2": "bg-fuchsia-100 text-fuchsia-700",
+  "BAG MÓVEL": "bg-green-100 text-green-700",
+  "PRODUTO ACABADO": "bg-emerald-100 text-emerald-700",
+  GRANEL: "bg-yellow-100 text-yellow-700",
+}
 const pad = (n: number) => String(n).padStart(2, "0")
 
 // Estilo do realizado de um dia. `passou` = o dia já decorreu.
@@ -37,10 +46,11 @@ type Cliente = { id: string; nome: string; codigo: string }
 type Produto = { id: string; descricao: string; codigo: string }
 
 export default function ProgramacaoClient({
-  programacoes: inicial, boxes, clientes, produtos, semana, ano, maxSemana, dias, realizadoPorDia
+  programacoes: inicial, boxes, clientes, produtos, semana, ano, maxSemana, dias, realizadoPorDia, linhaPorContrato = {}
 }: {
   programacoes: Prog[]; boxes: Box[]; clientes: Cliente[]; produtos: Produto[]
   semana: number; ano: number; maxSemana: number; dias: Dia[]; realizadoPorDia: Record<string, number[]>
+  linhaPorContrato?: Record<string, string>
 }) {
   const router = useRouter()
   const [rows, setRows] = useState<Prog[]>(inicial)
@@ -56,6 +66,9 @@ export default function ProgramacaoClient({
   const [handleId, setHandleId] = useState<string | null>(null) // linha com arraste habilitado (pelo handle)
 
   const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
+  // Linha de Produção do contrato (definida no Controle de Expedição)
+  const linhaDe = (numeroContrato: string | null) =>
+    numeroContrato ? linhaPorContrato[String(numeroContrato).trim().replace(/^0+/, "") || "0"] ?? null : null
 
   // Dias já decorridos (ymd do dia < hoje no fuso do navegador) — p/ YTD e "não atendido"
   const now = new Date()
@@ -289,6 +302,7 @@ export default function ProgramacaoClient({
                 <th className="px-3 py-3 text-left font-medium min-w-24">Box</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Cliente</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Produto</th>
+                <th className="px-3 py-3 text-left font-medium min-w-24" title="Definida no Controle de Expedição">Linha Prod.</th>
                 {VIS.map((i) => (
                   <th key={i} className={`px-2 py-3 text-center font-medium min-w-20 ${passou(i) ? "" : "opacity-80"}`}>
                     <div>{DIAS[i]}</div>
@@ -339,6 +353,14 @@ export default function ProgramacaoClient({
                   </td>
                   <td className="px-3 py-2 font-medium text-gray-800 text-xs">{row.clienteNome}</td>
                   <td className="px-3 py-2 text-gray-600 text-xs">{row.produto}</td>
+                  <td className="px-3 py-2">
+                    {(() => {
+                      const lp = linhaDe(row.numeroContrato)
+                      if (!lp) return <span className="text-gray-300 text-xs">—</span>
+                      const cls = LINHA_PROD_COLORS[lp] ?? "bg-gray-100 text-gray-600"
+                      return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${cls}`}>{lp}</span>
+                    })()}
+                  </td>
                   {VIS.map((i) => {
                     const d = DIAS_KEYS[i]
                     const e = estiloDia(row[d] ?? 0, real[i], passou(i))
@@ -405,6 +427,7 @@ export default function ProgramacaoClient({
                       className="w-full text-xs border border-blue-300 rounded px-2 py-1.5 focus:outline-none" />
                     <datalist id="produtos-list">{produtos.map((p) => <option key={p.id} value={p.descricao}>{p.codigo}</option>)}</datalist>
                   </td>
+                  <td className="px-2 py-2 text-gray-300 text-xs text-center">—</td>
                   {VIS.map((i) => <td key={i} className="px-1 py-2"><div className="w-full h-7 bg-gray-100 rounded" /></td>)}
                   <td className="px-2 py-2">
                     <button onClick={adicionarLinha} disabled={saving === "nova"}
@@ -417,13 +440,13 @@ export default function ProgramacaoClient({
                 </tr>
               )}
               {addMode && ctrInfo && (
-                <tr className="bg-blue-50"><td colSpan={15} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
+                <tr className="bg-blue-50"><td colSpan={16} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
               )}
 
               {/* Linha de totais */}
               {filtradas.length > 0 && (
                 <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
-                  <td colSpan={5} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
+                  <td colSpan={6} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
                   {VIS.map((i) => {
                     const t = totaisDia[i]
                     const e = estiloDia(t, realizadoDia[i], passou(i))
@@ -450,7 +473,7 @@ export default function ProgramacaoClient({
               )}
 
               {filtradas.length === 0 && !addMode && (
-                <tr><td colSpan={15} className="py-12 text-center text-gray-400">
+                <tr><td colSpan={16} className="py-12 text-center text-gray-400">
                   {busca ? "Nenhuma linha para esse filtro." : <>Nenhuma programação para a semana {semana}. Clique em &quot;Adicionar linha&quot; para começar.</>}
                 </td></tr>
               )}

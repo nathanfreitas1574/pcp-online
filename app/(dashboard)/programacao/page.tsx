@@ -16,7 +16,7 @@ export default async function ProgramacaoPage({
   const maxSemana = semanasDoAno(ano)
   const semana = Math.min(Math.max(Number(sp.semana) || atual.semana, 1), maxSemana)
 
-  const [programacoes, boxes, clientes, produtos] = await Promise.all([
+  const [programacoes, boxes, clientes, produtos, contratosExp] = await Promise.all([
     prisma.programacaoSemanal.findMany({
       where: { ano, semana },
       orderBy: [{ ordem: "asc" }, { clienteNome: "asc" }, { produto: "asc" }],
@@ -25,7 +25,16 @@ export default async function ProgramacaoPage({
     prisma.box.findMany({ where: { ativo: true }, orderBy: { codigo: "asc" }, select: { id: true, codigo: true } }),
     prisma.cliente.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true, codigo: true } }),
     prisma.produto.findMany({ where: { ativo: true }, orderBy: { descricao: "asc" }, select: { id: true, descricao: true, codigo: true } }),
+    // Linha de Produção vem do Controle de Expedição (definida lá, refletida aqui)
+    prisma.contratoExpedicao.findMany({ orderBy: { numero: "asc" }, select: { numero: true, linhaProducao: true } }),
   ])
+
+  // mapa nº contrato (sem zeros à esquerda) → linha de produção
+  const normNum = (s: string | null | undefined) => String(s ?? "").trim().replace(/^0+/, "") || "0"
+  const linhaPorContrato: Record<string, string> = {}
+  for (const c of contratosExp) {
+    if (c.linhaProducao && !(normNum(c.numero) in linhaPorContrato)) linhaPorContrato[normNum(c.numero)] = c.linhaProducao
+  }
 
   // Datas da semana SELECIONADA (Dom → Sáb), em UTC
   const diasSemana = diasDaSemana(ano, semana)
@@ -75,6 +84,7 @@ export default async function ProgramacaoPage({
       maxSemana={maxSemana}
       dias={dias}
       realizadoPorDia={realizadoPorDia}
+      linhaPorContrato={linhaPorContrato}
     />
   )
 }
