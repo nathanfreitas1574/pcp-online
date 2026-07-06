@@ -434,6 +434,35 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
   const [editing, setEditing] = useState<Cliente | null>(null)
   const [form, setForm] = useState({ codigo: "", nome: "", abreviado: "", cnpj: "" })
   const [saving, setSaving] = useState(false)
+  // mesclar clientes duplicados
+  const [mergeCliente, setMergeCliente] = useState<Cliente | null>(null) // o que será REMOVIDO
+  const [mergeTargetId, setMergeTargetId] = useState("")                 // o que será MANTIDO
+  const [mergeSearch, setMergeSearch] = useState("")
+  const [merging, setMerging] = useState(false)
+  const [msg, setMsg] = useState("")
+
+  function abrirMerge(c: Cliente) { setMergeCliente(c); setMergeTargetId(""); setMergeSearch(""); setMsg("") }
+  async function confirmarMerge() {
+    if (!mergeCliente || !mergeTargetId) return
+    setMerging(true)
+    const res = await fetch("/api/clientes/merge", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ manterId: mergeTargetId, removerId: mergeCliente.id }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setMerging(false)
+    if (res.ok) {
+      const alvo = clientes.find((c) => c.id === mergeTargetId)
+      const abrevNovo = mergeCliente.abreviado || mergeCliente.nome
+      setClientes((prev) => prev
+        .map((c) => (c.id === mergeTargetId && !c.abreviado ? { ...c, abreviado: abrevNovo } : c)) // reflete o apelido preservado
+        .filter((c) => c.id !== mergeCliente.id))
+      setMsg(`✓ "${mergeCliente.nome}" mesclado em "${alvo?.nome ?? ""}" — ${d.total ?? 0} registro(s) movido(s).`)
+      setMergeCliente(null)
+    } else {
+      setMsg(`✕ ${d.error ?? "Erro ao mesclar."}`)
+    }
+  }
 
   const filtered = clientes.filter(
     (c) =>
@@ -477,6 +506,13 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
         <button onClick={openNew} className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800"><Plus size={15} /> Novo Cliente</button>
       </div>
 
+      {msg && (
+        <div className={`mb-3 px-4 py-2 rounded-lg text-sm font-medium border flex items-center justify-between ${msg.startsWith("✓") ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+          <span>{msg}</span>
+          <button onClick={() => setMsg("")}><X size={14} /></button>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
@@ -492,8 +528,9 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
                 <td className="px-4 py-3"><Badge ativo={c.ativo} /></td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-600"><Pencil size={14} /></button>
-                    {c.ativo && <button onClick={() => handleInativar(c.id)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500"><Trash2 size={14} /></button>}
+                    <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-600" title="Editar"><Pencil size={14} /></button>
+                    <button onClick={() => abrirMerge(c)} className="p-1.5 hover:bg-purple-50 rounded-lg text-purple-600" title="Mesclar em outro (duplicado)"><ArrowRightLeft size={14} /></button>
+                    {c.ativo && <button onClick={() => handleInativar(c.id)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500" title="Inativar"><Trash2 size={14} /></button>}
                   </div>
                 </td>
               </tr>
@@ -534,6 +571,58 @@ function ClientesTab({ clientes: inicial }: { clientes: Cliente[] }) {
           </div>
         </div>
       )}
+
+      {/* Modal mesclar clientes */}
+      {mergeCliente && (() => {
+        const opcoes = clientes
+          .filter((c) => c.id !== mergeCliente.id)
+          .filter((c) => !mergeSearch || `${c.nome} ${c.codigo} ${c.abreviado ?? ""}`.toLowerCase().includes(mergeSearch.toLowerCase()))
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+              <div className="flex items-center gap-2 mb-1">
+                <ArrowRightLeft size={18} className="text-purple-600" />
+                <h3 className="font-bold text-gray-800 text-lg">Mesclar cliente duplicado</h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Escolha o cliente <strong>correto (mantido)</strong>. Todos os contratos, consignações e quebras de
+                <span className="font-semibold text-purple-700"> {mergeCliente.nome}</span> passam para ele, e este duplicado é <strong>excluído</strong>.
+              </p>
+
+              <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 mb-3 text-sm">
+                <span className="text-xs text-gray-500">Vai ser removido (mesclado):</span>
+                <div className="font-semibold text-gray-800">{mergeCliente.nome} <span className="font-mono text-xs text-gray-400">({mergeCliente.codigo})</span></div>
+              </div>
+
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Manter (destino):</label>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+                <input value={mergeSearch} onChange={(e) => setMergeSearch(e.target.value)} placeholder="Buscar cliente a manter…"
+                  className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+              </div>
+              <div className="border border-gray-100 rounded-lg max-h-52 overflow-y-auto mb-4 divide-y divide-gray-50">
+                {opcoes.map((c) => (
+                  <button key={c.id} onClick={() => setMergeTargetId(c.id)}
+                    className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-purple-50 ${mergeTargetId === c.id ? "bg-purple-100" : ""}`}>
+                    <span><span className="font-medium text-gray-800">{c.nome}</span> <span className="font-mono text-xs text-gray-400">{c.codigo}</span>{c.abreviado && <span className="text-xs text-gray-400"> · {c.abreviado}</span>}</span>
+                    {mergeTargetId === c.id && <Check size={15} className="text-purple-600 shrink-0" />}
+                  </button>
+                ))}
+                {opcoes.length === 0 && <div className="px-3 py-6 text-center text-gray-400 text-sm">Nenhum cliente.</div>}
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setMergeCliente(null)} className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50">Cancelar</button>
+                <button onClick={() => { if (confirm(`Mesclar "${mergeCliente.nome}" no cliente selecionado? Esta ação exclui o duplicado.`)) confirmarMerge() }}
+                  disabled={!mergeTargetId || merging}
+                  className="flex-1 bg-purple-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-purple-700 disabled:opacity-50">
+                  {merging ? "Mesclando…" : "Mesclar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
