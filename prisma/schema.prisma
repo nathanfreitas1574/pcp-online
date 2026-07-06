@@ -433,6 +433,7 @@ model ContratoExpedicao {
   numero           String
   clienteId        String
   operacao         String?
+  linhaProducao    String?                 // MISTURA 1 | MISTURA 2 | BAG MÓVEL | PRODUTO ACABADO | GRANEL
   produtoSistema   String?
   produtoAbreviado String?
   tipoProduto      String?

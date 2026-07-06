@@ -6,6 +6,7 @@ import { getSemanaAtual, semanasDoAno } from "@/lib/programacao"
 
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
+const LINHAS_PRODUCAO = ["MISTURA 1", "MISTURA 2", "BAG MÓVEL", "PRODUTO ACABADO", "GRANEL"]
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 const TIPO_OP_DIA = ["ENVASE", "GRANEL", "COMPACTADOR", "PRODUTO ACABADO"]
 const OPERACAO_DIA = ["SIMPLES", "MISTURA", "GRANEL", "COMPACTADOR"]
@@ -14,7 +15,7 @@ const DDINP = "w-full text-xs border border-gray-200 rounded px-1.5 py-1 focus:o
 
 type Contrato = {
   id: string; numero: string; operacao: string | null; produtoAbreviado: string | null
-  tipoProduto: string | null; mes: string | null; semana: number | null
+  tipoProduto: string | null; linhaProducao: string | null; mes: string | null; semana: number | null
   volProgramado: number; realizado: number; saldo: number; status: string
   cliente: { nome: string }
 }
@@ -283,10 +284,15 @@ export default function ExpedicaoClient({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function salvarDiaCampo(chave: string, campo: keyof DiaRow, valor: any) {
+    const anterior = ddRows.find((r) => r.chave === chave)?.[campo]
     setDdRows((prev) => prev.map((r) => (r.chave === chave ? { ...r, [campo]: valor } : r)))
-    await fetch("/api/expedicao/diadia", {
+    const ok = await fetch("/api/expedicao/diadia", {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chave, [campo]: valor }),
-    }).catch(() => {})
+    }).then((r) => r.ok).catch(() => false)
+    if (!ok) {
+      setDdRows((prev) => prev.map((r) => (r.chave === chave ? { ...r, [campo]: anterior } : r)))
+      alert("Falha ao salvar. Tente novamente.")
+    }
   }
   const ddFiltradas = ddRows.filter((r) => !busca || `${r.cliente} ${r.produto} ${r.linhaProducao ?? ""} ${r.obs}`.toLowerCase().includes(busca.toLowerCase()))
   const ddTotForecast = ddFiltradas.reduce((s, r) => s + r.forecast, 0)
@@ -296,7 +302,7 @@ export default function ExpedicaoClient({
   const performance = totalCapacidade > 0 ? (totalRealizado / totalCapacidade) * 100 : 0
   const mesesContrato = [...new Set(rows.map((c) => c.mes).filter(Boolean) as string[])].sort()
 
-  async function salvarContratoCampo(id: string, campo: "tipoProduto" | "operacao", valor: string) {
+  async function salvarContratoCampo(id: string, campo: "tipoProduto" | "operacao" | "linhaProducao", valor: string) {
     setRows((prev) => prev.map((c) => c.id === id ? { ...c, [campo]: valor || null } : c))
     await fetch(`/api/expedicao/contrato/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [campo]: valor }) })
   }
@@ -439,7 +445,7 @@ export default function ExpedicaoClient({
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Contrato", "Cliente", "Produto", "Tipo", "Operação", "Vol. Prog.", "Realizado", "Saldo", "Status"].map((h) => (
+                    {["Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "Status"].map((h) => (
                       <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>
                     ))}
                   </tr>
@@ -464,6 +470,13 @@ export default function ExpedicaoClient({
                           {OPERACOES.map((o) => <option key={o} value={o}>{o}</option>)}
                         </select>
                       </td>
+                      <td className="px-2 py-2">
+                        <select value={c.linhaProducao ?? ""} onChange={(e) => salvarContratoCampo(c.id, "linhaProducao", e.target.value)}
+                          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                          <option value="">—</option>
+                          {LINHAS_PRODUCAO.map((l) => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                      </td>
                       <td className="px-3 py-2 text-right font-medium">{c.volProgramado.toLocaleString("pt-BR")}</td>
                       <td className="px-3 py-2 text-right text-green-700 font-medium">{c.realizado.toLocaleString("pt-BR")}</td>
                       <td className={`px-3 py-2 text-right font-medium ${c.saldo < 0 ? "text-red-600" : "text-gray-700"}`}>
@@ -478,7 +491,7 @@ export default function ExpedicaoClient({
                     </tr>
                   ))}
                   {contratosFiltrados.length === 0 && (
-                    <tr><td colSpan={9} className="py-10 text-center text-gray-400">Nenhum contrato. Importe o Excel.</td></tr>
+                    <tr><td colSpan={10} className="py-10 text-center text-gray-400">Nenhum contrato. Importe o Excel.</td></tr>
                   )}
                 </tbody>
               </table>

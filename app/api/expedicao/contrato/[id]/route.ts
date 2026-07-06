@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const b = await req.json()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = {}
-  for (const k of ["tipoProduto", "operacao", "status"]) {
+  for (const k of ["tipoProduto", "operacao", "linhaProducao", "status"]) {
     if (b[k] !== undefined) data[k] = b[k] === "" ? null : b[k]
   }
   if (b.volProgramado !== undefined) data.volProgramado = Number(b.volProgramado) || 0
