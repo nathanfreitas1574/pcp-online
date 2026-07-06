@@ -8,6 +8,7 @@ import { ehCheckout, ehCarga, diasDaSemana, ddMM, DIA } from "@/lib/programacao"
 const TIPOS = [
   { tipo: "ENVASE", match: (ts: string) => ts.includes("BIG BAG") },   // envase = ensacado
   { tipo: "GRANEL", match: (ts: string) => ts.includes("GRANEL") },
+  { tipo: "PRODUTO ACABADO", match: (ts: string) => ts.includes("ACABADO") || ts.includes("PROD ACAB") },
 ]
 const TIPO_NOMES = TIPOS.map((t) => t.tipo)
 

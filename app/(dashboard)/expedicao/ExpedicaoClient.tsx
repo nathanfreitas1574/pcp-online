@@ -160,7 +160,7 @@ export default function ExpedicaoClient({
   const [fcTotForecast, setFcTotForecast] = useState(0)
   const [fcTotRealizado, setFcTotRealizado] = useState(0)
   const [fcClientes, setFcClientes] = useState<string[]>([])
-  const [fcTipos, setFcTipos] = useState<string[]>(["ENVASE", "GRANEL"])
+  const [fcTipos, setFcTipos] = useState<string[]>(["ENVASE", "GRANEL", "PRODUTO ACABADO"])
   const [fcLabel, setFcLabel] = useState("")
   const [fcLoading, setFcLoading] = useState(false)
   const [fcNovoCliente, setFcNovoCliente] = useState("")
@@ -770,7 +770,7 @@ export default function ExpedicaoClient({
               {[...fcTipos, "TODOS"].map((t) => (
                 <button key={t} onClick={() => setFcTipo(t)}
                   className={`px-3 py-1.5 text-xs font-medium transition ${fcTipo === t ? "bg-emerald-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
-                  {t === "ENVASE" ? "Envase" : t === "GRANEL" ? "Granel" : t === "TODOS" ? "Todos" : t}
+                  {t === "ENVASE" ? "Envase" : t === "GRANEL" ? "Granel" : t === "PRODUTO ACABADO" ? "Produto Acabado" : t === "TODOS" ? "Todos" : t}
                 </button>
               ))}
             </div>
