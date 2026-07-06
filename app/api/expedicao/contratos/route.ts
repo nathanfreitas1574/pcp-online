@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     ini = new Date(Date.UTC(ano, 0, 1)); fim = new Date(Date.UTC(ano + 1, 0, 1) - 1)
   }
 
-  const [contratos, progs, marcRaw] = await Promise.all([
+  const [contratos, progs, marcRaw, totvs] = await Promise.all([
     prisma.contratoExpedicao.findMany({ orderBy: { createdAt: "desc" }, include: { cliente: { select: { nome: true } } } }),
     prisma.programacaoSemanal.findMany({
       where: { ano, tipo: "EXPEDICAO" },
@@ -40,7 +40,11 @@ export async function GET(req: NextRequest) {
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
       select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true },
     }),
+    // tipo de contrato (definido na importação dos Contratos TOTVS)
+    prisma.contratoArmazenagem.findMany({ where: { tipoContrato: { not: null } }, select: { numero: true, tipoContrato: true } }),
   ])
+  const tipoPorNum = new Map<string, string>()
+  for (const t of totvs) if (t.tipoContrato && !tipoPorNum.has(normNum(t.numero))) tipoPorNum.set(normNum(t.numero), t.tipoContrato)
 
   // Vol. Programado por contrato = soma dos dias da Programação Semanal (EXPEDIÇÃO) que caem no período
   const progPorNum = new Map<string, number>()
@@ -72,6 +76,7 @@ export async function GET(req: NextRequest) {
     return {
       id: c.id, numero: c.numero, cliente: { nome: c.cliente.nome }, produtoAbreviado: c.produtoAbreviado,
       tipoProduto: c.tipoProduto, operacao: c.operacao, linhaProducao: c.linhaProducao, mes: c.mes, semana: c.semana,
+      tipoContrato: tipoPorNum.get(normNum(c.numero)) ?? null,
       volProgramado: programado, realizado, saldo, pct, status: c.status,
     }
   })

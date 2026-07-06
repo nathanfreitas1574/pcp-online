@@ -1174,6 +1174,7 @@ model ContratoArmazenagem {
   stsEstoque    String    @default("Aberto")
   modalidade    String?
   centroCusto   String?
+  tipoContrato  String?   // classificação na importação: COMPRA | VENDA | ARMAZEM_IND
   ativo         Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

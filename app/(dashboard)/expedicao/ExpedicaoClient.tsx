@@ -8,6 +8,8 @@ import BiExpedicao from "./BiExpedicao"
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
 const LINHAS_PRODUCAO = ["MISTURA 1", "MISTURA 2", "BAG MÓVEL", "PRODUTO ACABADO", "GRANEL"]
+const TIPO_CONTRATO_LABEL: Record<string, string> = { COMPRA: "Compra", VENDA: "Venda", ARMAZEM_IND: "Armazém/Ind." }
+const TIPO_CONTRATO_COLOR: Record<string, string> = { COMPRA: "bg-blue-100 text-blue-700", VENDA: "bg-green-100 text-green-700", ARMAZEM_IND: "bg-purple-100 text-purple-700" }
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const TIPO_OP_DIA = ["ENVASE", "GRANEL", "COMPACTADOR", "PRODUTO ACABADO"]
@@ -18,7 +20,7 @@ const DDINP = "w-full text-xs border border-gray-200 rounded px-1.5 py-1 focus:o
 type Contrato = {
   id: string; numero: string; operacao: string | null; produtoAbreviado: string | null
   tipoProduto: string | null; linhaProducao: string | null; mes: string | null; semana: number | null
-  volProgramado: number; realizado: number; saldo: number; status: string; pct?: number | null
+  volProgramado: number; realizado: number; saldo: number; status: string; pct?: number | null; tipoContrato?: string | null
   cliente: { nome: string }
 }
 
@@ -74,6 +76,7 @@ export default function ExpedicaoClient({
   const [ctrSemanas, setCtrSemanas] = useState(53)
   const [ctrClienteF, setCtrClienteF] = useState("")
   const [ctrProdutoF, setCtrProdutoF] = useState("")
+  const [ctrTipoContF, setCtrTipoContF] = useState("")
   const [ctrTotProg, setCtrTotProg] = useState(0)
   const [ctrTotReal, setCtrTotReal] = useState(0)
   const [ctrLoading, setCtrLoading] = useState(false)
@@ -368,6 +371,7 @@ export default function ExpedicaoClient({
 
   const contratosFiltrados = rows
     .filter((c) => filtroStatus === "TODOS" || c.status === filtroStatus)
+    .filter((c) => !ctrTipoContF || (c.tipoContrato ?? "") === ctrTipoContF)
     .filter((c) => !ctrClienteF || c.cliente.nome === ctrClienteF)
     .filter((c) => !ctrProdutoF || (c.produtoAbreviado ?? "") === ctrProdutoF)
     .filter((c) => {
@@ -491,6 +495,13 @@ export default function ExpedicaoClient({
                 {s}
               </button>
             ))}
+            <select value={ctrTipoContF} onChange={(e) => setCtrTipoContF(e.target.value)}
+              className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${ctrTipoContF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+              <option value="">Tipo contrato: todos</option>
+              <option value="COMPRA">Compra</option>
+              <option value="VENDA">Venda</option>
+              <option value="ARMAZEM_IND">Armazém/Ind.</option>
+            </select>
             {ctrClientes.length > 0 && (
               <select value={ctrClienteF} onChange={(e) => setCtrClienteF(e.target.value)}
                 className={`text-xs rounded-lg px-2 py-1.5 border max-w-40 focus:outline-none focus:ring-2 focus:ring-blue-200 ${ctrClienteF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
@@ -521,7 +532,7 @@ export default function ExpedicaoClient({
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Status", ""].map((h, i) => (
+                    {["Contrato", "Tipo Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Status", ""].map((h, i) => (
                       <th key={i} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>
                     ))}
                   </tr>
@@ -530,6 +541,11 @@ export default function ExpedicaoClient({
                   {contratosFiltrados.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-mono text-xs text-gray-700">{c.numero}</td>
+                      <td className="px-3 py-2">
+                        {c.tipoContrato
+                          ? <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${TIPO_CONTRATO_COLOR[c.tipoContrato] ?? "bg-gray-100 text-gray-600"}`}>{TIPO_CONTRATO_LABEL[c.tipoContrato] ?? c.tipoContrato}</span>
+                          : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
                       <td className="px-3 py-2 font-medium text-gray-800">{c.cliente.nome}</td>
                       <td className="px-3 py-2 text-gray-600">{c.produtoAbreviado ?? "—"}</td>
                       <td className="px-2 py-2">
@@ -576,7 +592,7 @@ export default function ExpedicaoClient({
                     </tr>
                   ))}
                   {contratosFiltrados.length === 0 && (
-                    <tr><td colSpan={12} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
+                    <tr><td colSpan={13} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
                   )}
                 </tbody>
               </table>

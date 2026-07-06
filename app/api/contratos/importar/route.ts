@@ -14,6 +14,11 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file") as File | null
   if (!file) return NextResponse.json({ error: "Nenhum arquivo enviado" }, { status: 400 })
 
+  // classificação escolhida na importação (aplicada a TODAS as linhas do arquivo)
+  const TIPOS = ["COMPRA", "VENDA", "ARMAZEM_IND"]
+  const tipoRaw = String(formData.get("tipoContrato") ?? "").trim().toUpperCase()
+  const tipoContrato = TIPOS.includes(tipoRaw) ? tipoRaw : null
+
   const buffer = Buffer.from(await file.arrayBuffer())
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
@@ -38,7 +43,8 @@ export async function POST(req: NextRequest) {
   let atualizados = 0
   for (const c of contratos) {
     const { filial, numero, ...rest } = c
-    const data = { ...rest, ativo: true }
+    // só sobrescreve o tipo se um foi escolhido na importação (senão preserva o existente)
+    const data = { ...rest, ativo: true, ...(tipoContrato ? { tipoContrato } : {}) }
     // Unicidade por filial+numero (o mesmo nº se repete entre filiais)
     const existing = await prisma.contratoArmazenagem.findUnique({ where: { filial_numero: { filial, numero } } })
     if (existing) {

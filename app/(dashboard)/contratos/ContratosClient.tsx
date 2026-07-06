@@ -67,6 +67,7 @@ export default function ContratosClient({
   const [buscado,    setBuscado]    = useState(false)
   const [importing,  setImporting]  = useState(false)
   const [importMsg,  setImportMsg]  = useState("")
+  const [tipoImport, setTipoImport] = useState("")  // classificação na importação
   // modal criar/editar
   const [editando,   setEditando]   = useState<Partial<Contrato> | null>(null)
   const [salvando,   setSalvando]   = useState(false)
@@ -133,6 +134,7 @@ export default function ContratosClient({
       // Lê o Excel via FileReader e envia para a rota de importação
       const formData = new FormData()
       formData.append("file", file)
+      if (tipoImport) formData.append("tipoContrato", tipoImport)
       const res = await fetch("/api/contratos/importar", {
         method: "POST",
         body: formData,
@@ -214,6 +216,16 @@ export default function ContratosClient({
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition">
             <Plus size={15} /> Novo Contrato
           </button>
+          <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg pl-2 pr-1 py-1">
+            <span className="text-[11px] font-semibold text-indigo-700 whitespace-nowrap" title="Classifica todos os contratos deste arquivo">Classificar como:</span>
+            <select value={tipoImport} onChange={(e) => setTipoImport(e.target.value)}
+              className="text-xs border border-indigo-300 rounded px-1.5 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              <option value="">— sem classificar —</option>
+              <option value="COMPRA">Contratos de Compra</option>
+              <option value="VENDA">Contratos de Venda</option>
+              <option value="ARMAZEM_IND">Cliente / Armazém / Industrialização</option>
+            </select>
+          </div>
           <label className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition ${
             importing ? "bg-gray-200 text-gray-500" : "bg-indigo-600 hover:bg-indigo-700 text-white"
           }`}>
