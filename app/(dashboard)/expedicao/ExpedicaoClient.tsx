@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Fragment } from "react"
 import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight } from "lucide-react"
-import { getSemanaAtual, semanasDoAno } from "@/lib/programacao"
+import { getSemanaAtual, semanasDoAno, semanaDeData } from "@/lib/programacao"
 import BiExpedicao from "./BiExpedicao"
 
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
 const LINHAS_PRODUCAO = ["MISTURA 1", "MISTURA 2", "BAG MÓVEL", "PRODUTO ACABADO", "GRANEL"]
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const TIPO_OP_DIA = ["ENVASE", "GRANEL", "COMPACTADOR", "PRODUTO ACABADO"]
 const OPERACAO_DIA = ["SIMPLES", "MISTURA", "GRANEL", "COMPACTADOR"]
 const LINHA_PROD_DIA = ["NAVE", "EMBEGADO", "GRANEL", "COMPACTADOR", "BAG MÓVEL"]
@@ -237,47 +238,67 @@ export default function ExpedicaoClient({
   function fecharDias() { setFcDiasCliente(null); carregarForecast() }
   const fcDiasTotal = fcDias.reduce((s, d) => s + d.forecast, 0)
 
-  // ── Aba Capacidade (equipamento × turno A/B/C) ──
-  type CapRow = { linha: string; turnos: Record<string, number>; total: number }
+  // ── Aba Capacidade — grade DIÁRIA (dias × equipamento × turno) ──
+  type CapDia = { dia: number; dow: number; feriado: string | null; cels: Record<string, number> }
   const [capAno, setCapAno] = useState(anoAtual)
   const [capMes, setCapMes] = useState(new Date().getMonth() + 1)
-  const [capRows, setCapRows] = useState<CapRow[]>([])
+  const [capDias, setCapDias] = useState<CapDia[]>([])
+  const [capEquip, setCapEquip] = useState<string[]>(["NAVE", "BAG MÓVEL", "PRODUTO ACABADO", "GRANEL", "COMPACTADOR"])
   const [capTurnos, setCapTurnos] = useState<string[]>(["A", "B", "C"])
-  const [capTotaisTurno, setCapTotaisTurno] = useState<Record<string, number>>({})
-  const [capTotalGeral, setCapTotalGeral] = useState(0)
   const [capLoading, setCapLoading] = useState(false)
 
-  useEffect(() => {
-    if (aba !== "capacidade") return
+  function carregarCapacidade() {
     setCapLoading(true)
     fetch(`/api/expedicao/capacidade?ano=${capAno}&mes=${capMes}`)
       .then((r) => r.json())
       .then((d) => {
-        setCapRows(d.rows ?? [])
+        setCapDias(d.dias ?? [])
+        setCapEquip(d.equipamentos ?? capEquip)
         setCapTurnos(d.turnos ?? ["A", "B", "C"])
-        setCapTotaisTurno(d.totaisTurno ?? {})
-        setCapTotalGeral(d.totalGeral ?? 0)
       })
       .catch(() => {})
       .finally(() => setCapLoading(false))
+  }
+  useEffect(() => {
+    if (aba !== "capacidade") return
+    carregarCapacidade()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, capAno, capMes])
 
-  async function salvarCapacidade(linha: string, turno: string, capacidade: number) {
-    setCapRows((prev) => {
-      const next = prev.map((r) => {
-        if (r.linha !== linha) return r
-        const turnos = { ...r.turnos, [turno]: capacidade }
-        const total = capTurnos.reduce((s, t) => s + (turnos[t] ?? 0), 0)
-        return { ...r, turnos, total }
-      })
-      setCapTotalGeral(next.reduce((s, r) => s + r.total, 0))
-      setCapTotaisTurno(Object.fromEntries(capTurnos.map((t) => [t, next.reduce((s, r) => s + (r.turnos[t] ?? 0), 0)])))
-      return next
-    })
-    await fetch("/api/expedicao/capacidade", {
+  const capCols = capEquip.flatMap((eq) => capTurnos.map((t) => `${eq}|${t}`))
+  const capTotalDia = (d: CapDia) => capCols.reduce((s, c) => s + (d.cels[c] ?? 0), 0)
+  const capTotalCol = (col: string) => capDias.reduce((s, d) => s + (d.cels[col] ?? 0), 0)
+  const capTotalTurno = (t: string) => capEquip.reduce((s, eq) => s + capTotalCol(`${eq}|${t}`), 0)
+  const capTotalLinha = (eq: string) => capTurnos.reduce((s, t) => s + capTotalCol(`${eq}|${t}`), 0)
+  const capTotalGeral = capDias.reduce((s, d) => s + capTotalDia(d), 0)
+  // semanas do mês (nº + total) — visão de demanda semanal
+  const capSemanas = (() => {
+    const out: { semana: number; dias: CapDia[]; total: number }[] = []
+    for (const d of capDias) {
+      const { semana: s } = semanaDeData(new Date(Date.UTC(capAno, capMes - 1, d.dia)))
+      let g = out.find((x) => x.semana === s)
+      if (!g) { g = { semana: s, dias: [], total: 0 }; out.push(g) }
+      g.dias.push(d); g.total += capTotalDia(d)
+    }
+    return out
+  })()
+
+  async function salvarCapDia(dia: number, linha: string, turno: string, capacidade: number) {
+    setCapDias((prev) => prev.map((d) => (d.dia === dia ? { ...d, cels: { ...d.cels, [`${linha}|${turno}`]: capacidade } } : d)))
+    const ok = await fetch("/api/expedicao/capacidade", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ano: capAno, mes: capMes, linha, turno, capacidade }),
+      body: JSON.stringify({ ano: capAno, mes: capMes, dia, linha, turno, capacidade }),
+    }).then((r) => r.ok).catch(() => false)
+    if (!ok) { alert("Falha ao salvar capacidade."); carregarCapacidade() }
+  }
+  async function preencherColuna(linha: string, turno: string, valor: number) {
+    if (valor < 0) return
+    setCapLoading(true)
+    await fetch("/api/expedicao/capacidade", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ano: capAno, mes: capMes, linha, turno, capacidade: valor }),
     }).catch(() => {})
+    carregarCapacidade()
   }
 
   // ── Aba Dia a Dia (Orçado x Faturado) — linhas VÊM DA MARCAÇÃO ──
@@ -897,7 +918,7 @@ export default function ExpedicaoClient({
         </div>
       )}
 
-      {/* Capacidade — equipamento × turno (A/B/C) */}
+      {/* Capacidade — grade DIÁRIA (dias × equipamento × turno) */}
       {aba === "capacidade" && (
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -909,59 +930,158 @@ export default function ExpedicaoClient({
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
               {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
             </select>
-            <span className="text-xs text-gray-500 ml-2">
-              Capacidade fixa por equipamento e turno — <span className="font-semibold text-blue-700">{capTotalGeral.toLocaleString("pt-BR")} t</span> total
+            <span className="text-xs text-gray-500">
+              Total do mês <span className="font-semibold text-blue-700">{capTotalGeral.toLocaleString("pt-BR")} t</span>
               {capLoading && <span className="text-gray-400 ml-2">carregando…</span>}
             </span>
+            <span className="text-[11px] text-gray-400 ml-auto hidden md:flex items-center gap-3">
+              <span><span className="inline-block w-3 h-3 rounded bg-amber-100 border border-amber-200 align-middle mr-1" />sábado</span>
+              <span><span className="inline-block w-3 h-3 rounded bg-red-100 border border-red-200 align-middle mr-1" />domingo</span>
+              <span><span className="inline-block w-3 h-3 rounded bg-yellow-100 border border-yellow-300 align-middle mr-1" />feriado</span>
+            </span>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden max-w-3xl">
+
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">Equipamento</th>
-                    {capTurnos.map((t) => (
-                      <th key={t} className="px-3 py-2 text-center font-medium text-gray-500">Turno {t}</th>
+              <table className="w-full text-xs" style={{ minWidth: 900 }}>
+                <thead>
+                  <tr className="bg-gray-800 text-white">
+                    <th rowSpan={2} className="px-2 py-2 text-left font-medium sticky left-0 bg-gray-800 z-10 min-w-20">Dia</th>
+                    {capEquip.map((eq) => (
+                      <th key={eq} colSpan={capTurnos.length} className="px-2 py-1.5 text-center font-medium border-l border-gray-700 whitespace-nowrap">{eq}</th>
                     ))}
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Total</th>
+                    <th rowSpan={2} className="px-2 py-2 text-right font-medium border-l border-gray-700 min-w-16">Total dia</th>
+                  </tr>
+                  <tr className="bg-gray-700 text-white">
+                    {capCols.map((col) => (
+                      <th key={col} className={`px-1 py-1 text-center font-normal opacity-80 ${col.endsWith("|" + capTurnos[0]) ? "border-l border-gray-600" : ""}`}>{col.split("|")[1]}</th>
+                    ))}
+                  </tr>
+                  {/* preencher coluna inteira (dias úteis) */}
+                  <tr className="bg-blue-50 border-b border-blue-100">
+                    <td className="px-2 py-1 text-[10px] font-semibold text-blue-700 sticky left-0 bg-blue-50 z-10" title="Digite e Enter para preencher a coluna nos dias úteis (seg–sáb, sem feriado)">Preencher ↵</td>
+                    {capCols.map((col) => {
+                      const [eq, t] = col.split("|")
+                      return (
+                        <td key={col} className={`px-0.5 py-1 ${t === capTurnos[0] ? "border-l border-blue-100" : ""}`}>
+                          <input type="number" min="0" placeholder="↓" title={`${eq} · turno ${t} — Enter preenche todos os dias úteis`}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter") return
+                              const el = e.target as HTMLInputElement
+                              preencherColuna(eq, t, Number(el.value) || 0)
+                              el.value = ""
+                            }}
+                            className="w-12 text-[11px] text-right border border-blue-200 rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                        </td>
+                      )
+                    })}
+                    <td className="bg-blue-50" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {capRows.map((r) => (
-                    <tr key={r.linha} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 font-medium text-gray-800">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${LINHA_COLORS[r.linha] ?? "bg-gray-100 text-gray-600"}`}>{r.linha}</span>
-                      </td>
-                      {capTurnos.map((t) => (
-                        <td key={t} className="px-2 py-1.5 text-center">
-                          <input key={`${capAno}-${capMes}-${r.linha}-${t}`} type="number" min="0" step="10"
-                            defaultValue={r.turnos[t] || ""} placeholder="0"
-                            onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (r.turnos[t] ?? 0)) salvarCapacidade(r.linha, t, v) }}
-                            className="w-24 text-sm border border-gray-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
-                        </td>
-                      ))}
-                      <td className="px-3 py-2 text-right font-semibold text-gray-700">{r.total.toLocaleString("pt-BR")}</td>
-                    </tr>
+                  {capSemanas.map((sem) => (
+                    <Fragment key={sem.semana}>
+                      {sem.dias.map((d) => {
+                        const bg = d.feriado ? "bg-yellow-50" : d.dow === 0 ? "bg-red-50" : d.dow === 6 ? "bg-amber-50" : "bg-white"
+                        const total = capTotalDia(d)
+                        return (
+                          <tr key={d.dia} className={bg === "bg-white" ? "hover:bg-gray-50" : bg}>
+                            <td className={`px-2 py-0.5 whitespace-nowrap sticky left-0 z-10 ${bg}`} title={d.feriado ?? undefined}>
+                              <span className={`font-semibold tabular-nums ${d.dow === 0 ? "text-red-600" : d.dow === 6 ? "text-amber-700" : "text-gray-700"}`}>{String(d.dia).padStart(2, "0")}</span>
+                              <span className={`ml-1 ${d.dow === 0 ? "text-red-400" : d.dow === 6 ? "text-amber-500" : "text-gray-400"}`}>{DOWS[d.dow]}</span>
+                              {d.feriado && <span className="ml-1" title={d.feriado}>🎌</span>}
+                            </td>
+                            {capCols.map((col) => {
+                              const [eq, t] = col.split("|")
+                              const v = d.cels[col] ?? 0
+                              return (
+                                <td key={col} className={`px-0.5 py-0.5 ${t === capTurnos[0] ? "border-l border-gray-100" : ""}`}>
+                                  <input key={`${capAno}-${capMes}-${d.dia}-${col}-${v}`} type="number" min="0" defaultValue={v || ""} placeholder="·"
+                                    onBlur={(e) => { const nv = Number(e.target.value) || 0; if (nv !== v) salvarCapDia(d.dia, eq, t, nv) }}
+                                    className="w-12 text-[11px] text-right border border-transparent hover:border-gray-200 focus:border-blue-300 rounded px-1 py-0.5 bg-transparent focus:bg-white focus:outline-none" />
+                                </td>
+                              )
+                            })}
+                            <td className="px-2 py-0.5 text-right font-semibold text-gray-700 tabular-nums border-l border-gray-100">{total ? total.toLocaleString("pt-BR") : ""}</td>
+                          </tr>
+                        )
+                      })}
+                      {/* subtotal da semana */}
+                      <tr className="bg-blue-50/90 border-y border-blue-100">
+                        <td className="px-2 py-1 text-[10px] font-bold text-blue-700 sticky left-0 bg-blue-50 z-10">Semana {sem.semana}</td>
+                        {capCols.map((col) => {
+                          const s = sem.dias.reduce((acc, d) => acc + (d.cels[col] ?? 0), 0)
+                          return <td key={col} className="px-1 py-1 text-right text-[10px] font-semibold text-blue-700 tabular-nums">{s ? s.toLocaleString("pt-BR") : ""}</td>
+                        })}
+                        <td className="px-2 py-1 text-right font-bold text-blue-800 tabular-nums">{sem.total ? sem.total.toLocaleString("pt-BR") : ""}</td>
+                      </tr>
+                    </Fragment>
                   ))}
-                  {capRows.length === 0 && !capLoading && (
-                    <tr><td colSpan={capTurnos.length + 2} className="py-10 text-center text-gray-400">Carregando equipamentos…</td></tr>
+                  {capDias.length === 0 && (
+                    <tr><td colSpan={capCols.length + 2} className="py-10 text-center text-gray-400">{capLoading ? "Carregando…" : "Sem dados."}</td></tr>
                   )}
                 </tbody>
-                {capRows.length > 0 && (
-                  <tfoot className="bg-gray-50 border-t">
+                {capDias.length > 0 && (
+                  <tfoot className="bg-gray-100 border-t-2 border-gray-300">
                     <tr>
-                      <td className="px-3 py-2 font-semibold text-gray-600">Total</td>
-                      {capTurnos.map((t) => (
-                        <td key={t} className="px-3 py-2 text-center font-semibold text-gray-700">{(capTotaisTurno[t] ?? 0).toLocaleString("pt-BR")}</td>
-                      ))}
-                      <td className="px-3 py-2 text-right font-bold text-blue-700">{capTotalGeral.toLocaleString("pt-BR")}</td>
+                      <td className="px-2 py-1.5 font-bold text-gray-700 sticky left-0 bg-gray-100 z-10">Total mês</td>
+                      {capCols.map((col) => {
+                        const s = capTotalCol(col)
+                        return <td key={col} className="px-1 py-1.5 text-right font-semibold text-gray-700 tabular-nums">{s ? s.toLocaleString("pt-BR") : ""}</td>
+                      })}
+                      <td className="px-2 py-1.5 text-right font-bold text-blue-700 tabular-nums">{capTotalGeral.toLocaleString("pt-BR")}</td>
                     </tr>
                   </tfoot>
                 )}
               </table>
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2 max-w-3xl">Valores em toneladas por turno. O total é a capacidade instalada do equipamento no mês.</p>
+
+          {/* resumos: por turno · por linha · por semana */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+              <p className="text-xs font-semibold text-gray-600 mb-2">Total por Turno</p>
+              {capTurnos.map((t) => {
+                const v = capTotalTurno(t)
+                return (
+                  <div key={t} className="flex items-center justify-between text-sm py-0.5">
+                    <span className="text-gray-600">Turno {t}</span>
+                    <span className="font-semibold text-gray-800 tabular-nums">{v.toLocaleString("pt-BR")} t
+                      <span className="text-[10px] text-gray-400 ml-1">({capTotalGeral > 0 ? Math.round((v / capTotalGeral) * 100) : 0}%)</span>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+              <p className="text-xs font-semibold text-gray-600 mb-2">Total por Linha</p>
+              {capEquip.map((eq) => (
+                <div key={eq} className="flex items-center justify-between text-sm py-0.5">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${LINHA_COLORS[eq] ?? "bg-gray-100 text-gray-600"}`}>{eq}</span>
+                  <span className="font-semibold text-gray-800 tabular-nums">{capTotalLinha(eq).toLocaleString("pt-BR")} t</span>
+                </div>
+              ))}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+              <p className="text-xs font-semibold text-gray-600 mb-2">Visão por Semana</p>
+              {capSemanas.map((sem) => {
+                const atual = getSemanaAtual()
+                const tag = capAno === atual.ano && sem.semana === atual.semana ? "atual" : capAno === atual.ano && sem.semana === atual.semana + 1 ? "próxima" : null
+                return (
+                  <div key={sem.semana} className={`flex items-center justify-between text-sm py-0.5 px-1 rounded ${tag ? "bg-blue-50" : ""}`}>
+                    <span className="text-gray-600">
+                      Semana {sem.semana}
+                      <span className="text-[10px] text-gray-400 ml-1">({String(sem.dias[0].dia).padStart(2, "0")}–{String(sem.dias[sem.dias.length - 1].dia).padStart(2, "0")})</span>
+                      {tag && <span className="ml-1.5 text-[10px] font-bold text-blue-600">◂ {tag}</span>}
+                    </span>
+                    <span className="font-semibold text-gray-800 tabular-nums">{sem.total.toLocaleString("pt-BR")} t</span>
+                  </div>
+                )
+              })}
+              {capSemanas.length === 0 && <p className="text-xs text-gray-400">—</p>}
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-2">Valores em toneladas por dia/turno. Use a linha <strong>Preencher ↵</strong> para lançar a capacidade fixa em todos os dias úteis de uma coluna (domingos e feriados ficam de fora; ajuste manualmente onde precisar).</p>
         </div>
       )}
 

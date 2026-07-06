@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
   const nDias = new Date(Date.UTC(ano, mesDiario, 0)).getUTCDate()
   const diario = Array.from({ length: nDias }, (_, i) => {
     const d = i + 1
-    const di = new Date(Date.UTC(ano, mesDiario - 1, d)), df = new Date(Date.UTC(ano, mesDiario - 1, d, 23, 59, 59))
+    const di = new Date(Date.UTC(ano, mesDiario - 1, d)), df = new Date(Date.UTC(ano, mesDiario - 1, d + 1) - 1)
     const realizado = somaCargas(cargas.filter((c) => c.dataCarregamento! >= di && c.dataCarregamento! <= df))
     const forecast = forecasts.filter((f) => f.data.getUTCMonth() + 1 === mesDiario && f.data.getUTCFullYear() === ano && f.data.getUTCDate() === d).reduce((s, f) => s + f.forecast, 0)
     return { dia: d, realizado: r1(realizado), forecast: r1(forecast) }
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
   for (const dd of diadias) {
     const dia = dd.chave.split("|")[0]
     const [y, mo, da] = dia.split("-").map(Number)
-    if (!y) continue
+    if (!y || !mo || !da) continue
     const d = new Date(Date.UTC(y, mo - 1, da, 12))
     if (!emPeriodo(d)) continue
     tA += dd.turnoA; tB += dd.turnoB; tC += dd.turnoC
@@ -120,9 +120,14 @@ export async function GET(req: NextRequest) {
   // aderência por cliente (realizado vs forecast do cliente no período)
   const fcCliente = new Map<string, number>()
   for (const f of forecasts) { if (!emPeriodo(f.data)) continue; const k = normCliente(f.clienteNome); if (k) fcCliente.set(k, (fcCliente.get(k) ?? 0) + f.forecast) }
+  // cada forecast conta p/ no máx. 1 cliente (maior volume primeiro) → não infla a aderência
+  const fcConsumidos = new Set<string>()
   const aderenciaCliente = porCliente.map((c) => {
     let fc = 0
-    for (const [k, v] of fcCliente) if (clienteMatch(k, c.nome)) fc += v
+    for (const [k, v] of fcCliente) {
+      if (fcConsumidos.has(k)) continue
+      if (clienteMatch(k, c.nome)) { fc += v; fcConsumidos.add(k) }
+    }
     return { nome: c.nome, realizado: c.valor, forecast: r1(fc), aderencia: fc > 0 ? Math.round((c.valor / fc) * 100) : null }
   })
 
