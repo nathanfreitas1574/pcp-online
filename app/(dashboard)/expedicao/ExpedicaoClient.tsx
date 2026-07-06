@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, Fragment } from "react"
-import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight } from "lucide-react"
+import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
 import { getSemanaAtual, semanasDoAno, semanaDeData } from "@/lib/programacao"
 import BiExpedicao from "./BiExpedicao"
 
@@ -351,6 +351,11 @@ export default function ExpedicaoClient({
     setRows((prev) => prev.map((c) => c.id === id ? { ...c, [campo]: valor || null } : c))
     await fetch(`/api/expedicao/contrato/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [campo]: valor }) })
   }
+  async function excluirContrato(id: string, numero: string) {
+    if (!confirm(`Excluir o contrato ${numero} do Controle de Expedição?`)) return
+    setRows((prev) => prev.filter((c) => c.id !== id))
+    await fetch(`/api/expedicao/contrato/${id}`, { method: "DELETE" }).catch(() => {})
+  }
   async function adicionarContrato() {
     if (!addNum.trim()) return
     setAdding(true); setAddMsg("")
@@ -516,8 +521,8 @@ export default function ExpedicaoClient({
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Status"].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>
+                    {["Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Status", ""].map((h, i) => (
+                      <th key={i} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -564,10 +569,14 @@ export default function ExpedicaoClient({
                           c.status === "CANCELADO" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
                         }`}>{c.status}</span>
                       </td>
+                      <td className="px-2 py-2 text-center">
+                        <button onClick={() => excluirContrato(c.id, c.numero)} title="Excluir contrato"
+                          className="text-gray-300 hover:text-red-600 transition"><Trash2 size={14} /></button>
+                      </td>
                     </tr>
                   ))}
                   {contratosFiltrados.length === 0 && (
-                    <tr><td colSpan={11} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
+                    <tr><td colSpan={12} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
                   )}
                 </tbody>
               </table>

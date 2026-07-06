@@ -17,6 +17,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const data: any = {}
   for (const d of DIAS) if (body[d] !== undefined) data[d] = Number(body[d]) || 0
   if (body.numeroContrato !== undefined) data.numeroContrato = body.numeroContrato || null
+  if (body.turno !== undefined) data.turno = body.turno || null
   if (body.produto !== undefined && body.produto) data.produto = body.produto
   if (body.boxId !== undefined) {
     data.boxId = body.boxId || null

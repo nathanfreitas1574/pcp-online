@@ -28,6 +28,7 @@ export default async function ProgramacaoPage({
     // Linha de Produção vem do Controle de Expedição (definida lá, refletida aqui)
     prisma.contratoExpedicao.findMany({ orderBy: { numero: "asc" }, select: { numero: true, linhaProducao: true } }),
   ])
+  const demandas = await prisma.demandaInterna.findMany({ where: { ano, semana }, orderBy: { createdAt: "asc" } })
 
   // mapa nº contrato (sem zeros à esquerda) → linha de produção
   const normNum = (s: string | null | undefined) => String(s ?? "").trim().replace(/^0+/, "") || "0"
@@ -85,6 +86,7 @@ export default async function ProgramacaoPage({
       dias={dias}
       realizadoPorDia={realizadoPorDia}
       linhaPorContrato={linhaPorContrato}
+      demandasIniciais={demandas}
     />
   )
 }
