@@ -16,7 +16,7 @@ const DDINP = "w-full text-xs border border-gray-200 rounded px-1.5 py-1 focus:o
 type Contrato = {
   id: string; numero: string; operacao: string | null; produtoAbreviado: string | null
   tipoProduto: string | null; linhaProducao: string | null; mes: string | null; semana: number | null
-  volProgramado: number; realizado: number; saldo: number; status: string
+  volProgramado: number; realizado: number; saldo: number; status: string; pct?: number | null
   cliente: { nome: string }
 }
 
@@ -61,10 +61,31 @@ export default function ExpedicaoClient({
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState("")
   const [rows, setRows] = useState<Contrato[]>(contratos)
-  const [mesF, setMesF] = useState("")
   const [addNum, setAddNum] = useState("")
   const [adding, setAdding] = useState(false)
   const [addMsg, setAddMsg] = useState("")
+
+  // Aba Contratos — Vol.Prog (Programação Semanal), Realizado (Marcação), Saldo e % por período
+  const [ctrAno, setCtrAno] = useState(() => new Date().getFullYear())
+  const [ctrMes, setCtrMes] = useState(0)       // 0 = todos os meses
+  const [ctrSemana, setCtrSemana] = useState(0) // 0 = todas as semanas
+  const [ctrSemanas, setCtrSemanas] = useState(53)
+  const [ctrClienteF, setCtrClienteF] = useState("")
+  const [ctrProdutoF, setCtrProdutoF] = useState("")
+  const [ctrTotProg, setCtrTotProg] = useState(0)
+  const [ctrTotReal, setCtrTotReal] = useState(0)
+  const [ctrLoading, setCtrLoading] = useState(false)
+
+  useEffect(() => {
+    if (aba !== "contratos") return
+    setCtrLoading(true)
+    const qs = new URLSearchParams({ ano: String(ctrAno), mes: String(ctrMes), semana: String(ctrSemana) })
+    fetch(`/api/expedicao/contratos?${qs}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.rows) setRows(d.rows); setCtrTotProg(d.totalProgramado ?? 0); setCtrTotReal(d.totalRealizado ?? 0); setCtrSemanas(d.semanas ?? 53) })
+      .catch(() => {})
+      .finally(() => setCtrLoading(false))
+  }, [aba, ctrAno, ctrMes, ctrSemana])
 
   // Aba "Realizado" — dados vêm da Marcação de Veículos (CHECKOUT · CARGA)
   const [realMes, setRealMes] = useState(() => {
@@ -298,9 +319,11 @@ export default function ExpedicaoClient({
   const ddTotForecast = ddFiltradas.reduce((s, r) => s + r.forecast, 0)
   const ddTotRealizado = ddFiltradas.reduce((s, r) => s + r.realizado, 0)
 
-  const gap = totalRealizado - totalForecast
-  const performance = totalCapacidade > 0 ? (totalRealizado / totalCapacidade) * 100 : 0
-  const mesesContrato = [...new Set(rows.map((c) => c.mes).filter(Boolean) as string[])].sort()
+  const gap = ctrTotReal - ctrTotProg
+  const ctrAderencia = ctrTotProg > 0 ? (ctrTotReal / ctrTotProg) * 100 : 0
+  const performance = totalCapacidade > 0 ? (ctrTotReal / totalCapacidade) * 100 : 0
+  const ctrClientes = [...new Set(rows.map((c) => c.cliente.nome))].sort()
+  const ctrProdutos = [...new Set(rows.map((c) => c.produtoAbreviado).filter(Boolean) as string[])].sort()
 
   async function salvarContratoCampo(id: string, campo: "tipoProduto" | "operacao" | "linhaProducao", valor: string) {
     setRows((prev) => prev.map((c) => c.id === id ? { ...c, [campo]: valor || null } : c))
@@ -318,7 +341,8 @@ export default function ExpedicaoClient({
 
   const contratosFiltrados = rows
     .filter((c) => filtroStatus === "TODOS" || c.status === filtroStatus)
-    .filter((c) => !mesF || c.mes === mesF)
+    .filter((c) => !ctrClienteF || c.cliente.nome === ctrClienteF)
+    .filter((c) => !ctrProdutoF || (c.produtoAbreviado ?? "") === ctrProdutoF)
     .filter((c) => {
       const q = busca.toLowerCase()
       return (
@@ -361,10 +385,10 @@ export default function ExpedicaoClient({
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         {[
-          { label: "Forecast", value: totalForecast.toLocaleString("pt-BR"), icon: Target, sub: "ton" },
-          { label: "Realizado", value: totalRealizado.toLocaleString("pt-BR"), icon: Package, sub: "ton" },
-          { label: "Gap", value: (gap >= 0 ? "+" : "") + gap.toLocaleString("pt-BR"), icon: BarChart2, sub: "ton" },
-          { label: "Aderência", value: `${aderencia.toFixed(1)}%`, icon: TrendingUp, sub: "forecast" },
+          { label: "Programado", value: ctrTotProg.toLocaleString("pt-BR"), icon: Target, sub: "ton (Prog. Semanal)" },
+          { label: "Realizado", value: ctrTotReal.toLocaleString("pt-BR"), icon: Package, sub: "ton (Marcação)" },
+          { label: "Saldo", value: (gap >= 0 ? "+" : "") + gap.toLocaleString("pt-BR"), icon: BarChart2, sub: "realiz − prog" },
+          { label: "Aderência", value: `${ctrAderencia.toFixed(1)}%`, icon: TrendingUp, sub: "realiz/prog" },
           { label: "Performance", value: `${performance.toFixed(1)}%`, icon: TrendingUp, sub: "capacidade" },
         ].map(({ label, value, icon: Icon, sub }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
@@ -414,19 +438,43 @@ export default function ExpedicaoClient({
             {addMsg && <span className={`text-xs font-medium ml-1 ${addMsg.startsWith("✓") ? "text-green-600" : "text-red-600"}`}>{addMsg} <button onClick={() => setAddMsg("")}><X size={11} className="inline" /></button></span>}
           </div>
           <div className="flex flex-wrap items-center gap-2 mb-3">
+            {/* período: ano · mês · semana (Vol.Prog e Realizado são calculados nele) */}
+            <select value={ctrAno} onChange={(e) => setCtrAno(Number(e.target.value))}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select value={ctrMes} onChange={(e) => { setCtrMes(Number(e.target.value)); if (Number(e.target.value)) setCtrSemana(0) }}
+              className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${ctrMes ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+              <option value={0}>Mês: todos</option>
+              {MESES.map((n, i) => <option key={i} value={i + 1}>{n}</option>)}
+            </select>
+            <select value={ctrSemana} onChange={(e) => { setCtrSemana(Number(e.target.value)); if (Number(e.target.value)) setCtrMes(0) }}
+              className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${ctrSemana ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+              <option value={0}>Semana: todas</option>
+              {Array.from({ length: ctrSemanas }, (_, i) => i + 1).map((s) => <option key={s} value={s}>Sem {s}</option>)}
+            </select>
+            {ctrLoading && <span className="text-[11px] text-gray-400">calculando…</span>}
+            <span className="text-gray-300 mx-1">|</span>
             {["TODOS", "PROGRAMADO", "FINALIZADO", "CANCELADO"].map((s) => (
               <button key={s} onClick={() => setFiltroStatus(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
                   filtroStatus === s ? "bg-blue-700 text-white" : "bg-white border border-gray-200 text-gray-600"
                 }`}>
                 {s}
               </button>
             ))}
-            {mesesContrato.length > 0 && (
-              <select value={mesF} onChange={(e) => setMesF(e.target.value)}
-                className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${mesF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
-                <option value="">Todos os meses</option>
-                {mesesContrato.map((m) => <option key={m} value={m}>{m}</option>)}
+            {ctrClientes.length > 0 && (
+              <select value={ctrClienteF} onChange={(e) => setCtrClienteF(e.target.value)}
+                className={`text-xs rounded-lg px-2 py-1.5 border max-w-40 focus:outline-none focus:ring-2 focus:ring-blue-200 ${ctrClienteF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+                <option value="">Cliente: todos</option>
+                {ctrClientes.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+            {ctrProdutos.length > 0 && (
+              <select value={ctrProdutoF} onChange={(e) => setCtrProdutoF(e.target.value)}
+                className={`text-xs rounded-lg px-2 py-1.5 border max-w-40 focus:outline-none focus:ring-2 focus:ring-blue-200 ${ctrProdutoF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+                <option value="">Produto: todos</option>
+                {ctrProdutos.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
             <div className="relative ml-auto">
@@ -445,7 +493,7 @@ export default function ExpedicaoClient({
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "Status"].map((h) => (
+                    {["Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Status"].map((h) => (
                       <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>
                     ))}
                   </tr>
@@ -479,8 +527,13 @@ export default function ExpedicaoClient({
                       </td>
                       <td className="px-3 py-2 text-right font-medium">{c.volProgramado.toLocaleString("pt-BR")}</td>
                       <td className="px-3 py-2 text-right text-green-700 font-medium">{c.realizado.toLocaleString("pt-BR")}</td>
-                      <td className={`px-3 py-2 text-right font-medium ${c.saldo < 0 ? "text-red-600" : "text-gray-700"}`}>
+                      <td className={`px-3 py-2 text-right font-medium ${c.saldo < 0 ? "text-amber-600" : "text-gray-700"}`}>
                         {c.saldo.toLocaleString("pt-BR")}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {c.pct == null ? <span className="text-gray-300">—</span> : (
+                          <span className={`font-semibold ${c.pct >= 100 ? "text-green-600" : c.pct >= 70 ? "text-amber-600" : "text-red-500"}`}>{c.pct.toFixed(0)}%</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -491,7 +544,7 @@ export default function ExpedicaoClient({
                     </tr>
                   ))}
                   {contratosFiltrados.length === 0 && (
-                    <tr><td colSpan={10} className="py-10 text-center text-gray-400">Nenhum contrato. Importe o Excel.</td></tr>
+                    <tr><td colSpan={11} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
                   )}
                 </tbody>
               </table>
