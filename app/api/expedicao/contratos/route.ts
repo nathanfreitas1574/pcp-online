@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
-import { clienteMatch, produtoMatch } from "@/lib/texto"
+import { clienteMatch, produtoMatch, normCliente } from "@/lib/texto"
 import { ehCheckout, ehCarga, diasDaSemana, semanasDoAno, DIA } from "@/lib/programacao"
 
 const DIAS_KEYS = ["seg", "ter", "qua", "qui", "sex", "sab"] as const // seg..sab (dom fora)
@@ -41,10 +41,20 @@ export async function GET(req: NextRequest) {
       select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true },
     }),
     // tipo de contrato (definido na importação dos Contratos TOTVS)
-    prisma.contratoArmazenagem.findMany({ where: { tipoContrato: { not: null } }, select: { numero: true, tipoContrato: true } }),
+    prisma.contratoArmazenagem.findMany({ where: { tipoContrato: { not: null } }, select: { numero: true, clienteNome: true, tipoContrato: true } }),
   ])
+  // casa por número + cliente (desambigua o mesmo nº em filiais/tipos diferentes); fallback só nº
+  const tipoPorChave = new Map<string, string>()
   const tipoPorNum = new Map<string, string>()
-  for (const t of totvs) if (t.tipoContrato && !tipoPorNum.has(normNum(t.numero))) tipoPorNum.set(normNum(t.numero), t.tipoContrato)
+  for (const t of totvs) {
+    if (!t.tipoContrato) continue
+    const kNum = normNum(t.numero)
+    const kFull = `${kNum}|${normCliente(t.clienteNome)}`
+    if (!tipoPorChave.has(kFull)) tipoPorChave.set(kFull, t.tipoContrato)
+    if (!tipoPorNum.has(kNum)) tipoPorNum.set(kNum, t.tipoContrato)
+  }
+  const tipoDoContrato = (numero: string, cliente: string) =>
+    tipoPorChave.get(`${normNum(numero)}|${normCliente(cliente)}`) ?? tipoPorNum.get(normNum(numero)) ?? null
 
   // Vol. Programado por contrato = soma dos dias da Programação Semanal (EXPEDIÇÃO) que caem no período
   const progPorNum = new Map<string, number>()
@@ -76,7 +86,7 @@ export async function GET(req: NextRequest) {
     return {
       id: c.id, numero: c.numero, cliente: { nome: c.cliente.nome }, produtoAbreviado: c.produtoAbreviado,
       tipoProduto: c.tipoProduto, operacao: c.operacao, linhaProducao: c.linhaProducao, mes: c.mes, semana: c.semana,
-      tipoContrato: tipoPorNum.get(normNum(c.numero)) ?? null,
+      tipoContrato: tipoDoContrato(c.numero, c.cliente.nome),
       volProgramado: programado, realizado, saldo, pct, status: c.status,
     }
   })
