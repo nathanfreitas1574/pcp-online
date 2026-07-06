@@ -504,6 +504,24 @@ model ExpedicaoObs {
   updatedAt      DateTime @updatedAt
 }
 
+// Dia a Dia (Orçado x Faturado) — linha por dia/cliente/produto; realizado total vem da Marcação
+model ExpedicaoDiaDia {
+  id            String   @id @default(cuid())
+  data          DateTime
+  clienteNome   String?
+  produto       String?
+  tipoOperacao  String?                 // ENVASE | GRANEL | COMPACTADOR | PRODUTO ACABADO
+  operacao      String?                 // SIMPLES | MISTURA | GRANEL | COMPACTADOR
+  linhaProducao String?                 // NAVE | EMBEGADO | GRANEL | COMPACTADOR | BAG MÓVEL
+  forecast      Float    @default(0)
+  turnoA        Float    @default(0)
+  turnoB        Float    @default(0)
+  turnoC        Float    @default(0)
+  obs           String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 // Forecast de volume por cliente/tipo, lançado por DATA (o que o cliente diz que vai fazer)
 // tipo: ENVASE | GRANEL | ... — usado p/ puxar o realizado pelo tipo de operação
 model ExpedicaoForecast {

@@ -1,12 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight } from "lucide-react"
+import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
 import { getSemanaAtual, semanasDoAno } from "@/lib/programacao"
 
 const TIPOS_OPERACAO = ["BIG BAG", "GRANEL", "PRODUTO ACABADO"]
 const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+const TIPO_OP_DIA = ["ENVASE", "GRANEL", "COMPACTADOR", "PRODUTO ACABADO"]
+const OPERACAO_DIA = ["SIMPLES", "MISTURA", "GRANEL", "COMPACTADOR"]
+const LINHA_PROD_DIA = ["NAVE", "EMBEGADO", "GRANEL", "COMPACTADOR", "BAG MÓVEL"]
+const DDINP = "w-full text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white text-gray-800 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
 
 type Contrato = {
   id: string; numero: string; operacao: string | null; produtoAbreviado: string | null
@@ -50,7 +54,7 @@ export default function ExpedicaoClient({
   totalCapacidade: number
   aderencia: number
 }) {
-  const [aba, setAba] = useState<"contratos" | "registros" | "orcado" | "forecast" | "capacidade" | "importar">("contratos")
+  const [aba, setAba] = useState<"contratos" | "registros" | "diadia" | "orcado" | "forecast" | "capacidade" | "importar">("contratos")
   const [filtroStatus, setFiltroStatus] = useState("TODOS")
   const [busca, setBusca] = useState("")
   const [uploading, setUploading] = useState(false)
@@ -253,6 +257,57 @@ export default function ExpedicaoClient({
     }).catch(() => {})
   }
 
+  // ── Aba Dia a Dia (Orçado x Faturado) — realizado total vem da Marcação ──
+  type DiaRow = {
+    id: string; data: string; clienteNome: string | null; produto: string | null
+    tipoOperacao: string | null; operacao: string | null; linhaProducao: string | null
+    forecast: number; turnoA: number; turnoB: number; turnoC: number; obs: string | null; realizadoMarcacao: number
+  }
+  const [ddMes, setDdMes] = useState(() => { const h = new Date(); return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}` })
+  const [ddRows, setDdRows] = useState<DiaRow[]>([])
+  const [ddClientes, setDdClientes] = useState<string[]>([])
+  const [ddProdutos, setDdProdutos] = useState<string[]>([])
+  const [ddLoading, setDdLoading] = useState(false)
+  const [ddAdding, setDdAdding] = useState(false)
+
+  function carregarDiaDia() {
+    setDdLoading(true)
+    fetch(`/api/expedicao/diadia?mes=${ddMes}`)
+      .then((r) => r.json())
+      .then((d) => { setDdRows(d.rows ?? []); setDdClientes(d.clientes ?? []); setDdProdutos(d.produtos ?? []) })
+      .catch(() => {})
+      .finally(() => setDdLoading(false))
+  }
+  useEffect(() => {
+    if (aba !== "diadia") return
+    carregarDiaDia()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, ddMes])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function salvarDiaCampo(id: string, campo: keyof DiaRow, valor: any) {
+    setDdRows((prev) => prev.map((r) => (r.id === id ? { ...r, [campo]: valor } : r)))
+    await fetch(`/api/expedicao/diadia/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [campo]: valor }),
+    }).catch(() => {})
+    // cliente/produto/data mudam o casamento do realizado automático → recarrega
+    if (campo === "clienteNome" || campo === "produto" || campo === "data") carregarDiaDia()
+  }
+  async function adicionarDia() {
+    setDdAdding(true)
+    const primeiroDia = `${ddMes}-01`
+    const res = await fetch("/api/expedicao/diadia", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: primeiroDia }) })
+    const nova = await res.json().catch(() => null)
+    if (nova?.id) setDdRows((prev) => [...prev, nova])
+    setDdAdding(false)
+  }
+  async function excluirDia(id: string) {
+    if (!confirm("Excluir esta linha do Dia a Dia?")) return
+    setDdRows((prev) => prev.filter((r) => r.id !== id))
+    await fetch(`/api/expedicao/diadia/${id}`, { method: "DELETE" }).catch(() => {})
+  }
+  const ddFiltradas = ddRows.filter((r) => !busca || `${r.clienteNome ?? ""} ${r.produto ?? ""} ${r.linhaProducao ?? ""} ${r.obs ?? ""} ${r.data}`.toLowerCase().includes(busca.toLowerCase()))
+
   const gap = totalRealizado - totalForecast
   const performance = totalCapacidade > 0 ? (totalRealizado / totalCapacidade) * 100 : 0
   const mesesContrato = [...new Set(rows.map((c) => c.mes).filter(Boolean) as string[])].sort()
@@ -338,6 +393,7 @@ export default function ExpedicaoClient({
         {[
           { id: "contratos", label: "Contratos" },
           { id: "registros", label: "Realizado" },
+          { id: "diadia", label: "Dia a Dia" },
           { id: "orcado", label: "Orçado" },
           { id: "forecast", label: "Forecast" },
           { id: "capacidade", label: "Capacidade" },
@@ -519,6 +575,93 @@ export default function ExpedicaoClient({
             </table>
           </div>
           </div>
+        </div>
+      )}
+
+      {/* Dia a Dia (Orçado x Faturado) — realizado total automático da Marcação */}
+      {aba === "diadia" && (
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <input type="month" value={ddMes} onChange={(e) => setDdMes(e.target.value)}
+              className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600" />
+            <span className="text-xs text-gray-500">{ddLoading ? "carregando…" : `${ddFiltradas.length} linha(s)`}</span>
+            <span className="text-xs text-gray-400 hidden md:inline">Realizado (auto) = total do dia na <strong>Marcação</strong> (cliente + produto)</span>
+            <div className="relative ml-auto">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente, produto, linha…"
+                className="pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 w-56 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600" />
+            </div>
+            <button onClick={adicionarDia} disabled={ddAdding}
+              className="flex items-center gap-1.5 bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-60">
+              <Plus size={14} /> {ddAdding ? "…" : "Adicionar linha"}
+            </button>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-green-800 text-white">
+                  <tr>
+                    <th className="px-2 py-2.5 text-center font-medium w-12">#</th>
+                    <th className="px-2 py-2.5 text-left font-medium min-w-32">Data</th>
+                    <th className="px-2 py-2.5 text-left font-medium min-w-28">Cliente</th>
+                    <th className="px-2 py-2.5 text-left font-medium min-w-28">Produto</th>
+                    <th className="px-2 py-2.5 text-left font-medium min-w-28">Tipo Operação</th>
+                    <th className="px-2 py-2.5 text-left font-medium min-w-24">Operação</th>
+                    <th className="px-2 py-2.5 text-left font-medium min-w-28">Linha Produção</th>
+                    <th className="px-2 py-2.5 text-center font-medium min-w-20">Forecast</th>
+                    <th className="px-2 py-2.5 text-center font-medium min-w-24 bg-green-900">Realizado</th>
+                    <th className="px-2 py-2.5 text-center font-medium min-w-16">T. A</th>
+                    <th className="px-2 py-2.5 text-center font-medium min-w-16">T. B</th>
+                    <th className="px-2 py-2.5 text-center font-medium min-w-16">T. C</th>
+                    <th className="px-2 py-2.5 text-left font-medium min-w-28">OBS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {ddFiltradas.map((r, idx) => (
+                    <tr key={r.id} className="hover:bg-green-50/40">
+                      <td className="px-1 py-1.5">
+                        <div className="flex items-center justify-center gap-1 text-gray-400">
+                          <span className="text-xs text-gray-500 tabular-nums">{idx + 1}</span>
+                          <button onClick={() => excluirDia(r.id)} title="Excluir linha" className="text-gray-300 hover:text-red-600"><Trash2 size={12} /></button>
+                        </div>
+                      </td>
+                      <td className="px-1 py-1"><input type="date" defaultValue={r.data} onBlur={(e) => { if (e.target.value && e.target.value !== r.data) salvarDiaCampo(r.id, "data", e.target.value) }} className={DDINP} /></td>
+                      <td className="px-1 py-1"><input list="dd-clientes" defaultValue={r.clienteNome ?? ""} placeholder="Cliente" onBlur={(e) => { if (e.target.value !== (r.clienteNome ?? "")) salvarDiaCampo(r.id, "clienteNome", e.target.value) }} className={DDINP} /></td>
+                      <td className="px-1 py-1"><input list="dd-produtos" defaultValue={r.produto ?? ""} placeholder="Produto" onBlur={(e) => { if (e.target.value !== (r.produto ?? "")) salvarDiaCampo(r.id, "produto", e.target.value) }} className={DDINP} /></td>
+                      <td className="px-1 py-1">
+                        <select defaultValue={r.tipoOperacao ?? ""} onChange={(e) => salvarDiaCampo(r.id, "tipoOperacao", e.target.value)} className={DDINP}>
+                          <option value="">—</option>{TIPO_OP_DIA.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-1 py-1">
+                        <select defaultValue={r.operacao ?? ""} onChange={(e) => salvarDiaCampo(r.id, "operacao", e.target.value)} className={DDINP}>
+                          <option value="">—</option>{OPERACAO_DIA.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-1 py-1">
+                        <select defaultValue={r.linhaProducao ?? ""} onChange={(e) => salvarDiaCampo(r.id, "linhaProducao", e.target.value)} className={DDINP}>
+                          <option value="">—</option>{LINHA_PROD_DIA.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-1 py-1"><input type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.forecast) salvarDiaCampo(r.id, "forecast", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-2 py-1 text-right font-semibold text-green-700 tabular-nums bg-green-50/50">{r.realizadoMarcacao ? r.realizadoMarcacao.toLocaleString("pt-BR") : "—"}</td>
+                      <td className="px-1 py-1"><input type="number" min="0" step="10" defaultValue={r.turnoA || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.turnoA) salvarDiaCampo(r.id, "turnoA", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-1 py-1"><input type="number" min="0" step="10" defaultValue={r.turnoB || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.turnoB) salvarDiaCampo(r.id, "turnoB", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-1 py-1"><input type="number" min="0" step="10" defaultValue={r.turnoC || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.turnoC) salvarDiaCampo(r.id, "turnoC", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-1 py-1"><input defaultValue={r.obs ?? ""} placeholder="obs" onBlur={(e) => { if (e.target.value !== (r.obs ?? "")) salvarDiaCampo(r.id, "obs", e.target.value) }} className={DDINP} /></td>
+                    </tr>
+                  ))}
+                  {!ddLoading && ddFiltradas.length === 0 && (
+                    <tr><td colSpan={13} className="py-10 text-center text-gray-400">{busca ? "Nenhuma linha para esse filtro." : "Nenhuma linha neste mês. Clique em “Adicionar linha”."}</td></tr>
+                  )}
+                  {ddLoading && <tr><td colSpan={13} className="py-10 text-center text-gray-400">Carregando…</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <datalist id="dd-clientes">{ddClientes.map((c) => <option key={c} value={c} />)}</datalist>
+          <datalist id="dd-produtos">{ddProdutos.map((p) => <option key={p} value={p} />)}</datalist>
+          <p className="text-[11px] text-gray-400 mt-2">Turno A/B/C são digitados (a Marcação não separa turno). A coluna <span className="text-green-700 font-semibold">Realizado</span> é o total do dia puxado da Marcação (CHECKOUT · CARGA) casando cliente + produto.</p>
         </div>
       )}
 
