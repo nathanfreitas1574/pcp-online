@@ -30,8 +30,12 @@ type Contrato = {
   stsEstoque: string
   modalidade: string | null
   centroCusto: string | null
+  tipoContrato: string | null
   ativo: boolean
 }
+
+const TIPO_CONTRATO_LABEL: Record<string, string> = { COMPRA: "Compra", VENDA: "Venda", ARMAZEM_IND: "Armazém/Ind." }
+const TIPO_CONTRATO_COR: Record<string, string> = { COMPRA: "bg-blue-100 text-blue-700", VENDA: "bg-green-100 text-green-700", ARMAZEM_IND: "bg-purple-100 text-purple-700" }
 
 type TotalTabela = { descTabela: string; count: number; totalQtd: number }
 
@@ -393,11 +397,19 @@ export default function ContratosClient({
                           <span title={c.desProduto} className="block truncate">{c.desProduto}</span>
                         </td>
                         <td className="px-3 py-2.5">
-                          {c.descTabela && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${TABELA_COR[c.descTabela] ?? "bg-gray-100 text-gray-600"}`}>
-                              {c.descTabela}
-                            </span>
-                          )}
+                          <div className="flex flex-col gap-1 items-start">
+                            {c.descTabela && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${TABELA_COR[c.descTabela] ?? "bg-gray-100 text-gray-600"}`}>
+                                {c.descTabela}
+                              </span>
+                            )}
+                            {c.tipoContrato && (
+                              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${TIPO_CONTRATO_COR[c.tipoContrato] ?? "bg-gray-100 text-gray-600"}`}
+                                title="Tipo de contrato (definido na importação)">
+                                {TIPO_CONTRATO_LABEL[c.tipoContrato] ?? c.tipoContrato}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 text-right font-semibold text-gray-800">
                           {c.qtdContratada > 0 ? c.qtdContratada.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "—"}
