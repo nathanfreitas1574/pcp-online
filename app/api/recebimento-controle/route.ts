@@ -14,13 +14,20 @@ export async function GET(req: NextRequest) {
   const atual = getSemanaAtual()
   const hoje = new Date()
   const ano = Number(searchParams.get("ano")) || atual.ano
-  const mes = Number(searchParams.get("mes")) || (hoje.getUTCMonth() + 1)
+  const mesesParam = searchParams.get("meses")
+  let meses = (mesesParam ? mesesParam.split(",").map(Number) : [Number(searchParams.get("mes")) || (hoje.getUTCMonth() + 1)])
+    .filter(m => Number.isInteger(m) && m >= 1 && m <= 12)
+  if (!meses.length) meses = [hoje.getUTCMonth() + 1]
+  meses = [...new Set(meses)]
+  const mesesSet = new Set(meses)
   const unidade = searchParams.get("unidade") || undefined
   const tipoProduto = searchParams.get("tipoProduto") || undefined
   const cliente = searchParams.get("cliente") || undefined
 
+  // filtra pela DATA real do registro (só o(s) mês(es) selecionado(s)); sem data → cai pelo mês de referência
+  const rangesMes = meses.map(m => ({ data: { gte: new Date(Date.UTC(ano, m - 1, 1)), lte: new Date(Date.UTC(ano, m, 1) - 1) } }))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { ano, mes }
+  const where: any = { ano, OR: [...rangesMes, { data: null, mes: { in: meses } }] }
   if (unidade) where.unidade = unidade
   if (tipoProduto) where.tipoProduto = tipoProduto
   if (cliente) where.cliente = cliente
@@ -30,20 +37,23 @@ export async function GET(req: NextRequest) {
     prisma.recebimentoControle.findMany({ select: { ano: true, mes: true, unidade: true, tipoProduto: true, cliente: true } }),
   ])
 
-  // marcações finalizadas (CHECKOUT) de DESCARGA no mês
-  const ini = new Date(Date.UTC(ano, mes - 1, 1))
-  const fim = new Date(Date.UTC(ano, mes, 1) - 1)
+  // marcações finalizadas (CHECKOUT) de DESCARGA nos meses selecionados
+  const ini = new Date(Date.UTC(ano, Math.min(...meses) - 1, 1))
+  const fim = new Date(Date.UTC(ano, Math.max(...meses), 1) - 1)
   const marcRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
     select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
   })
-  const descargas = marcRaw.filter(m => ehCheckout(m.status) && ehCarga(m.operacao) === false && m.dataCarregamento)
+  const descargas = marcRaw.filter(m => ehCheckout(m.status) && ehCarga(m.operacao) === false && m.dataCarregamento
+    && mesesSet.has(new Date(m.dataCarregamento).getUTCMonth() + 1))
 
   // calcula realizado por registro + realizado por dia (painel)
   const realizadoDiaMap = new Map<string, number>()
   const itens = registros.map(r => {
+    const rm = r.data ? new Date(r.data).getUTCMonth() + 1 : r.mes // mês do registro (data real ou referência)
     let realizado = 0
     for (const m of descargas) {
+      if (new Date(m.dataCarregamento!).getUTCMonth() + 1 !== rm) continue // realizado só do mês do registro
       if (!clienteMatch(m.clienteDestino || m.cliente, r.cliente)) continue
       if (!produtoMatch(m.produto, r.produtoAbreviado)) continue
       const peso = m.pesoLiquido || 0
@@ -81,7 +91,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    ano, mes,
+    ano, meses,
     itens,
     painel: { cotas: soma(itens), porCliente: agrupar("cliente"), porProduto: agrupar("produtoAbreviado"), porTipo: agrupar("tipoProduto"), realizadoDia },
     opcoes,

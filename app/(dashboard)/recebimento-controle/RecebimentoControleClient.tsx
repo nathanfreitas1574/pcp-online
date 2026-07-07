@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
-  Download, Plus, Pencil, Trash2, X, Save, Table2, BarChart3, Upload, Ship, Target, CheckCircle2, TrendingDown,
+  Download, Plus, Pencil, Trash2, X, Save, Table2, BarChart3, Upload, Ship, Target, CheckCircle2, TrendingDown, ChevronDown,
 } from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
@@ -22,7 +22,7 @@ type Item = {
 }
 type Grupo = { nome: string; confirmado: number; realizado: number; saldo: number }
 type Dados = {
-  ano: number; mes: number; itens: Item[]
+  ano: number; meses: number[]; itens: Item[]
   painel: { cotas: { confirmado: number; realizado: number; saldo: number }; porCliente: Grupo[]; porProduto: Grupo[]; porTipo: Grupo[]; realizadoDia: { dia: string; valor: number }[] }
   opcoes: { anos: number[]; unidades: string[]; tiposProduto: string[]; clientes: string[] }
 }
@@ -31,7 +31,8 @@ type CadOpt = { nome?: string; descricao?: string; abreviado: string | null }
 
 export default function RecebimentoControleClient({ anoAtual, mesAtual, clientesCad, produtosCad }: { anoAtual: number; mesAtual: number; clientesCad: CadOpt[]; produtosCad: CadOpt[] }) {
   const [ano, setAno] = useState(anoAtual)
-  const [mes, setMes] = useState(mesAtual)
+  const [meses, setMeses] = useState<number[]>([mesAtual])   // filtro de mês(es)
+  const [showMeses, setShowMeses] = useState(false)
   const [unidade, setUnidade] = useState("")
   const [tipoProduto, setTipoProduto] = useState("")
   const [cliente, setCliente] = useState("")
@@ -46,17 +47,25 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
   const [aviso, setAviso] = useState("")
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const mesesKey = meses.join(",")
   const carregar = useCallback(async () => {
     setLoading(true)
-    const qs = new URLSearchParams({ ano: String(ano), mes: String(mes) })
+    const qs = new URLSearchParams({ ano: String(ano), meses: mesesKey })
     if (unidade) qs.set("unidade", unidade)
     if (tipoProduto) qs.set("tipoProduto", tipoProduto)
     if (cliente) qs.set("cliente", cliente)
     const r = await fetch("/api/recebimento-controle?" + qs.toString())
     setD(await r.json())
     setLoading(false)
-  }, [ano, mes, unidade, tipoProduto, cliente])
+  }, [ano, mesesKey, unidade, tipoProduto, cliente])
   useEffect(() => { carregar() }, [carregar])
+
+  function toggleMes(m: number) {
+    setMeses(prev => prev.includes(m) ? (prev.length > 1 ? prev.filter(x => x !== m) : prev) : [...prev, m].sort((a, b) => a - b))
+  }
+  const mesesLabel = meses.length === 12 ? "Todos os meses"
+    : meses.length === 1 ? MESES[meses[0] - 1]
+    : meses.map(m => MESES[m - 1].slice(0, 3)).join(", ")
 
   function abrirNovo() { setForm({ ...VAZIO }); setEditId(null) }
   // Busca contrato e auto-preenche cliente + produto (igual à Programação)
@@ -84,7 +93,9 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
     if (!form.cliente.trim() || !form.produtoAbreviado.trim()) { setAviso("Informe cliente e produto."); return }
     setSalvando(true)
     const url = editId ? `/api/recebimento-controle/${editId}` : "/api/recebimento-controle"
-    const body = editId ? form : { ...form, ano, mes }
+    // novo registro: mês vem da data informada, ou do 1º mês selecionado
+    const mesNovo = form.data ? Number(form.data.slice(5, 7)) : (meses[0] ?? mesAtual)
+    const body = editId ? form : { ...form, ano, mes: mesNovo }
     const r = await fetch(url, { method: editId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
     setSalvando(false)
     if (r.ok) { setForm(null); await carregar() } else setAviso("Erro ao salvar.")
@@ -139,9 +150,32 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
         <select value={ano} onChange={e => setAno(Number(e.target.value))} className="border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
           {[...new Set([anoAtual, ...(d?.opcoes.anos ?? [])])].sort((a, b) => b - a).map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={mes} onChange={e => setMes(Number(e.target.value))} className="border border-blue-300 bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
-          {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-        </select>
+        {/* filtro multi-mês */}
+        <div className="relative">
+          <button onClick={() => setShowMeses(v => !v)}
+            className="border border-blue-300 bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-sm font-semibold flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[130px] justify-between">
+            <span className="truncate max-w-[180px]">{mesesLabel}</span> <ChevronDown size={14} className="shrink-0" />
+          </button>
+          {showMeses && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowMeses(false)} />
+              <div className="absolute z-20 mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-60">
+                <div className="flex justify-between px-1 pb-1.5 mb-1 border-b border-gray-100">
+                  <button onClick={() => setMeses(Array.from({ length: 12 }, (_, i) => i + 1))} className="text-[11px] font-medium text-blue-600 hover:underline">Todos</button>
+                  <button onClick={() => setMeses([mesAtual])} className="text-[11px] text-gray-500 hover:underline">Só o atual</button>
+                </div>
+                <div className="grid grid-cols-2 gap-0.5">
+                  {MESES.map((m, i) => (
+                    <label key={i} className="flex items-center gap-1.5 text-xs px-1.5 py-1 rounded hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" checked={meses.includes(i + 1)} onChange={() => toggleMes(i + 1)} className="accent-blue-600" />
+                      {m}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
         <select value={unidade} onChange={e => setUnidade(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">Todas unidades</option>
           {(d?.opcoes.unidades ?? []).map(u => <option key={u} value={u}>{u}</option>)}
@@ -222,7 +256,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
                   </tr>
                 ))}
                 {!loading && itens.length === 0 && (
-                  <tr><td colSpan={18} className="text-center py-12 text-gray-400">Nenhum recebimento em {MESES[mes - 1]}/{ano}. Clique em <strong>Adicionar</strong>.</td></tr>
+                  <tr><td colSpan={18} className="text-center py-12 text-gray-400">Nenhum recebimento em {mesesLabel}/{ano}. Clique em <strong>Adicionar</strong>.</td></tr>
                 )}
               </tbody>
             </table>
