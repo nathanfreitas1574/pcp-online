@@ -1,9 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import { Camera, ClipboardCheck, Lock, Unlock, Pencil, ExternalLink, Ruler, History } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Camera, ClipboardCheck, Lock, Unlock, Pencil, ExternalLink, Ruler, History, Truck, Plus, ChevronDown } from "lucide-react"
 import ArmazemBoxSelect from "@/components/ArmazemBoxSelect"
 import { STATUS_USO_CFG, type StatusUsoBox } from "@/components/BoxVisual"
+import { clienteMatch, produtoMatch } from "@/lib/texto"
+
+type DescargaRef = { data: string; cliente: string; clienteDestino: string; produto: string; peso: number }
 
 export type VistoriaBoxOption = {
   id: string
@@ -61,8 +64,31 @@ export default function VistoriaDiariaModal({
   const [savingMedicao, setSavingMedicao] = useState(false)
   const [msgMedicao, setMsgMedicao] = useState("")
 
+  // Descargas recentes (CHECKOUT) da Marcação — REFERÊNCIA (não altera volume sozinho)
+  const DIAS_REF = 10
+  const [descRecentes, setDescRecentes] = useState<DescargaRef[]>([])
+  const [refHoje, setRefHoje] = useState("")
+  const [showDescargas, setShowDescargas] = useState(false)
+  useEffect(() => {
+    fetch(`/api/marcacoes/descargas-recentes?dias=${DIAS_REF}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) { setDescRecentes(d.descargas ?? []); setRefHoje(d.hoje ?? "") } })
+      .catch(() => {})
+  }, [])
+
   const box = boxes.find((b) => b.id === boxId) ?? null
   const hoje = new Date().toLocaleDateString("pt-BR")
+
+  // Descargas que casam com o cliente+produto atualmente digitados (ao vivo)
+  const descCasadas = (editCliente && editProduto)
+    ? descRecentes.filter(d =>
+        (clienteMatch(d.cliente, editCliente) || clienteMatch(d.clienteDestino, editCliente)) &&
+        produtoMatch(d.produto, editProduto))
+    : []
+  const descHoje = descCasadas.filter(d => d.data === refHoje)
+  const totalHoje = descHoje.reduce((s, d) => s + d.peso, 0)
+  const totalPeriodo = descCasadas.reduce((s, d) => s + d.peso, 0)
+  const fmtT = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
 
   function selectBox(id: string) {
     setBoxId(id)
@@ -295,6 +321,50 @@ export default function VistoriaDiariaModal({
                       className={inp}
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* ── Referência: descargas da Marcação (CHECKOUT) — NÃO altera volume sozinho ── */}
+              <div className="border border-emerald-100 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 text-sm font-semibold text-emerald-800">
+                  <div className="flex items-center gap-2"><Truck size={15} /> Entrou via Marcação (referência)</div>
+                  <span className="text-[11px] font-normal text-emerald-600">últimos {DIAS_REF} dias</span>
+                </div>
+                <div className="p-4 space-y-2 bg-emerald-50/30">
+                  {(!editCliente || !editProduto) ? (
+                    <p className="text-xs text-gray-500">Preencha <strong>Cliente</strong> e <strong>Produto</strong> acima para ver as descargas casadas da Marcação de Veículos.</p>
+                  ) : descCasadas.length === 0 ? (
+                    <p className="text-xs text-gray-500">Nenhuma descarga (CHECKOUT) casou com <strong>{editCliente}</strong> / <strong>{editProduto}</strong> nos últimos {DIAS_REF} dias.</p>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                        <div><span className="text-gray-500 text-xs">Hoje: </span><strong className="text-emerald-700">{fmtT(totalHoje)} t</strong> <span className="text-gray-400 text-xs">({descHoje.length} carga{descHoje.length !== 1 ? "s" : ""})</span></div>
+                        <div><span className="text-gray-500 text-xs">Últimos {DIAS_REF} dias: </span><strong className="text-gray-700">{fmtT(totalPeriodo)} t</strong> <span className="text-gray-400 text-xs">({descCasadas.length})</span></div>
+                      </div>
+                      {totalHoje > 0 && (
+                        <button type="button" onClick={() => setEditVolume(String((parseFloat(editVolume) || 0) + totalHoje))}
+                          className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 bg-white rounded-lg px-2.5 py-1.5 hover:bg-emerald-50">
+                          <Plus size={13} /> Somar hoje ao volume (+{fmtT(totalHoje)} t)
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setShowDescargas(v => !v)}
+                        className="flex items-center gap-1 text-[11px] text-emerald-600 hover:underline">
+                        <ChevronDown size={12} className={showDescargas ? "rotate-180 transition" : "transition"} /> {showDescargas ? "ocultar" : "ver"} descargas
+                      </button>
+                      {showDescargas && (
+                        <div className="max-h-40 overflow-y-auto rounded-lg border border-emerald-100 bg-white divide-y divide-gray-50">
+                          {descCasadas.slice(0, 30).map((d, i) => (
+                            <div key={i} className="flex items-center justify-between px-2.5 py-1 text-[11px]">
+                              <span className="text-gray-500 tabular-nums">{d.data.slice(8, 10)}/{d.data.slice(5, 7)}</span>
+                              <span className="flex-1 px-2 text-gray-700 truncate">{d.produto}</span>
+                              <span className="font-semibold text-gray-800 tabular-nums">{fmtT(d.peso)} t</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-[10px] text-gray-400 leading-tight">Referência da Marcação — não altera o volume automaticamente (a Marcação não informa o box de destino). Confira e ajuste o volume acima se necessário.</p>
+                    </>
+                  )}
                 </div>
               </div>
 
