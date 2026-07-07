@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight, History, Search, X, GripVertical, Trash2 } from "lucide-react"
+import { Plus, Save, Calendar, Table2, BarChart3, ChevronLeft, ChevronRight, History, Search, X, GripVertical, Trash2, Layers, Eraser } from "lucide-react"
 import ProgramacaoGraficos from "./ProgramacaoGraficos"
 import { DIA, ddMM, domingoDaSemana } from "@/lib/programacao"
 
@@ -20,6 +20,8 @@ const LINHA_PROD_COLORS: Record<string, string> = {
   "PRODUTO ACABADO": "bg-emerald-100 text-emerald-700",
   GRANEL: "bg-yellow-100 text-yellow-700",
 }
+const SEM_LINHA = "— sem linha —"
+const STORAGE_KEY = "pcp:prog:filtros" // filtros persistidos entre navegações
 const pad = (n: number) => String(n).padStart(2, "0")
 
 // Estilo do realizado de um dia. `passou` = o dia já decorreu.
@@ -67,8 +69,29 @@ export default function ProgramacaoClient({
   const [ctrInfo, setCtrInfo] = useState<string>("")
   const [view, setView] = useState<"tabela" | "graficos">("tabela")
   const [busca, setBusca] = useState("")
+  const [linhasSel, setLinhasSel] = useState<string[]>([]) // filtro por linha de produção (multi)
+  const [filtrosOk, setFiltrosOk] = useState(false)        // já hidratou filtros do localStorage?
   const [dragId, setDragId] = useState<string | null>(null)   // linha sendo arrastada
   const [handleId, setHandleId] = useState<string | null>(null) // linha com arraste habilitado (pelo handle)
+
+  // Restaura filtros salvos ao montar (persistem ao trocar de tela/semana)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const f = JSON.parse(raw)
+        if (f.tipo === "RECEBIMENTO" || f.tipo === "EXPEDICAO") setTipo(f.tipo)
+        if (typeof f.busca === "string") setBusca(f.busca)
+        if (Array.isArray(f.linhasSel)) setLinhasSel(f.linhasSel.filter((x: unknown) => typeof x === "string"))
+      }
+    } catch { /* ignora storage indisponível */ }
+    setFiltrosOk(true)
+  }, [])
+  // Salva filtros sempre que mudarem (após hidratar, p/ não sobrescrever com default)
+  useEffect(() => {
+    if (!filtrosOk) return
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tipo, busca, linhasSel })) } catch { /* ignora */ }
+  }, [tipo, busca, linhasSel, filtrosOk])
 
   const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
   // Linha de Produção do contrato (definida no Controle de Expedição)
@@ -106,9 +129,23 @@ export default function ProgramacaoClient({
     setBuscandoCtr(false)
   }
 
+  // Linhas de produção disponíveis (do tipo atual) + as já selecionadas (p/ chip visível mesmo mudando de semana)
+  const linhasDisponiveis = (() => {
+    const set = new Set<string>()
+    for (const r of rows) if (r.tipo === tipo) set.add(linhaDe(r.numeroContrato) ?? SEM_LINHA)
+    for (const lp of linhasSel) set.add(lp)
+    const arr = [...set].filter((x) => x !== SEM_LINHA).sort()
+    if (set.has(SEM_LINHA)) arr.push(SEM_LINHA)
+    return arr
+  })()
+  const toggleLinha = (lp: string) => setLinhasSel((prev) => (prev.includes(lp) ? prev.filter((x) => x !== lp) : [...prev, lp]))
+  const limparFiltros = () => { setBusca(""); setLinhasSel([]) }
+  const temFiltro = !!busca || linhasSel.length > 0
+
   const filtradas = rows.filter((r) =>
     r.tipo === tipo &&
-    (!busca || `${r.numeroContrato ?? ""} ${r.clienteNome} ${r.produto} ${r.boxCodigo ?? ""}`.toLowerCase().includes(busca.toLowerCase()))
+    (!busca || `${r.numeroContrato ?? ""} ${r.clienteNome} ${r.produto} ${r.boxCodigo ?? ""}`.toLowerCase().includes(busca.toLowerCase())) &&
+    (linhasSel.length === 0 || linhasSel.includes(linhaDe(r.numeroContrato) ?? SEM_LINHA))
   )
   // arrays de 7 posições (índice 0 = Dom, ignorado na exibição/soma)
   const totaisDia = DIAS_KEYS.map((d) => filtradas.reduce((s, r) => s + (r[d] ?? 0), 0))
@@ -212,14 +249,7 @@ export default function ProgramacaoClient({
     })
     setDragId(null); setHandleId(null)
   }
-  const podeArrastar = !busca // arrastar só sem filtro ativo
-
-  async function salvarTurno(row: Prog, turno: string) {
-    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, turno: turno || null } : r)))
-    await fetch(`/api/programacao/${row.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ turno }),
-    }).catch(() => {})
-  }
+  const podeArrastar = !temFiltro // arrastar só sem filtro ativo
 
   // ── Outras demandas internas da semana ──
   const [demandas, setDemandas] = useState<Demanda[]>(demandasIniciais)
@@ -321,15 +351,39 @@ export default function ProgramacaoClient({
       )}
 
       {view === "tabela" && (<>
-      {/* Filtro — isola um cliente/produto/contrato p/ enviar a programação da semana */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="relative flex-1 max-w-md">
+      {/* Filtros — isola cliente/produto/contrato/box e linha(s) de produção. Persistem entre navegações. */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Filtrar por cliente, produto, contrato ou box…"
             className="w-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 dark:placeholder-gray-400" />
           {busca && <button onClick={() => setBusca("")} className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-700"><X size={15} /></button>}
         </div>
-        {busca && <span className="text-xs text-gray-500">{filtradas.length} linha(s)</span>}
+
+        {/* Filtro por Linha de Produção (multi-seleção) */}
+        {linhasDisponiveis.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="flex items-center gap-1 text-xs text-gray-500 font-medium"><Layers size={13} /> Linha:</span>
+            {linhasDisponiveis.map((lp) => {
+              const on = linhasSel.includes(lp)
+              const cor = lp === SEM_LINHA ? "bg-gray-100 text-gray-600" : (LINHA_PROD_COLORS[lp] ?? "bg-gray-100 text-gray-600")
+              return (
+                <button key={lp} onClick={() => toggleLinha(lp)} title={on ? "Clique p/ remover do filtro" : "Clique p/ isolar esta linha"}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${on ? `${cor} border-current ring-1 ring-current` : "bg-white text-gray-400 border-gray-200 hover:border-gray-300"}`}>
+                  {lp}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {temFiltro && (
+          <button onClick={limparFiltros}
+            className="flex items-center gap-1 text-xs text-gray-600 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600">
+            <Eraser size={13} /> Limpar filtros
+          </button>
+        )}
+        {temFiltro && <span className="text-xs text-gray-500">{filtradas.length} linha(s)</span>}
       </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -342,7 +396,6 @@ export default function ProgramacaoClient({
                 <th className="px-3 py-3 text-left font-medium min-w-32">Cliente</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Produto</th>
                 <th className="px-3 py-3 text-left font-medium min-w-24" title="Definida no Controle de Expedição">Linha Prod.</th>
-                <th className="px-2 py-3 text-center font-medium min-w-16">Turno</th>
                 {VIS.map((i) => (
                   <th key={i} className={`px-2 py-3 text-center font-medium min-w-20 ${passou(i) ? "" : "opacity-80"}`}>
                     <div>{DIAS[i]}</div>
@@ -400,13 +453,6 @@ export default function ProgramacaoClient({
                       const cls = LINHA_PROD_COLORS[lp] ?? "bg-gray-100 text-gray-600"
                       return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${cls}`}>{lp}</span>
                     })()}
-                  </td>
-                  <td className="px-1 py-2 text-center">
-                    <select value={row.turno ?? ""} onChange={(e) => salvarTurno(row, e.target.value)}
-                      className="text-xs border border-gray-200 rounded px-1 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" title="Turno">
-                      <option value="">—</option>
-                      {["A", "B", "C"].map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
                   </td>
                   {VIS.map((i) => {
                     const d = DIAS_KEYS[i]
@@ -475,7 +521,6 @@ export default function ProgramacaoClient({
                     <datalist id="produtos-list">{produtos.map((p) => <option key={p.id} value={p.descricao}>{p.codigo}</option>)}</datalist>
                   </td>
                   <td className="px-2 py-2 text-gray-300 text-xs text-center">—</td>
-                  <td className="px-2 py-2 text-gray-300 text-xs text-center">—</td>
                   {VIS.map((i) => <td key={i} className="px-1 py-2"><div className="w-full h-7 bg-gray-100 rounded" /></td>)}
                   <td className="px-2 py-2">
                     <button onClick={adicionarLinha} disabled={saving === "nova"}
@@ -488,13 +533,13 @@ export default function ProgramacaoClient({
                 </tr>
               )}
               {addMode && ctrInfo && (
-                <tr className="bg-blue-50"><td colSpan={17} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
+                <tr className="bg-blue-50"><td colSpan={16} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
               )}
 
               {/* Linha de totais */}
               {filtradas.length > 0 && (
                 <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
-                  <td colSpan={7} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
+                  <td colSpan={6} className="px-3 py-2.5 text-xs text-gray-600 font-semibold">TOTAL SEMANA</td>
                   {VIS.map((i) => {
                     const t = totaisDia[i]
                     const e = estiloDia(t, realizadoDia[i], passou(i))
@@ -521,8 +566,8 @@ export default function ProgramacaoClient({
               )}
 
               {filtradas.length === 0 && !addMode && (
-                <tr><td colSpan={17} className="py-12 text-center text-gray-400">
-                  {busca ? "Nenhuma linha para esse filtro." : <>Nenhuma programação para a semana {semana}. Clique em &quot;Adicionar linha&quot; para começar.</>}
+                <tr><td colSpan={16} className="py-12 text-center text-gray-400">
+                  {temFiltro ? "Nenhuma linha para esse filtro." : <>Nenhuma programação para a semana {semana}. Clique em &quot;Adicionar linha&quot; para começar.</>}
                 </td></tr>
               )}
             </tbody>
