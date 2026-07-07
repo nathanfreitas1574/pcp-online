@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma"
 import BoxesVisualClient from "./BoxesVisualClient"
+import { clienteMatch, produtoMatch } from "@/lib/texto"
+import { ehCheckout, ymd, DIA } from "@/lib/programacao"
 
 export const dynamic = "force-dynamic"
+
+const DIAS_DESC = 10 // janela da referência de descargas (Marcação)
 
 export default async function BoxesPage() {
   const [boxes, alertasAbertos, previsoes, navios, contabilAgg, coberturaAgg, produtosCad, clientesCad] = await Promise.all([
@@ -61,8 +65,40 @@ export default async function BoxesPage() {
     if (!previsaoPorBox.has(p.boxId)) previsaoPorBox.set(p.boxId, p)
   }
 
+  // ── Referência de descargas da Marcação (CHECKOUT) dos últimos N dias ──────
+  // Casa por cliente+produto contra os itens do box (NÃO altera o volume — só referência).
+  const hojeD = new Date()
+  const corteDesc = new Date(Date.UTC(hojeD.getUTCFullYear(), hojeD.getUTCMonth(), hojeD.getUTCDate()) - (DIAS_DESC - 1) * DIA)
+  const hojeYmd = ymd(hojeD)
+  const descRaw = await prisma.marcacaoVeiculo.findMany({
+    where: { ativo: true, operacao: { contains: "DESCARGA" }, dataCarregamento: { gte: corteDesc } },
+    select: { cliente: true, clienteDestino: true, produto: true, pesoLiquido: true, dataCarregamento: true, status: true },
+  })
+  const descargas = descRaw
+    .filter((m) => ehCheckout(m.status) && m.dataCarregamento)
+    .map((m) => ({
+      data: ymd(new Date(m.dataCarregamento!)),
+      cliente: m.cliente ?? "",
+      clienteDestino: m.clienteDestino ?? "",
+      produto: m.produto ?? "",
+      peso: m.pesoLiquido || 0,
+    }))
+
   const boxesData = boxes.map((b) => {
     const prev = previsaoPorBox.get(b.id)
+    // descargas (Marcação) que casam com algum item do box (cliente+produto)
+    const itensBox = b.estoques.map((e) => ({ cliente: e.clienteNome ?? "", produto: e.produto?.descricao ?? "" })).filter((x) => x.produto)
+    let descargaHoje = 0, descargaPeriodo = 0
+    if (itensBox.length && descargas.length) {
+      for (const d of descargas) {
+        const casa = itensBox.some((it) =>
+          (clienteMatch(d.cliente, it.cliente) || clienteMatch(d.clienteDestino, it.cliente)) &&
+          produtoMatch(d.produto, it.produto))
+        if (!casa) continue
+        descargaPeriodo += d.peso
+        if (d.data === hojeYmd) descargaHoje += d.peso
+      }
+    }
     // um box pode ter VÁRIOS produtos → volume = soma; "principal" = o maior (estoques[0])
     const volumeTotal = b.estoques.reduce((s, e) => s + e.quantidade, 0)
     const itens = b.estoques.map((e) => ({
@@ -91,6 +127,7 @@ export default async function BoxesPage() {
         (e) => new Date(e.updatedAt).toDateString() === new Date().toDateString()
       ),
       alertasAbertos: alertasPorBox.get(b.id) ?? 0,
+      descargaHoje, descargaPeriodo, descargaDias: DIAS_DESC,
       armazemId: b.armazem?.id ?? null,
       armazemCodigo: b.armazem?.codigo ?? null,
       armazemNome: b.armazem?.nome ?? null,

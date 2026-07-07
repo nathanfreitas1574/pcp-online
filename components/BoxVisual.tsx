@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, X, Trash2, Package } from "lucide-react"
+import { Plus, X, Trash2, Package, Truck } from "lucide-react"
 
 export type StatusUsoBox = "LIVRE" | "CONSUMO" | "PROGRAMADO" | "BLOQUEADO"
 
@@ -30,6 +30,10 @@ export type BoxData = {
   statusUso?: StatusUsoBox | null
   obsBox?: string | null
   itens?: BoxItemRow[]
+  // Referência da Marcação (descargas CHECKOUT casadas por cliente+produto) — não altera o volume
+  descargaHoje?: number | null
+  descargaPeriodo?: number | null
+  descargaDias?: number | null
 }
 
 // Configuração visual do semáforo de uso
@@ -274,6 +278,15 @@ export default function BoxVisual({
         <span>{statusCfg.label}</span>
         {box.obsBox && <span className="ml-1 font-normal opacity-80 truncate">— {box.obsBox}</span>}
       </div>
+
+      {/* Referência: descarregado hoje via Marcação (CHECKOUT, casado por cliente+produto) */}
+      {(box.descargaHoje ?? 0) > 0 && (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100"
+          title={`Descargas finalizadas (CHECKOUT) casadas por cliente+produto nos últimos ${box.descargaDias ?? 10} dias. Referência da Marcação — confira e ajuste o volume na Vistoria.`}>
+          <Truck size={13} className="shrink-0" />
+          <span>{(box.descargaHoje ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} t descarregado hoje (Marcação)</span>
+        </div>
+      )}
 
       {/* Tank visual */}
       <div className="pl-6">
