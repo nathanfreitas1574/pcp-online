@@ -194,6 +194,35 @@ export default function ProgramacaoClient({
     setSaving(null)
   }
 
+  // Preenche o contrato numa linha já criada (ex.: programação da próxima semana sem contrato ainda).
+  // Salva o nº e alinha cliente/produto pelo contrato (a Linha de Produção reflete sozinha).
+  // NÃO mexe nos volumes já digitados (o PATCH recalcula o total a partir dos dias existentes).
+  async function salvarContrato(row: Prog, numero: string) {
+    const num = numero.trim()
+    if (num === (row.numeroContrato ?? "")) return
+    setSaving(row.id + "ctr")
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, numeroContrato: num || null } : r)))
+    await fetch(`/api/programacao/${row.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ numeroContrato: num }),
+    }).catch(() => {})
+    // busca o contrato e alinha cliente/produto (só o cabeçalho — volumes ficam como estão)
+    if (num) {
+      try {
+        const res = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(num)}`)
+        const d = await res.json()
+        const m = d.matches?.[0]
+        if (m && (m.clienteNome || m.desProduto)) {
+          const upd = { clienteNome: m.clienteNome || row.clienteNome, produto: m.desProduto || row.produto }
+          setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...upd } : r)))
+          await fetch(`/api/programacao/${row.id}`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd),
+          }).catch(() => {})
+        }
+      } catch { /* ignora lookup indisponível */ }
+    }
+    setSaving(null)
+  }
+
   async function salvarBox(row: Prog, boxId: string) {
     const codigo = boxes.find(b => b.id === boxId)?.codigo ?? null
     setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, boxId, boxCodigo: codigo } : r))
@@ -435,7 +464,13 @@ export default function ProgramacaoClient({
                         className="text-gray-300 hover:text-red-600"><Trash2 size={12} /></button>
                     </div>
                   </td>
-                  <td className="px-3 py-2"><span className="font-mono text-xs text-gray-600">{row.numeroContrato ?? "—"}</span></td>
+                  <td className="px-3 py-2">
+                    <input defaultValue={row.numeroContrato ?? ""} placeholder="+ contrato" key={`ctr-${row.id}-${row.numeroContrato ?? ""}`}
+                      onBlur={(e) => salvarContrato(row, e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
+                      title="Nº do contrato — preencha depois; alinha cliente/produto/linha sem mexer nos volumes"
+                      className={`w-24 font-mono text-xs rounded px-1.5 py-1 border focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300 ${saving === row.id + "ctr" ? "border-blue-400 bg-blue-50" : "border-transparent hover:border-gray-300 bg-transparent text-gray-600"}`} />
+                  </td>
                   <td className="px-2 py-2">
                     <select value={row.boxId ?? ""} onChange={(e) => salvarBox(row, e.target.value)}
                       className={`text-xs border rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 ${saving === row.id + "box" ? "border-blue-400 bg-blue-50" : "border-gray-200 text-blue-700 font-bold"}`}

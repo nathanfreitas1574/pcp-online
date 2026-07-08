@@ -19,6 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.numeroContrato !== undefined) data.numeroContrato = body.numeroContrato || null
   if (body.turno !== undefined) data.turno = body.turno || null
   if (body.produto !== undefined && body.produto) data.produto = body.produto
+  if (body.clienteNome !== undefined && body.clienteNome) data.clienteNome = body.clienteNome
   if (body.boxId !== undefined) {
     data.boxId = body.boxId || null
     data.boxCodigo = body.boxId
