@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, Fragment } from "react"
-import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
+import { Package, TrendingUp, BarChart2, Target, Upload, Search, Plus, X, CalendarDays, Zap, ChevronLeft, ChevronRight, Trash2, Layers, Eraser } from "lucide-react"
 import { getSemanaAtual, semanasDoAno, semanaDeData } from "@/lib/programacao"
 import BiExpedicao from "./BiExpedicao"
 
@@ -15,6 +15,8 @@ const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const TIPO_OP_DIA = ["ENVASE", "GRANEL", "COMPACTADOR", "PRODUTO ACABADO"]
 const OPERACAO_DIA = ["SIMPLES", "MISTURA", "GRANEL", "COMPACTADOR"]
 const LINHA_PROD_DIA = ["NAVE", "EMBEGADO", "GRANEL", "COMPACTADOR", "BAG MÓVEL"]
+const SEM_LINHA_EXP = "— sem linha —"
+const EXP_STORAGE_KEY = "pcp:exp:filtros" // filtros persistidos entre navegações
 const DDINP = "w-full text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white text-gray-800 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
 
 type Contrato = {
@@ -39,6 +41,8 @@ type RealRow = {
 }
 
 const LINHA_COLORS: Record<string, string> = {
+  "MISTURA 1": "bg-purple-100 text-purple-700",
+  "MISTURA 2": "bg-fuchsia-100 text-fuchsia-700",
   NAVE: "bg-blue-100 text-blue-700",
   "BAG MÓVEL": "bg-green-100 text-green-700",
   GRANEL: "bg-yellow-100 text-yellow-700",
@@ -77,6 +81,8 @@ export default function ExpedicaoClient({
   const [ctrClienteF, setCtrClienteF] = useState("")
   const [ctrProdutoF, setCtrProdutoF] = useState("")
   const [ctrTipoContF, setCtrTipoContF] = useState("")
+  const [ctrLinhasF, setCtrLinhasF] = useState<string[]>([]) // filtro por linha de produção (multi)
+  const [filtrosOk, setFiltrosOk] = useState(false)          // já hidratou filtros do localStorage?
   const [ctrTotProg, setCtrTotProg] = useState(0)
   const [ctrTotReal, setCtrTotReal] = useState(0)
   const [ctrLoading, setCtrLoading] = useState(false)
@@ -91,6 +97,36 @@ export default function ExpedicaoClient({
       .catch(() => {})
       .finally(() => setCtrLoading(false))
   }, [aba, ctrAno, ctrMes, ctrSemana])
+
+  // Restaura filtros salvos ao montar (persistem ao trocar de tela)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(EXP_STORAGE_KEY)
+      if (raw) {
+        const f = JSON.parse(raw)
+        if (typeof f.aba === "string") setAba(f.aba as typeof aba)
+        if (typeof f.busca === "string") setBusca(f.busca)
+        if (typeof f.filtroStatus === "string") setFiltroStatus(f.filtroStatus)
+        if (Number.isInteger(f.ctrAno)) setCtrAno(f.ctrAno)
+        if (Number.isInteger(f.ctrMes)) setCtrMes(f.ctrMes)
+        if (Number.isInteger(f.ctrSemana)) setCtrSemana(f.ctrSemana)
+        if (typeof f.ctrClienteF === "string") setCtrClienteF(f.ctrClienteF)
+        if (typeof f.ctrProdutoF === "string") setCtrProdutoF(f.ctrProdutoF)
+        if (typeof f.ctrTipoContF === "string") setCtrTipoContF(f.ctrTipoContF)
+        if (Array.isArray(f.ctrLinhasF)) setCtrLinhasF(f.ctrLinhasF.filter((x: unknown) => typeof x === "string"))
+      }
+    } catch { /* ignora storage indisponível */ }
+    setFiltrosOk(true)
+  }, [])
+  // Salva filtros ao mudarem (após hidratar, p/ não sobrescrever com default)
+  useEffect(() => {
+    if (!filtrosOk) return
+    try {
+      localStorage.setItem(EXP_STORAGE_KEY, JSON.stringify({
+        aba, busca, filtroStatus, ctrAno, ctrMes, ctrSemana, ctrClienteF, ctrProdutoF, ctrTipoContF, ctrLinhasF,
+      }))
+    } catch { /* ignora */ }
+  }, [filtrosOk, aba, busca, filtroStatus, ctrAno, ctrMes, ctrSemana, ctrClienteF, ctrProdutoF, ctrTipoContF, ctrLinhasF])
 
   // Aba "Realizado" — dados vêm da Marcação de Veículos (CHECKOUT · CARGA)
   const [realMes, setRealMes] = useState(() => {
@@ -369,11 +405,25 @@ export default function ExpedicaoClient({
     else setAddMsg(`✕ ${d.error ?? "Erro ao adicionar."}`)
   }
 
+  // Linhas de produção disponíveis (dos contratos carregados) + as já selecionadas
+  const ctrLinhasDisp = (() => {
+    const set = new Set<string>()
+    for (const c of rows) set.add(c.linhaProducao || SEM_LINHA_EXP)
+    for (const lp of ctrLinhasF) set.add(lp)
+    const arr = [...set].filter((x) => x !== SEM_LINHA_EXP).sort()
+    if (set.has(SEM_LINHA_EXP)) arr.push(SEM_LINHA_EXP)
+    return arr
+  })()
+  const toggleCtrLinha = (lp: string) => setCtrLinhasF((prev) => (prev.includes(lp) ? prev.filter((x) => x !== lp) : [...prev, lp]))
+  const temFiltroExp = !!busca || !!ctrClienteF || !!ctrProdutoF || !!ctrTipoContF || ctrLinhasF.length > 0 || filtroStatus !== "TODOS"
+  const limparFiltrosExp = () => { setBusca(""); setCtrClienteF(""); setCtrProdutoF(""); setCtrTipoContF(""); setCtrLinhasF([]); setFiltroStatus("TODOS") }
+
   const contratosFiltrados = rows
     .filter((c) => filtroStatus === "TODOS" || c.status === filtroStatus)
     .filter((c) => !ctrTipoContF || (c.tipoContrato ?? "") === ctrTipoContF)
     .filter((c) => !ctrClienteF || c.cliente.nome === ctrClienteF)
     .filter((c) => !ctrProdutoF || (c.produtoAbreviado ?? "") === ctrProdutoF)
+    .filter((c) => ctrLinhasF.length === 0 || ctrLinhasF.includes(c.linhaProducao || SEM_LINHA_EXP))
     .filter((c) => {
       const q = busca.toLowerCase()
       return (
@@ -515,6 +565,28 @@ export default function ExpedicaoClient({
                 <option value="">Produto: todos</option>
                 {ctrProdutos.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
+            )}
+            {/* Filtro por Linha de Produção (multi-seleção) */}
+            {ctrLinhasDisp.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="flex items-center gap-1 text-[11px] text-gray-500 font-medium"><Layers size={12} /> Linha:</span>
+                {ctrLinhasDisp.map((lp) => {
+                  const on = ctrLinhasF.includes(lp)
+                  const cor = lp === SEM_LINHA_EXP ? "bg-gray-100 text-gray-600" : (LINHA_COLORS[lp] ?? "bg-gray-100 text-gray-600")
+                  return (
+                    <button key={lp} onClick={() => toggleCtrLinha(lp)} title={on ? "Remover do filtro" : "Isolar esta linha"}
+                      className={`px-2 py-1 rounded-full text-[11px] font-semibold border transition ${on ? `${cor} border-current ring-1 ring-current` : "bg-white text-gray-400 border-gray-200 hover:border-gray-300"}`}>
+                      {lp}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            {temFiltroExp && (
+              <button onClick={limparFiltrosExp}
+                className="flex items-center gap-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50">
+                <Eraser size={12} /> Limpar filtros
+              </button>
             )}
             <div className="relative ml-auto">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
