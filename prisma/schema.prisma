@@ -716,19 +716,25 @@ model ProgramacaoSemanal {
 
 // Outras demandas internas da semana (varredura, organização, transferências…)
 model DemandaInterna {
-  id         String   @id @default(cuid())
-  ano        Int
-  semana     Int
-  cliente    String?                  // INTERNO | FERTALVO | …
-  produto    String?
-  quantidade Float    @default(0)
-  local      String?                  // box/área (AZ5A, B11…)
-  turno1     Boolean  @default(false)
-  turno2     Boolean  @default(false)
-  turno3     Boolean  @default(false)
-  obs        String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String    @id @default(cuid())
+  ano         Int
+  semana      Int
+  cliente     String?                  // legado (não usado na UI atual)
+  produto     String?                  // legado
+  quantidade  Float     @default(0)
+  local       String?                  // box/área (AZ5A, B11…)
+  turno1      Boolean   @default(false) // legado
+  turno2      Boolean   @default(false) // legado
+  turno3      Boolean   @default(false) // legado
+  responsavel String?                  // quem toca a ação
+  dataInicio  DateTime?                 // início planejado
+  dataFim     DateTime?                 // conclusão/prazo
+  status      String    @default("PENDENTE") // PENDENTE | EM_ANDAMENTO | CONCLUIDA | CANCELADA
+  obs         String?
+  createdAt   DateTime  @default(now()) // data de inclusão da ação
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
 }
 
 // ─── PROGRAMAÇÃO DO VIRA (movimentação interna box → box) ─────────────────────

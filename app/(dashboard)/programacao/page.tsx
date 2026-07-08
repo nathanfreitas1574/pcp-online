@@ -28,7 +28,19 @@ export default async function ProgramacaoPage({
     // Linha de Produção vem do Controle de Expedição (definida lá, refletida aqui)
     prisma.contratoExpedicao.findMany({ orderBy: { numero: "asc" }, select: { numero: true, linhaProducao: true } }),
   ])
-  const demandas = await prisma.demandaInterna.findMany({ where: { ano, semana }, orderBy: { createdAt: "asc" } })
+  // Ações internas — lista VIVA (não trava por semana); serializa datas p/ o cliente
+  const demandasRaw = await prisma.demandaInterna.findMany({ orderBy: { createdAt: "desc" } })
+  const demandas = demandasRaw.map(d => ({
+    id: d.id,
+    quantidade: d.quantidade,
+    local: d.local,
+    obs: d.obs,
+    responsavel: d.responsavel,
+    status: d.status,
+    createdAt: d.createdAt.toISOString(),
+    dataInicio: d.dataInicio ? d.dataInicio.toISOString() : null,
+    dataFim: d.dataFim ? d.dataFim.toISOString() : null,
+  }))
 
   // mapa nº contrato (sem zeros à esquerda) → linha de produção
   const normNum = (s: string | null | undefined) => String(s ?? "").trim().replace(/^0+/, "") || "0"

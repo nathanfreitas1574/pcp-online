@@ -24,6 +24,17 @@ const SEM_LINHA = "— sem linha —"
 const STORAGE_KEY = "pcp:prog:filtros" // filtros persistidos entre navegações
 const pad = (n: number) => String(n).padStart(2, "0")
 
+// Status das ações internas (lista viva)
+const STATUS_ACAO: { key: string; label: string; cls: string }[] = [
+  { key: "PENDENTE",     label: "Pendente",     cls: "bg-amber-100 text-amber-700 border-amber-200" },
+  { key: "EM_ANDAMENTO", label: "Em andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  { key: "CONCLUIDA",    label: "Concluída",    cls: "bg-green-100 text-green-700 border-green-200" },
+  { key: "CANCELADA",    label: "Cancelada",    cls: "bg-gray-200 text-gray-500 border-gray-300" },
+]
+const statusCfg = (s: string) => STATUS_ACAO.find(x => x.key === s) ?? STATUS_ACAO[0]
+const ymdInput = (iso: string | null) => (iso ? iso.slice(0, 10) : "") // ISO → yyyy-mm-dd p/ <input date>
+const ddMMyy = (iso: string | null) => { if (!iso) return "—"; const [y, m, d] = iso.slice(0, 10).split("-"); return `${d}/${m}/${y.slice(2)}` }
+
 // Estilo do realizado de um dia. `passou` = o dia já decorreu.
 function estiloDia(prog: number, real: number, passou: boolean): { cls: string; sym: string } {
   if (real <= 0) {
@@ -47,8 +58,9 @@ type Box = { id: string; codigo: string }
 type Cliente = { id: string; nome: string; codigo: string }
 type Produto = { id: string; descricao: string; codigo: string }
 type Demanda = {
-  id: string; cliente: string | null; produto: string | null; quantidade: number
-  local: string | null; turno1: boolean; turno2: boolean; turno3: boolean; obs: string | null
+  id: string; quantidade: number; local: string | null; obs: string | null
+  responsavel: string | null; status: string
+  createdAt: string; dataInicio: string | null; dataFim: string | null
 }
 
 export default function ProgramacaoClient({
@@ -280,16 +292,17 @@ export default function ProgramacaoClient({
   }
   const podeArrastar = !temFiltro // arrastar só sem filtro ativo
 
-  // ── Outras demandas internas da semana ──
+  // ── Ações / demandas internas — lista VIVA (não trava por semana) ──
   const [demandas, setDemandas] = useState<Demanda[]>(demandasIniciais)
   const [addingDem, setAddingDem] = useState(false)
+  const [statusFiltro, setStatusFiltro] = useState<string>("") // "" = todas
   async function adicionarDemanda() {
     setAddingDem(true)
     const res = await fetch("/api/programacao/demandas", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ano, semana }),
     })
     const nova = await res.json().catch(() => null)
-    if (nova?.id) setDemandas((prev) => [...prev, nova])
+    if (nova?.id) setDemandas((prev) => [{ ...nova, createdAt: nova.createdAt ?? new Date().toISOString() }, ...prev])
     setAddingDem(false)
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -300,11 +313,13 @@ export default function ProgramacaoClient({
     }).catch(() => {})
   }
   async function excluirDemanda(id: string) {
-    if (!confirm("Excluir esta demanda interna?")) return
+    if (!confirm("Excluir esta ação interna?")) return
     setDemandas((prev) => prev.filter((d) => d.id !== id))
     await fetch(`/api/programacao/demandas/${id}`, { method: "DELETE" }).catch(() => {})
   }
-  const totalDemandas = demandas.reduce((s, d) => s + (d.quantidade || 0), 0)
+  const demandasFiltradas = statusFiltro ? demandas.filter((d) => d.status === statusFiltro) : demandas
+  const totalDemandas = demandasFiltradas.reduce((s, d) => s + (d.quantidade || 0), 0)
+  const contaStatus = (k: string) => demandas.filter((d) => d.status === k).length
   const DEMINP = "w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-400 bg-white text-gray-800 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
 
   const ehSemanaAtual = elapsedIdx >= 0 && elapsedIdx < 6
@@ -620,11 +635,24 @@ export default function ProgramacaoClient({
         <span><strong>Saldo</strong> = programado − realizado</span>
       </div>
 
-      {/* ── Outras Demandas Internas da semana ─────────────────────────────── */}
+      {/* ── Outras Demandas Internas — lista VIVA (não trava por semana) ────── */}
       <div className="mt-6 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between bg-green-800 text-white px-4 py-2.5">
-          <h3 className="font-bold text-sm tracking-wide">OUTRAS DEMANDAS INTERNAS — Semana {semana}</h3>
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between bg-green-800 text-white px-4 py-2.5 flex-wrap gap-2">
+          <h3 className="font-bold text-sm tracking-wide">OUTRAS DEMANDAS INTERNAS</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* filtro por status */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <button onClick={() => setStatusFiltro("")}
+                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition ${statusFiltro === "" ? "bg-white text-green-800 border-white" : "bg-white/10 text-green-50 border-white/20 hover:bg-white/20"}`}>
+                Todas ({demandas.length})
+              </button>
+              {STATUS_ACAO.map((s) => (
+                <button key={s.key} onClick={() => setStatusFiltro(statusFiltro === s.key ? "" : s.key)}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition ${statusFiltro === s.key ? "bg-white text-green-800 border-white" : "bg-white/10 text-green-50 border-white/20 hover:bg-white/20"}`}>
+                  {s.label} ({contaStatus(s.key)})
+                </button>
+              ))}
+            </div>
             <span className="text-xs text-green-100">Total: <strong>{totalDemandas.toLocaleString("pt-BR")} t</strong></span>
             <button onClick={adicionarDemanda} disabled={addingDem}
               className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white px-2.5 py-1 rounded-lg text-xs font-medium disabled:opacity-60">
@@ -636,28 +664,33 @@ export default function ProgramacaoClient({
           <table className="w-full text-sm">
             <thead className="bg-green-50 border-b border-green-100">
               <tr>
-                {["", "Cliente", "Produto", "Quantidade", "Local", "1º Turno", "2º Turno", "3º Turno", "Observação"].map((h, i) => (
-                  <th key={i} className={`px-3 py-2 font-medium text-green-900 text-xs ${i >= 5 && i <= 7 ? "text-center" : "text-left"}`}>{h}</th>
+                {["", "Inclusão", "Início", "Fim", "Responsável", "Qtd (t)", "Local", "Observação", "Status"].map((h, i) => (
+                  <th key={i} className="px-3 py-2 font-medium text-green-900 text-xs text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {demandas.map((d) => (
+              {demandasFiltradas.map((d) => (
                 <tr key={d.id} className="hover:bg-green-50/40">
                   <td className="px-2 py-2 text-center w-8">
-                    <button onClick={() => excluirDemanda(d.id)} title="Excluir demanda"
+                    <button onClick={() => excluirDemanda(d.id)} title="Excluir ação"
                       className="text-gray-300 hover:text-red-600"><Trash2 size={13} /></button>
                   </td>
+                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-500" title="Data de inclusão da ação">{ddMMyy(d.createdAt)}</td>
+                  <td className="px-2 py-1.5 w-36">
+                    <input type="date" defaultValue={ymdInput(d.dataInicio)}
+                      onChange={(e) => salvarDemanda(d.id, "dataInicio", e.target.value || null)} className={DEMINP} />
+                  </td>
+                  <td className="px-2 py-1.5 w-36">
+                    <input type="date" defaultValue={ymdInput(d.dataFim)}
+                      onChange={(e) => salvarDemanda(d.id, "dataFim", e.target.value || null)} className={DEMINP} />
+                  </td>
                   <td className="px-2 py-1.5 min-w-28">
-                    <input list="dem-clientes" defaultValue={d.cliente ?? ""} placeholder="INTERNO / FERTALVO…"
-                      onBlur={(e) => { if (e.target.value !== (d.cliente ?? "")) salvarDemanda(d.id, "cliente", e.target.value) }} className={DEMINP} />
-                    <datalist id="dem-clientes"><option value="INTERNO" /><option value="FERTALVO" /></datalist>
+                    <input list="dem-resp" defaultValue={d.responsavel ?? ""} placeholder="Responsável"
+                      onBlur={(e) => { if (e.target.value !== (d.responsavel ?? "")) salvarDemanda(d.id, "responsavel", e.target.value) }} className={DEMINP} />
+                    <datalist id="dem-resp"><option value="QUALIDADE" /><option value="OPERAÇÃO" /><option value="PCP" /><option value="MANUTENÇÃO" /></datalist>
                   </td>
-                  <td className="px-2 py-1.5 min-w-32">
-                    <input list="produtos-list" defaultValue={d.produto ?? ""} placeholder="VARREDURA, NK…"
-                      onBlur={(e) => { if (e.target.value !== (d.produto ?? "")) salvarDemanda(d.id, "produto", e.target.value) }} className={DEMINP} />
-                  </td>
-                  <td className="px-2 py-1.5 w-28">
+                  <td className="px-2 py-1.5 w-24">
                     <input type="number" min="0" defaultValue={d.quantidade || ""} placeholder="—"
                       onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== d.quantidade) salvarDemanda(d.id, "quantidade", v) }}
                       className={`${DEMINP} text-right`} />
@@ -667,21 +700,23 @@ export default function ProgramacaoClient({
                       onBlur={(e) => { if (e.target.value !== (d.local ?? "")) salvarDemanda(d.id, "local", e.target.value) }} className={DEMINP} />
                     <datalist id="dem-locais">{boxes.map((b) => <option key={b.id} value={b.codigo} />)}</datalist>
                   </td>
-                  {(["turno1", "turno2", "turno3"] as const).map((t) => (
-                    <td key={t} className="px-2 py-1.5 text-center w-16">
-                      <input type="checkbox" checked={d[t]} onChange={(e) => salvarDemanda(d.id, t, e.target.checked)}
-                        className="w-4 h-4 accent-green-700 cursor-pointer" />
-                    </td>
-                  ))}
-                  <td className="px-2 py-1.5 min-w-40">
-                    <input defaultValue={d.obs ?? ""} placeholder="ex: ORGANIZAR E ARRUMAR BOX"
+                  <td className="px-2 py-1.5 min-w-64">
+                    <input defaultValue={d.obs ?? ""} placeholder="ex: cliente, produto e detalhes da ação…"
                       onBlur={(e) => { if (e.target.value !== (d.obs ?? "")) salvarDemanda(d.id, "obs", e.target.value) }}
                       className={`${DEMINP} uppercase`} />
                   </td>
+                  <td className="px-2 py-1.5 w-36">
+                    <select value={d.status} onChange={(e) => salvarDemanda(d.id, "status", e.target.value)}
+                      className={`w-full text-xs font-semibold rounded-lg border px-2 py-1.5 focus:outline-none cursor-pointer ${statusCfg(d.status).cls}`}>
+                      {STATUS_ACAO.map((s) => <option key={s.key} value={s.key} className="bg-white text-gray-800">{s.label}</option>)}
+                    </select>
+                  </td>
                 </tr>
               ))}
-              {demandas.length === 0 && (
-                <tr><td colSpan={9} className="py-8 text-center text-gray-400 text-sm">Nenhuma demanda interna nesta semana. Clique em “Adicionar”.</td></tr>
+              {demandasFiltradas.length === 0 && (
+                <tr><td colSpan={9} className="py-8 text-center text-gray-400 text-sm">
+                  {statusFiltro ? "Nenhuma ação com esse status." : "Nenhuma ação interna. Clique em “Adicionar”."}
+                </td></tr>
               )}
             </tbody>
           </table>

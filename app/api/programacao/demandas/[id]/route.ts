@@ -2,8 +2,8 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 
-const TXT = ["cliente", "produto", "local", "obs"] as const
-const BOOL = ["turno1", "turno2", "turno3"] as const
+const TXT = ["local", "obs", "responsavel", "status"] as const
+const DATE = ["dataInicio", "dataFim"] as const
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = {}
   for (const c of TXT) if (b[c] !== undefined) data[c] = b[c] === "" ? null : b[c]
-  for (const c of BOOL) if (b[c] !== undefined) data[c] = Boolean(b[c])
+  for (const c of DATE) if (b[c] !== undefined) data[c] = b[c] ? new Date(b[c]) : null
   if (b.quantidade !== undefined) data.quantidade = Number(b.quantidade) || 0
   const d = await prisma.demandaInterna.update({ where: { id }, data })
   return NextResponse.json(d)
