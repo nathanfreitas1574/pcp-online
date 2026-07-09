@@ -33,11 +33,16 @@ export async function GET(req: NextRequest) {
   const now = new Date()
   const ano = Number(sp.get("ano")) || now.getUTCFullYear()
   const mes = Number(sp.get("mes")) || 0 // 0 = ano todo
+  const mesAte = Number(sp.get("mesAte")) || mes // intervalo de/até (0 = ano todo)
+  // filtros do dashboard (aplicados ao realizado da Marcação; tipo também ao forecast)
+  const tipoOp = (sp.get("tipoOp") || "").toUpperCase()
+  const linhaF = (sp.get("linha") || "").toUpperCase()
+  const operacaoF = (sp.get("operacao") || "").toUpperCase()
 
   const anoIni = new Date(Date.UTC(ano, 0, 1))
   const anoFim = new Date(Date.UTC(ano + 1, 0, 1) - 1)
   const perIni = mes > 0 ? new Date(Date.UTC(ano, mes - 1, 1)) : anoIni
-  const perFim = mes > 0 ? new Date(Date.UTC(ano, mes, 1) - 1) : anoFim
+  const perFim = mes > 0 ? new Date(Date.UTC(ano, (mesAte > mes ? mesAte : mes), 1) - 1) : anoFim
   const emPeriodo = (d: Date) => d >= perIni && d <= perFim
 
   const [orcados, forecasts, marcAno, capacidades, progs, diadias, contratos] = await Promise.all([
@@ -45,17 +50,41 @@ export async function GET(req: NextRequest) {
     prisma.expedicaoForecast.findMany({ where: { data: { gte: anoIni, lte: anoFim } } }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: anoIni, lte: anoFim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true },
     }),
     prisma.expedicaoCapacidade.findMany({ where: { ano } }),
     prisma.programacaoSemanal.findMany({ where: { ano, tipo: "EXPEDICAO" }, select: { semana: true, seg: true, ter: true, qua: true, qui: true, sex: true, sab: true } }),
     prisma.expedicaoDiaDia.findMany(),
-    prisma.contratoExpedicao.findMany({ orderBy: { numero: "asc" }, select: { produtoSistema: true, produtoAbreviado: true, operacao: true, cliente: { select: { nome: true } } } }),
+    prisma.contratoExpedicao.findMany({ orderBy: { numero: "asc" }, select: { produtoSistema: true, produtoAbreviado: true, operacao: true, linhaProducao: true, cliente: { select: { nome: true } } } }),
   ])
 
-  const cargas = marcAno.filter((m) => m.dataCarregamento && ehCheckout(m.status) && ehCarga(m.operacao) === true)
+  // tipo (tipoServico) → ENVASE / GRANEL / PRODUTO ACABADO
+  const TIPO_MATCH: Record<string, (ts: string) => boolean> = {
+    ENVASE: (ts) => ts.includes("BIG BAG"),
+    GRANEL: (ts) => ts.includes("GRANEL"),
+    "PRODUTO ACABADO": (ts) => ts.includes("ACABADO") || ts.includes("PROD ACAB"),
+  }
+  const cargasBrutas = marcAno.filter((m) => m.dataCarregamento && ehCheckout(m.status) && ehCarga(m.operacao) === true)
+  // contrato casado por carga (p/ derivar linha e operação do realizado)
+  const contratoDaCarga = (m: typeof cargasBrutas[number]) =>
+    contratos.find((ct) => clienteMatch(m.clienteDestino || m.cliente, ct.cliente.nome) && produtoMatch(m.produto, ct.produtoAbreviado || ct.produtoSistema))
+  const cargaPassa = (m: typeof cargasBrutas[number]) => {
+    if (tipoOp && !(TIPO_MATCH[tipoOp]?.((m.tipoServico ?? "").toUpperCase()) ?? true)) return false
+    if (linhaF || operacaoF) {
+      const ct = contratoDaCarga(m)
+      if (linhaF && (ct?.linhaProducao ?? "").toUpperCase() !== linhaF) return false
+      if (operacaoF && (ct?.operacao ?? "").toUpperCase() !== operacaoF) return false
+    }
+    return true
+  }
+  const cargas = cargasBrutas.filter(cargaPassa) // realizado já filtrado
   const cargasPer = cargas.filter((m) => emPeriodo(m.dataCarregamento!))
   const somaCargas = (arr: typeof cargas) => arr.reduce((s, m) => s + (m.pesoLiquido || 0), 0)
+  // forecast: só o tipo se aplica
+  const forecastsF = tipoOp ? forecasts.filter((f) => (f.tipo ?? "").toUpperCase() === tipoOp) : forecasts
+  // opções dos filtros (p/ a UI)
+  const linhasOpts = [...new Set(contratos.map((c) => (c.linhaProducao ?? "").toUpperCase()).filter(Boolean))].sort()
+  const operacoesOpts = [...new Set(contratos.map((c) => (c.operacao ?? "").toUpperCase()).filter(Boolean))].sort()
 
   // ── mensal (12 meses): orçado / forecast / realizado / ritmo ──
   const orcadoMes = new Map(orcados.map((o) => [o.mes, o.orcado]))
@@ -63,7 +92,7 @@ export async function GET(req: NextRequest) {
     const m = i + 1
     const mi = new Date(Date.UTC(ano, m - 1, 1)), mf = new Date(Date.UTC(ano, m, 1) - 1)
     const orcado = orcadoMes.get(m) ?? 0
-    const forecast = forecasts.filter((f) => f.data >= mi && f.data <= mf).reduce((s, f) => s + f.forecast, 0)
+    const forecast = forecastsF.filter((f) => f.data >= mi && f.data <= mf).reduce((s, f) => s + f.forecast, 0)
     const realizado = somaCargas(cargas.filter((c) => c.dataCarregamento! >= mi && c.dataCarregamento! <= mf))
     return { mes: nome, orcado: r1(orcado), forecast: r1(forecast), realizado: r1(realizado), ritmo: orcado > 0 ? Math.round((realizado / orcado) * 100) : null }
   })
@@ -90,7 +119,7 @@ export async function GET(req: NextRequest) {
     const d = i + 1
     const di = new Date(Date.UTC(ano, mesDiario - 1, d)), df = new Date(Date.UTC(ano, mesDiario - 1, d + 1) - 1)
     const realizado = somaCargas(cargas.filter((c) => c.dataCarregamento! >= di && c.dataCarregamento! <= df))
-    const forecast = forecasts.filter((f) => f.data.getUTCMonth() + 1 === mesDiario && f.data.getUTCFullYear() === ano && f.data.getUTCDate() === d).reduce((s, f) => s + f.forecast, 0)
+    const forecast = forecastsF.filter((f) => f.data.getUTCMonth() + 1 === mesDiario && f.data.getUTCFullYear() === ano && f.data.getUTCDate() === d).reduce((s, f) => s + f.forecast, 0)
     return { dia: d, realizado: r1(realizado), forecast: r1(forecast) }
   })
 
@@ -128,7 +157,7 @@ export async function GET(req: NextRequest) {
   }
   const porCliente = agrupa((m) => m.clienteDestino || m.cliente || "—").slice(0, 15)
   const porProduto = agrupa((m) => m.produto || "—").slice(0, 15)
-  const porLinha = agrupa((m) => (m.local || "—").toUpperCase())
+  const porLinha = agrupa((m) => (contratoDaCarga(m)?.linhaProducao || "—").toUpperCase())
   const porOperacao = agrupa((m) => {
     const c = contratos.find((ct) => clienteMatch(m.clienteDestino || m.cliente, ct.cliente.nome) && produtoMatch(m.produto, ct.produtoAbreviado || ct.produtoSistema))
     return (c?.operacao || "—").toUpperCase()
@@ -148,7 +177,7 @@ export async function GET(req: NextRequest) {
 
   // ── KPIs do período ──
   const orcado = orcados.filter((o) => mes === 0 || o.mes === mes).reduce((s, o) => s + o.orcado, 0)
-  const forecast = forecasts.filter((f) => emPeriodo(f.data)).reduce((s, f) => s + f.forecast, 0)
+  const forecast = forecastsF.filter((f) => emPeriodo(f.data)).reduce((s, f) => s + f.forecast, 0)
   const realizado = somaCargas(cargasPer)
   const capacidade = capacidades.filter((c) => mes === 0 || c.mes === mes).reduce((s, c) => s + c.capacidade, 0)
   const kpis = {
@@ -161,7 +190,7 @@ export async function GET(req: NextRequest) {
 
   // aderência por cliente (realizado vs forecast do cliente no período)
   const fcCliente = new Map<string, number>()
-  for (const f of forecasts) { if (!emPeriodo(f.data)) continue; const k = normCliente(f.clienteNome); if (k) fcCliente.set(k, (fcCliente.get(k) ?? 0) + f.forecast) }
+  for (const f of forecastsF) { if (!emPeriodo(f.data)) continue; const k = normCliente(f.clienteNome); if (k) fcCliente.set(k, (fcCliente.get(k) ?? 0) + f.forecast) }
   // cada forecast conta p/ no máx. 1 cliente (maior volume primeiro) → não infla a aderência
   const fcConsumidos = new Set<string>()
   const aderenciaCliente = porCliente.map((c) => {
@@ -174,7 +203,9 @@ export async function GET(req: NextRequest) {
   })
 
   return NextResponse.json({
-    ano, mes, mesDiario: MESES[mesDiario - 1],
+    ano, mes, mesAte, mesDiario: MESES[mesDiario - 1],
+    tipoOp, linha: linhaF, operacao: operacaoF,
+    tiposOpts: ["ENVASE", "GRANEL", "PRODUTO ACABADO"], linhasOpts, operacoesOpts,
     kpis, ritmo, mensal, semanal, diario, porCliente, porProduto, porLinha, porOperacao, porTurno, aderenciaCliente,
   })
 }

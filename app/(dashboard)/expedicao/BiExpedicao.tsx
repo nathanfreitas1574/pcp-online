@@ -12,7 +12,9 @@ const PIE = ["#16a34a", "#0ea5e9", "#f59e0b"]
 
 type NV = { nome: string; valor: number }
 type Bi = {
-  ano: number; mes: number; mesDiario: string
+  ano: number; mes: number; mesAte: number; mesDiario: string
+  tipoOp: string; linha: string; operacao: string
+  tiposOpts: string[]; linhasOpts: string[]; operacoesOpts: string[]
   kpis: { orcado: number; forecast: number; realizado: number; capacidade: number; gap: number; aderenciaForecast: number; aderenciaOrcado: number; performance: number }
   ritmo: { mes: string; realizado: number; forecast: number; diasUteisTotais: number; diasUteisDecorridos: number; diasUteisRestantes: number; mediaDiaria: number; projecao: number; gap: number; atingeForecast: number | null }
   mensal: { mes: string; orcado: number; forecast: number; realizado: number; ritmo: number | null }[]
@@ -50,14 +52,22 @@ export default function BiExpedicao() {
   const anoAtual = new Date().getFullYear()
   const [ano, setAno] = useState(anoAtual)
   const [mes, setMes] = useState(0)
+  const [mesAte, setMesAte] = useState(0)
+  const [tipoOp, setTipoOp] = useState("")
+  const [linha, setLinha] = useState("")
+  const [operacao, setOperacao] = useState("")
   const [d, setD] = useState<Bi | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/expedicao/bi?ano=${ano}&mes=${mes}`)
+    const qs = new URLSearchParams({ ano: String(ano), mes: String(mes), mesAte: String(mesAte), tipoOp, linha, operacao })
+    fetch(`/api/expedicao/bi?${qs}`)
       .then((r) => r.json()).then((j) => setD(j.error ? null : j)).catch(() => {}).finally(() => setLoading(false))
-  }, [ano, mes])
+  }, [ano, mes, mesAte, tipoOp, linha, operacao])
+
+  const temFiltroBi = !!tipoOp || !!linha || !!operacao || (mes > 0 && mesAte > mes)
+  const limparBi = () => { setTipoOp(""); setLinha(""); setOperacao(""); setMesAte(0) }
 
   const k = d?.kpis
   const kpiCards = [
@@ -70,18 +80,49 @@ export default function BiExpedicao() {
 
   return (
     <div className="bg-green-800 rounded-2xl p-3 md:p-4">
-      {/* barra de período */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+      {/* barra de período + filtros */}
+      <div className="flex flex-wrap items-center gap-2 mb-1">
         <h3 className="text-white font-bold text-lg mr-2">Dashboard Expedição</h3>
         <select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="text-xs rounded-lg px-2 py-1.5 border border-green-600 bg-green-700 text-white">
-          {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+          {[anoAtual - 2, anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={mes} onChange={(e) => setMes(Number(e.target.value))} className="text-xs rounded-lg px-2 py-1.5 border border-green-600 bg-green-700 text-white">
+        <select value={mes} onChange={(e) => { const v = Number(e.target.value); setMes(v); if (mesAte && mesAte < v) setMesAte(v) }} className="text-xs rounded-lg px-2 py-1.5 border border-green-600 bg-green-700 text-white">
           <option value={0}>Ano todo</option>
           {MESES.map((n, i) => <option key={i} value={i + 1}>{n}</option>)}
         </select>
+        {mes > 0 && (
+          <>
+            <span className="text-xs text-green-200">até</span>
+            <select value={mesAte || mes} onChange={(e) => setMesAte(Number(e.target.value))} className="text-xs rounded-lg px-2 py-1.5 border border-green-600 bg-green-700 text-white">
+              {MESES.map((n, i) => <option key={i} value={i + 1} disabled={i + 1 < mes}>{n}</option>)}
+            </select>
+          </>
+        )}
+        <span className="text-green-600 mx-0.5">|</span>
+        <select value={tipoOp} onChange={(e) => setTipoOp(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-green-600 bg-green-700 text-white">
+          <option value="">Tipo: todos</option>
+          {(d?.tiposOpts ?? ["ENVASE", "GRANEL", "PRODUTO ACABADO"]).map((t) => <option key={t} value={t}>{t === "ENVASE" ? "Envase" : t === "GRANEL" ? "Granel" : "Produto Acabado"}</option>)}
+        </select>
+        {(d?.operacoesOpts?.length ?? 0) > 0 && (
+          <select value={operacao} onChange={(e) => setOperacao(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-green-600 bg-green-700 text-white">
+            <option value="">Operação: todas</option>
+            {(d?.operacoesOpts ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )}
+        {(d?.linhasOpts?.length ?? 0) > 0 && (
+          <select value={linha} onChange={(e) => setLinha(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-green-600 bg-green-700 text-white">
+            <option value="">Linha: todas</option>
+            {(d?.linhasOpts ?? []).map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        )}
+        {temFiltroBi && (
+          <button onClick={limparBi} className="text-xs text-green-50 border border-green-600 rounded-lg px-2 py-1.5 hover:bg-green-700">Limpar</button>
+        )}
         {loading && <span className="text-xs text-green-200">carregando…</span>}
       </div>
+      {temFiltroBi && (
+        <p className="text-[10px] text-green-200 mb-2">Tipo / operação / linha recortam o <strong>realizado</strong> (e o tipo também o forecast). Orçado e programado não têm esse recorte.</p>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
