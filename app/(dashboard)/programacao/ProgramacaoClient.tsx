@@ -712,10 +712,10 @@ export default function ProgramacaoClient({
                       onBlur={(e) => { if (e.target.value !== (d.local ?? "")) salvarDemanda(d.id, "local", e.target.value) }} className={DEMINP} />
                     <datalist id="dem-locais">{boxes.map((b) => <option key={b.id} value={b.codigo} />)}</datalist>
                   </td>
-                  <td className="px-2 py-1.5 min-w-64">
-                    <input defaultValue={d.obs ?? ""} placeholder="ex: cliente, produto e detalhes da ação…"
+                  <td className="px-2 py-1.5 min-w-[280px] align-top">
+                    <textarea defaultValue={d.obs ?? ""} rows={2} title={d.obs ?? ""} placeholder="ex: cliente, produto e detalhes da ação…"
                       onBlur={(e) => { if (e.target.value !== (d.obs ?? "")) salvarDemanda(d.id, "obs", e.target.value) }}
-                      className={`${DEMINP} uppercase`} />
+                      className={`${DEMINP} uppercase resize-y leading-snug whitespace-pre-wrap break-words min-h-[38px]`} />
                   </td>
                   <td className="px-2 py-1.5 w-36">
                     <select value={d.status} onChange={(e) => salvarDemanda(d.id, "status", e.target.value)}
