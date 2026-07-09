@@ -29,9 +29,16 @@ export default async function ExpedicaoPage() {
 
   const aderencia = totalForecast > 0 ? (totalRealizado / totalForecast) * 100 : 0
 
+  // serializa datas p/ o cliente (a aba Contratos recarrega da API depois)
+  const contratosSer = contratos.map((c) => ({
+    ...c,
+    dataInicio: c.dataInicio ? c.dataInicio.toISOString() : null,
+    dataFim: c.dataFim ? c.dataFim.toISOString() : null,
+  }))
+
   return (
     <ExpedicaoClient
-      contratos={contratos}
+      contratos={contratosSer}
       registros={registros}
       totalForecast={totalForecast}
       totalRealizado={totalRealizado}

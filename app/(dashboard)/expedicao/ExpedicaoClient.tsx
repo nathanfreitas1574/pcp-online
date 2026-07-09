@@ -10,6 +10,15 @@ const OPERACOES = ["SIMPLES", "MISTURA", "EXPEDIÇÃO"]
 const LINHAS_PRODUCAO = ["MISTURA 1", "MISTURA 2", "BAG MÓVEL", "PRODUTO ACABADO", "GRANEL"]
 const TIPO_CONTRATO_LABEL: Record<string, string> = { COMPRA: "Compra", VENDA: "Venda", ARMAZEM_IND: "Armazém/Ind." }
 const TIPO_CONTRATO_COLOR: Record<string, string> = { COMPRA: "bg-blue-100 text-blue-700", VENDA: "bg-green-100 text-green-700", ARMAZEM_IND: "bg-purple-100 text-purple-700" }
+const TIPO_CONTRATO_OPCOES = ["COMPRA", "VENDA", "ARMAZEM_IND"]
+// status manual do contrato (workflow)
+const STATUS_CONTRATO = [
+  { key: "ABERTO", label: "Aberto", cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  { key: "CONFIRMADO", label: "Confirmado", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  { key: "REALIZADO", label: "Realizado", cls: "bg-green-100 text-green-700 border-green-200" },
+]
+const statusContratoCfg = (s: string) => STATUS_CONTRATO.find((x) => x.key === s) ?? STATUS_CONTRATO[0]
+const ymdOf = (iso?: string | null) => (iso ? iso.slice(0, 10) : "")
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const TIPO_OP_DIA = ["ENVASE", "GRANEL", "COMPACTADOR", "PRODUTO ACABADO"]
@@ -23,6 +32,7 @@ type Contrato = {
   id: string; numero: string; operacao: string | null; produtoAbreviado: string | null
   tipoProduto: string | null; linhaProducao: string | null; mes: string | null; semana: number | null
   volProgramado: number; realizado: number; saldo: number; status: string; pct?: number | null; tipoContrato?: string | null
+  dataInicio?: string | null; dataFim?: string | null
   cliente: { nome: string }
 }
 
@@ -386,8 +396,10 @@ export default function ExpedicaoClient({
   const ctrClientes = [...new Set(rows.map((c) => c.cliente.nome))].sort()
   const ctrProdutos = [...new Set(rows.map((c) => c.produtoAbreviado).filter(Boolean) as string[])].sort()
 
-  async function salvarContratoCampo(id: string, campo: "tipoProduto" | "operacao" | "linhaProducao", valor: string) {
-    setRows((prev) => prev.map((c) => c.id === id ? { ...c, [campo]: valor || null } : c))
+  async function salvarContratoCampo(id: string, campo: "tipoProduto" | "operacao" | "linhaProducao" | "status" | "tipoContratoManual" | "dataInicio" | "dataFim", valor: string) {
+    // tipoContratoManual reflete localmente no campo derivado `tipoContrato`
+    const localKey = campo === "tipoContratoManual" ? "tipoContrato" : campo
+    setRows((prev) => prev.map((c) => c.id === id ? { ...c, [localKey]: valor || null } : c))
     await fetch(`/api/expedicao/contrato/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [campo]: valor }) })
   }
   async function excluirContrato(id: string, numero: string) {
@@ -537,12 +549,12 @@ export default function ExpedicaoClient({
             </select>
             {ctrLoading && <span className="text-[11px] text-gray-400">calculando…</span>}
             <span className="text-gray-300 mx-1">|</span>
-            {["TODOS", "PROGRAMADO", "FINALIZADO", "CANCELADO"].map((s) => (
-              <button key={s} onClick={() => setFiltroStatus(s)}
+            {[{ key: "TODOS", label: "Todos" }, ...STATUS_CONTRATO].map((s) => (
+              <button key={s.key} onClick={() => setFiltroStatus(s.key)}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
-                  filtroStatus === s ? "bg-blue-700 text-white" : "bg-white border border-gray-200 text-gray-600"
+                  filtroStatus === s.key ? "bg-blue-700 text-white" : "bg-white border border-gray-200 text-gray-600"
                 }`}>
-                {s}
+                {s.label}
               </button>
             ))}
             <select value={ctrTipoContF} onChange={(e) => setCtrTipoContF(e.target.value)}
@@ -604,8 +616,8 @@ export default function ExpedicaoClient({
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Contrato", "Tipo Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Status", ""].map((h, i) => (
-                      <th key={i} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>
+                    {["Contrato", "Tipo Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Início", "Fim", "Status", ""].map((h, i) => (
+                      <th key={i} className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -613,10 +625,12 @@ export default function ExpedicaoClient({
                   {contratosFiltrados.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-mono text-xs text-gray-700">{c.numero}</td>
-                      <td className="px-3 py-2">
-                        {c.tipoContrato
-                          ? <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${TIPO_CONTRATO_COLOR[c.tipoContrato] ?? "bg-gray-100 text-gray-600"}`}>{TIPO_CONTRATO_LABEL[c.tipoContrato] ?? c.tipoContrato}</span>
-                          : <span className="text-gray-300 text-xs">—</span>}
+                      <td className="px-2 py-2">
+                        <select value={c.tipoContrato ?? ""} onChange={(e) => salvarContratoCampo(c.id, "tipoContratoManual", e.target.value)}
+                          className={`text-[11px] font-semibold rounded-full border px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${c.tipoContrato ? (TIPO_CONTRATO_COLOR[c.tipoContrato] ?? "bg-gray-100 text-gray-600") + " border-transparent" : "bg-white text-gray-400 border-gray-200"}`}>
+                          <option value="" className="bg-white text-gray-600">—</option>
+                          {TIPO_CONTRATO_OPCOES.map((t) => <option key={t} value={t} className="bg-white text-gray-800">{TIPO_CONTRATO_LABEL[t]}</option>)}
+                        </select>
                       </td>
                       <td className="px-3 py-2 font-medium text-gray-800">{c.cliente.nome}</td>
                       <td className="px-3 py-2 text-gray-600">{c.produtoAbreviado ?? "—"}</td>
@@ -651,11 +665,19 @@ export default function ExpedicaoClient({
                           <span className={`font-semibold ${c.pct >= 100 ? "text-green-600" : c.pct >= 70 ? "text-amber-600" : "text-red-500"}`}>{c.pct.toFixed(0)}%</span>
                         )}
                       </td>
-                      <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          c.status === "FINALIZADO" ? "bg-green-100 text-green-700" :
-                          c.status === "CANCELADO" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
-                        }`}>{c.status}</span>
+                      <td className="px-2 py-2">
+                        <input type="date" value={ymdOf(c.dataInicio)} onChange={(e) => salvarContratoCampo(c.id, "dataInicio", e.target.value)}
+                          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" title="Data de início" />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="date" value={ymdOf(c.dataFim)} onChange={(e) => salvarContratoCampo(c.id, "dataFim", e.target.value)}
+                          className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" title="Data de fim" />
+                      </td>
+                      <td className="px-2 py-2">
+                        <select value={statusContratoCfg(c.status).key} onChange={(e) => salvarContratoCampo(c.id, "status", e.target.value)}
+                          className={`text-xs font-semibold rounded-full border px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${statusContratoCfg(c.status).cls}`}>
+                          {STATUS_CONTRATO.map((s) => <option key={s.key} value={s.key} className="bg-white text-gray-800">{s.label}</option>)}
+                        </select>
                       </td>
                       <td className="px-2 py-2 text-center">
                         <button onClick={() => excluirContrato(c.id, c.numero)} title="Excluir contrato"
@@ -664,7 +686,7 @@ export default function ExpedicaoClient({
                     </tr>
                   ))}
                   {contratosFiltrados.length === 0 && (
-                    <tr><td colSpan={13} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
+                    <tr><td colSpan={15} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
                   )}
                 </tbody>
               </table>

@@ -86,7 +86,10 @@ export async function GET(req: NextRequest) {
     return {
       id: c.id, numero: c.numero, cliente: { nome: c.cliente.nome }, produtoAbreviado: c.produtoAbreviado,
       tipoProduto: c.tipoProduto, operacao: c.operacao, linhaProducao: c.linhaProducao, mes: c.mes, semana: c.semana,
-      tipoContrato: tipoDoContrato(c.numero, c.cliente.nome),
+      // tipo manual (editável) tem prioridade sobre o derivado do TOTVS
+      tipoContrato: c.tipoContratoManual ?? tipoDoContrato(c.numero, c.cliente.nome),
+      dataInicio: c.dataInicio ? c.dataInicio.toISOString() : null,
+      dataFim: c.dataFim ? c.dataFim.toISOString() : null,
       volProgramado: programado, realizado, saldo, pct, status: c.status,
     }
   })

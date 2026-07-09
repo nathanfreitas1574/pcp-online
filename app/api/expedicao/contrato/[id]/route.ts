@@ -9,8 +9,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const b = await req.json()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = {}
-  for (const k of ["tipoProduto", "operacao", "linhaProducao", "status"]) {
+  for (const k of ["tipoProduto", "operacao", "linhaProducao", "status", "tipoContratoManual"]) {
     if (b[k] !== undefined) data[k] = b[k] === "" ? null : b[k]
+  }
+  for (const k of ["dataInicio", "dataFim"]) {
+    if (b[k] !== undefined) data[k] = b[k] ? new Date(b[k]) : null
   }
   if (b.volProgramado !== undefined) data.volProgramado = Number(b.volProgramado) || 0
   const c = await prisma.contratoExpedicao.update({ where: { id }, data, include: { cliente: { select: { nome: true } } } })

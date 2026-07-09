@@ -443,7 +443,10 @@ model ContratoExpedicao {
   volProgramado    Float     @default(0)
   realizado        Float     @default(0)
   saldo            Float     @default(0)
-  status           String    @default("PROGRAMADO")
+  status           String    @default("ABERTO")   // ABERTO | CONFIRMADO | REALIZADO (status manual do contrato)
+  tipoContratoManual String?                       // COMPRA | VENDA | ARMAZEM_IND (sobrepõe o derivado do TOTVS)
+  dataInicio       DateTime?                        // início do contrato
+  dataFim          DateTime?                        // fim do contrato
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
