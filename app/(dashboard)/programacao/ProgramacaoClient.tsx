@@ -444,7 +444,7 @@ export default function ProgramacaoClient({
                   <th key={i} className={`px-2 py-3 text-center font-medium min-w-20 ${passou(i) ? "" : "opacity-80"}`}>
                     <div>{DIAS[i]}</div>
                     <div className="text-xs opacity-70 font-normal">{dias[i].label}</div>
-                    <div className="text-[9px] opacity-60 font-normal mt-0.5">prog / real</div>
+                    <div className="text-[9px] opacity-60 font-normal mt-0.5">prog / real / gap</div>
                   </th>
                 ))}
                 <th className="px-3 py-3 text-center font-medium">Total</th>
@@ -516,6 +516,13 @@ export default function ProgramacaoClient({
                       <div className={`text-center text-[10px] mt-0.5 px-0.5 ${e.cls}`} title="Realizado (CHECKOUT) · ✓ atendido · ✕ não atendido · ▲ excedeu">
                         {real[i] > 0 ? `${e.sym} ${fmt1(real[i])}`.trim() : (e.sym || "·")}
                       </div>
+                      {((row[d] ?? 0) > 0 || real[i] > 0) && (() => {
+                        const g = (row[d] ?? 0) - real[i] // gap = programado − realizado
+                        const cls = Math.abs(g) < 0.05 ? "text-green-500" : g > 0 ? "text-gray-400" : "text-amber-500"
+                        return <div className={`text-center text-[9px] leading-none ${cls}`} title="Gap = programado − realizado (positivo = falta; negativo = excedeu)">
+                          {Math.abs(g) < 0.05 ? "✓ 0" : g > 0 ? fmt1(g) : `+${fmt1(-g)}`}
+                        </div>
+                      })()}
                     </td>
                     )
                   })}
@@ -597,6 +604,11 @@ export default function ProgramacaoClient({
                     <td key={i} className="px-2 py-2.5 text-center text-xs align-top">
                       <div className="text-blue-700">{t > 0 ? t.toLocaleString("pt-BR") : "—"}</div>
                       <div className={`text-[10px] px-0.5 ${e.cls}`}>{realizadoDia[i] > 0 ? `${e.sym} ${fmt1(realizadoDia[i])}`.trim() : (e.sym || "")}</div>
+                      {(t > 0 || realizadoDia[i] > 0) && (() => {
+                        const g = t - realizadoDia[i]
+                        const cls = Math.abs(g) < 0.05 ? "text-green-600" : g > 0 ? "text-gray-500" : "text-amber-600"
+                        return <div className={`text-[9px] leading-none font-semibold ${cls}`} title="Gap = programado − realizado">{Math.abs(g) < 0.05 ? "✓ 0" : g > 0 ? fmt1(g) : `+${fmt1(-g)}`}</div>
+                      })()}
                     </td>
                     )
                   })}
