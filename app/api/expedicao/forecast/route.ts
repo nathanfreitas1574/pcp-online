@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { clienteMatch, normCliente } from "@/lib/texto"
-import { ehCheckout, ehCarga, diasDaSemana, ddMM, DIA } from "@/lib/programacao"
+import { ehCheckout, ehCarga, diasDaSemana, ddMM, DIA, dedupePorRomaneio } from "@/lib/programacao"
 
 // Tipos de forecast e como cada um casa o realizado na Marcação (campo tipoServico)
 const TIPOS = [
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
     prisma.expedicaoForecast.findMany({ where: { data: { gte: ini, lte: fim }, ...(tipo === "TODOS" ? {} : { tipo }) } }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-      select: { clienteDestino: true, cliente: true, operacao: true, status: true, pesoLiquido: true, tipoServico: true },
+      select: { clienteDestino: true, cliente: true, operacao: true, status: true, pesoLiquido: true, tipoServico: true, romaneio: true },
     }),
     prisma.cliente.findMany({ where: { ativo: true }, select: { nome: true, abreviado: true }, orderBy: { nome: "asc" } }),
   ])
@@ -109,8 +109,8 @@ export async function GET(req: NextRequest) {
 
   // realizado por cliente (CHECKOUT · CARGA, filtrado pelo tipo)
   const rMap = new Map<string, { display: string; total: number }>()
-  for (const m of marcRaw) {
-    if (!ehCheckout(m.status) || ehCarga(m.operacao) !== true) continue
+  const cargas = dedupePorRomaneio(marcRaw.filter((m) => ehCheckout(m.status) && ehCarga(m.operacao) === true))
+  for (const m of cargas) {
     if (!tipoMatchMarcacao(tipo, m.tipoServico)) continue
     const disp = m.clienteDestino || m.cliente || "—"
     const key = normCliente(disp)

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import BoxesVisualClient from "./BoxesVisualClient"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
-import { ehCheckout, ymd, DIA } from "@/lib/programacao"
+import { ehCheckout, ymd, DIA, dedupePorRomaneio } from "@/lib/programacao"
 
 export const dynamic = "force-dynamic"
 
@@ -72,10 +72,9 @@ export default async function BoxesPage() {
   const hojeYmd = ymd(hojeD)
   const descRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, operacao: { contains: "DESCARGA" }, dataCarregamento: { gte: corteDesc } },
-    select: { cliente: true, clienteDestino: true, produto: true, pesoLiquido: true, dataCarregamento: true, status: true },
+    select: { cliente: true, clienteDestino: true, produto: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
   })
-  const descargas = descRaw
-    .filter((m) => ehCheckout(m.status) && m.dataCarregamento)
+  const descargas = dedupePorRomaneio(descRaw.filter((m) => ehCheckout(m.status) && m.dataCarregamento))
     .map((m) => ({
       data: ymd(new Date(m.dataCarregamento!)),
       cliente: m.cliente ?? "",

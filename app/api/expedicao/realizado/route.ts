@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
-import { ehCheckout, ehCarga, ymd } from "@/lib/programacao"
+import { ehCheckout, ehCarga, ymd, dedupePorRomaneio } from "@/lib/programacao"
 
 const pad = (n: number) => String(n).padStart(2, "0")
 
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       select: {
         numero: true, clienteDestino: true, cliente: true, produto: true,
         operacao: true, status: true, pesoLiquido: true, dataCarregamento: true,
-        local: true, turno: true,
+        local: true, turno: true, romaneio: true,
       },
     }),
     prisma.contratoExpedicao.findMany({
@@ -44,9 +44,9 @@ export async function GET(req: NextRequest) {
   const obsMap = new Map(obsList.map((o) => [o.marcacaoNumero, o.observacao]))
 
   // só carregamentos finalizados (CHECKOUT) de CARGA (expedição)
-  const cargas = marcRaw.filter(
+  const cargas = dedupePorRomaneio(marcRaw.filter(
     (m) => m.dataCarregamento && ehCheckout(m.status) && ehCarga(m.operacao) === true
-  )
+  ))
 
   const rows = cargas.map((m) => {
     const clienteNome = m.clienteDestino || m.cliente || ""

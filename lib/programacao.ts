@@ -46,6 +46,20 @@ export function semanaDeData(d: Date): { ano: number; semana: number } {
 export const ehCheckout = (s: string | null | undefined) =>
   (s ?? "").toUpperCase().replace(/[^A-Z]/g, "").includes("CHECKOUT")
 
+// Remove marcações duplicadas pelo ROMANEIO (a origem/Connect às vezes traz a mesma
+// entrega em 2 linhas com nº diferentes → inflava o realizado). Mantém a 1ª ocorrência
+// de cada romaneio não-vazio; linhas sem romaneio ficam todas (não dá p/ identificar).
+export function dedupePorRomaneio<T extends { romaneio?: string | null }>(arr: T[]): T[] {
+  const vistos = new Set<string>()
+  const out: T[] = []
+  for (const m of arr) {
+    const rom = String(m.romaneio ?? "").trim()
+    if (rom) { if (vistos.has(rom)) continue; vistos.add(rom) }
+    out.push(m)
+  }
+  return out
+}
+
 // Classifica a operação da marcação: true = CARGA (expedição), false = DESCARGA, null = nenhuma.
 export function ehCarga(operacao: string | null | undefined): boolean | null {
   const op = (operacao || "").toUpperCase()

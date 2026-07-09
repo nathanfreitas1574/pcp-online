@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
-import { diasDaSemana, ymd, ehCheckout, ehCarga, getSemanaAtual, DIA } from "@/lib/programacao"
+import { diasDaSemana, ymd, ehCheckout, ehCarga, getSemanaAtual, DIA, dedupePorRomaneio } from "@/lib/programacao"
 import { NextRequest, NextResponse } from "next/server"
 
 const DIAS_KEYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const
@@ -31,16 +31,16 @@ export async function GET(req: NextRequest) {
   const fim = new Date(Date.UTC(ano, 11, 31) + 8 * DIA)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
   })
 
   // Bucket por dia + operação(carga?) → lista (cliente/produto casam de forma flexível no laço)
   const bucket = new Map<string, { cliente: string | null; produto: string | null; peso: number }[]>()
-  for (const m of marcacoesRaw) {
-    if (!m.dataCarregamento || !ehCheckout(m.status)) continue
+  const cargasHist = dedupePorRomaneio(marcacoesRaw.filter((m) => m.dataCarregamento && ehCheckout(m.status)))
+  for (const m of cargasHist) {
     const carga = ehCarga(m.operacao)
     if (carga === null) continue
-    const key = `${ymd(new Date(m.dataCarregamento))}|${carga ? 1 : 0}`
+    const key = `${ymd(new Date(m.dataCarregamento!))}|${carga ? 1 : 0}`
     if (!bucket.has(key)) bucket.set(key, [])
     bucket.get(key)!.push({ cliente: m.clienteDestino || m.cliente, produto: m.produto, peso: m.pesoLiquido || 0 })
   }

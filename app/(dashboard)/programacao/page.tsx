@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import ProgramacaoClient from "./ProgramacaoClient"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
-import { DIA, ymd, ddMM, getSemanaAtual, semanasDoAno, diasDaSemana, ehCheckout } from "@/lib/programacao"
+import { DIA, ymd, ddMM, getSemanaAtual, semanasDoAno, diasDaSemana, ehCheckout, dedupePorRomaneio } from "@/lib/programacao"
 
 export const dynamic = "force-dynamic"
 
@@ -59,9 +59,9 @@ export default async function ProgramacaoPage({
   const semanaFim = new Date(diasSemana[6].getTime() + DIA - 1)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: semanaIni, lte: semanaFim } },
-    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
   })
-  const marcacoes = marcacoesRaw.filter(m => ehCheckout(m.status))
+  const marcacoes = dedupePorRomaneio(marcacoesRaw.filter(m => ehCheckout(m.status)))
 
   const idxPorData = new Map<string, number>()
   diasSemana.forEach((d, i) => idxPorData.set(ymd(d), i))

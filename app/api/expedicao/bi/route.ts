@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { clienteMatch, produtoMatch, normCliente } from "@/lib/texto"
-import { ehCheckout, ehCarga, ymd, diasDaSemana, semanasDoAno, DIA } from "@/lib/programacao"
+import { ehCheckout, ehCarga, ymd, diasDaSemana, semanasDoAno, DIA, dedupePorRomaneio } from "@/lib/programacao"
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 const PROG_DIAS = ["seg", "ter", "qua", "qui", "sex", "sab"] as const
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     prisma.expedicaoForecast.findMany({ where: { data: { gte: anoIni, lte: anoFim } } }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: anoIni, lte: anoFim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true, romaneio: true },
     }),
     prisma.expedicaoCapacidade.findMany({ where: { ano } }),
     prisma.programacaoSemanal.findMany({ where: { ano, tipo: "EXPEDICAO" }, select: { semana: true, seg: true, ter: true, qua: true, qui: true, sex: true, sab: true } }),
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     GRANEL: (ts) => ts.includes("GRANEL"),
     "PRODUTO ACABADO": (ts) => ts.includes("ACABADO") || ts.includes("PROD ACAB"),
   }
-  const cargasBrutas = marcAno.filter((m) => m.dataCarregamento && ehCheckout(m.status) && ehCarga(m.operacao) === true)
+  const cargasBrutas = dedupePorRomaneio(marcAno.filter((m) => m.dataCarregamento && ehCheckout(m.status) && ehCarga(m.operacao) === true))
   // contrato casado por carga (p/ derivar linha e operação do realizado)
   const contratoDaCarga = (m: typeof cargasBrutas[number]) =>
     contratos.find((ct) => clienteMatch(m.clienteDestino || m.cliente, ct.cliente.nome) && produtoMatch(m.produto, ct.produtoAbreviado || ct.produtoSistema))

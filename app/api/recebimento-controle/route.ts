@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
 import { dataInputUTC } from "@/lib/cobertura"
-import { ehCheckout, ehCarga, ymd, semanaDeData, getSemanaAtual } from "@/lib/programacao"
+import { ehCheckout, ehCarga, ymd, semanaDeData, getSemanaAtual, dedupePorRomaneio } from "@/lib/programacao"
 import { NextRequest, NextResponse } from "next/server"
 
 // GET — registros do mês + realizado (marcação CHECKOUT/DESCARGA) + dados do painel
@@ -42,10 +42,10 @@ export async function GET(req: NextRequest) {
   const fim = new Date(Date.UTC(ano, Math.max(...meses), 1) - 1)
   const marcRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
   })
-  const descargas = marcRaw.filter(m => ehCheckout(m.status) && ehCarga(m.operacao) === false && m.dataCarregamento
-    && mesesSet.has(new Date(m.dataCarregamento).getUTCMonth() + 1))
+  const descargas = dedupePorRomaneio(marcRaw.filter(m => ehCheckout(m.status) && ehCarga(m.operacao) === false && m.dataCarregamento
+    && mesesSet.has(new Date(m.dataCarregamento).getUTCMonth() + 1)))
 
   // calcula realizado por registro + realizado por dia (painel)
   const realizadoDiaMap = new Map<string, number>()

@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
-import { ehCheckout, ehCarga, ymd } from "@/lib/programacao"
+import { ehCheckout, ehCarga, ymd, dedupePorRomaneio } from "@/lib/programacao"
 
 const pad = (n: number) => String(n).padStart(2, "0")
 const chaveDia = (dia: string, cliente: string, produto: string) =>
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   const [marcRaw, contratos, overlays] = await Promise.all([
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true, romaneio: true },
     }),
     prisma.contratoExpedicao.findMany({
       orderBy: { numero: "asc" },
@@ -47,9 +47,9 @@ export async function GET(req: NextRequest) {
   // agrupa marcações CHECKOUT · CARGA por dia|cliente|produto
   type Grupo = { chave: string; data: string; cliente: string; produto: string; realizado: number; local: string | null; tipoServico: string | null }
   const grupos = new Map<string, Grupo>()
-  for (const m of marcRaw) {
-    if (!m.dataCarregamento || !ehCheckout(m.status) || ehCarga(m.operacao) !== true) continue
-    const dia = ymd(new Date(m.dataCarregamento))
+  const cargas = dedupePorRomaneio(marcRaw.filter((m) => m.dataCarregamento && ehCheckout(m.status) && ehCarga(m.operacao) === true))
+  for (const m of cargas) {
+    const dia = ymd(new Date(m.dataCarregamento!))
     const cliente = m.clienteDestino || m.cliente || "—"
     const produto = m.produto || "—"
     const chave = chaveDia(dia, cliente, produto)

@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { clienteMatch, produtoMatch, normCliente } from "@/lib/texto"
-import { ehCheckout, ehCarga, diasDaSemana, semanasDoAno, DIA } from "@/lib/programacao"
+import { ehCheckout, ehCarga, diasDaSemana, semanasDoAno, DIA, dedupePorRomaneio } from "@/lib/programacao"
 
 const DIAS_KEYS = ["seg", "ter", "qua", "qui", "sex", "sab"] as const // seg..sab (dom fora)
 const normNum = (s: string | null | undefined) => String(s ?? "").trim().replace(/^0+/, "") || "0"
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, romaneio: true },
     }),
     // tipo de contrato (definido na importação dos Contratos TOTVS)
     prisma.contratoArmazenagem.findMany({ where: { tipoContrato: { not: null } }, select: { numero: true, clienteNome: true, tipoContrato: true } }),
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Realizado = Marcação CHECKOUT · CARGA no período
-  const cargas = marcRaw.filter((m) => ehCheckout(m.status) && ehCarga(m.operacao) === true)
+  const cargas = dedupePorRomaneio(marcRaw.filter((m) => ehCheckout(m.status) && ehCarga(m.operacao) === true))
 
   const rows = contratos.map((c) => {
     const programado = progPorNum.get(normNum(c.numero)) ?? 0
