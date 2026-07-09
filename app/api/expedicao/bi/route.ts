@@ -8,6 +8,22 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 const PROG_DIAS = ["seg", "ter", "qua", "qui", "sex", "sab"] as const
 const r1 = (n: number) => Math.round(n * 10) / 10
 
+// feriados nacionais (p/ dias úteis do ritmo) — mesma lógica da Capacidade
+function feriadosDoAno(ano: number): Set<string> {
+  const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const mesP = Math.floor((h + l - 7 * m + 114) / 31)
+  const diaP = ((h + l - 7 * m + 114) % 31) + 1
+  const pascoa = Date.UTC(ano, mesP - 1, diaP)
+  const key = (t: number) => { const dt = new Date(t); return `${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}` }
+  const s = new Set(["01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "11-20", "12-25"])
+  s.add(key(pascoa - 47 * DIA)); s.add(key(pascoa - 2 * DIA)); s.add(key(pascoa + 60 * DIA))
+  return s
+}
+
 // Dashboard Expedição (BI) — cruza orçado, forecast, marcação, capacidade e programação semanal
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -78,6 +94,32 @@ export async function GET(req: NextRequest) {
     return { dia: d, realizado: r1(realizado), forecast: r1(forecast) }
   })
 
+  // ── Ritmo / projeção do mês (run-rate por dias úteis) ──────────────────────
+  // média diária = realizado ÷ dias úteis decorridos; projeção = realizado + média × dias úteis restantes
+  const feriados = feriadosDoAno(ano)
+  const ehDiaUtil = (d: number) => {
+    const dow = new Date(Date.UTC(ano, mesDiario - 1, d)).getUTCDay()
+    const mmdd = `${String(mesDiario).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+    return dow !== 0 && !feriados.has(mmdd) // sábado conta; domingo e feriado não
+  }
+  const isMesCorrente = ano === now.getUTCFullYear() && mesDiario === now.getUTCMonth() + 1
+  const isMesPassado = ano < now.getUTCFullYear() || (ano === now.getUTCFullYear() && mesDiario < now.getUTCMonth() + 1)
+  const cutoff = isMesCorrente ? now.getUTCDate() : (isMesPassado ? nDias : 0)
+  let duTotais = 0, duDecorridos = 0
+  for (let d = 1; d <= nDias; d++) { if (ehDiaUtil(d)) { duTotais++; if (d <= cutoff) duDecorridos++ } }
+  const realizadoMes = r1(diario.reduce((s, x) => s + x.realizado, 0))
+  const forecastMes = r1(diario.reduce((s, x) => s + x.forecast, 0))
+  const mediaDiaria = duDecorridos > 0 ? realizadoMes / duDecorridos : 0
+  const duRestantes = Math.max(0, duTotais - duDecorridos)
+  const projecao = r1(realizadoMes + mediaDiaria * duRestantes)
+  const ritmo = {
+    mes: MESES[mesDiario - 1],
+    realizado: realizadoMes, forecast: forecastMes,
+    diasUteisTotais: duTotais, diasUteisDecorridos: duDecorridos, diasUteisRestantes: duRestantes,
+    mediaDiaria: r1(mediaDiaria), projecao, gap: r1(projecao - forecastMes),
+    atingeForecast: forecastMes > 0 ? Math.round((projecao / forecastMes) * 100) : null,
+  }
+
   // ── agrupamentos do período (cliente / produto / linha / operação / turno) ──
   const agrupa = (keyFn: (m: typeof cargas[number]) => string | null) => {
     const map = new Map<string, number>()
@@ -133,6 +175,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ano, mes, mesDiario: MESES[mesDiario - 1],
-    kpis, mensal, semanal, diario, porCliente, porProduto, porLinha, porOperacao, porTurno, aderenciaCliente,
+    kpis, ritmo, mensal, semanal, diario, porCliente, porProduto, porLinha, porOperacao, porTurno, aderenciaCliente,
   })
 }

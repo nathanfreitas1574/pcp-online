@@ -14,6 +14,7 @@ type NV = { nome: string; valor: number }
 type Bi = {
   ano: number; mes: number; mesDiario: string
   kpis: { orcado: number; forecast: number; realizado: number; capacidade: number; gap: number; aderenciaForecast: number; aderenciaOrcado: number; performance: number }
+  ritmo: { mes: string; realizado: number; forecast: number; diasUteisTotais: number; diasUteisDecorridos: number; diasUteisRestantes: number; mediaDiaria: number; projecao: number; gap: number; atingeForecast: number | null }
   mensal: { mes: string; orcado: number; forecast: number; realizado: number; ritmo: number | null }[]
   semanal: { semana: number; programado: number; realizado: number; aderencia: number | null }[]
   diario: { dia: number; realizado: number; forecast: number }[]
@@ -23,12 +24,24 @@ type Bi = {
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })
 const fmt1 = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+const r1 = (n: number) => Math.round(n * 10) / 10
 
 function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`bg-white rounded-xl border border-green-100 shadow-sm p-3 ${className}`}>
       <p className="text-xs font-semibold text-gray-600 mb-2">{title}</p>
       {children}
+    </div>
+  )
+}
+
+const TONE: Record<string, string> = { green: "text-green-700", red: "text-red-600", blue: "text-blue-700", gray: "text-gray-800" }
+function RTile({ label, value, sub, tone = "gray", strong = false }: { label: string; value: string; sub?: string; tone?: string; strong?: boolean }) {
+  return (
+    <div className={`rounded-lg px-3 py-2 ${strong ? "bg-green-50 border border-green-200" : "bg-gray-50 border border-gray-100"}`}>
+      <p className="text-[10px] text-gray-500 leading-tight">{label}</p>
+      <p className={`font-bold ${strong ? "text-base" : "text-sm"} ${TONE[tone] ?? TONE.gray}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-400 leading-tight">{sub}</p>}
     </div>
   )
 }
@@ -85,6 +98,41 @@ export default function BiExpedicao() {
           </div>
         ))}
       </div>
+
+      {/* Ritmo do mês — projeção por dias úteis (run-rate) */}
+      {d?.ritmo && (
+        <div className="bg-white rounded-xl border border-green-100 shadow-sm p-3 mb-3">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+            <p className="text-xs font-semibold text-gray-600">Ritmo do Mês — projeção por dias úteis ({d.ritmo.mes})</p>
+            <p className="text-[10px] text-gray-400">projeção = realizado + (média diária × dias úteis restantes)</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+            <RTile label="Realizado até agora" value={`${fmt1(d.ritmo.realizado)} t`} sub={`${d.ritmo.diasUteisDecorridos} dia(s) úteis`} tone="green" />
+            <RTile label="Média por dia" value={`${fmt1(d.ritmo.mediaDiaria)} t`} sub="realizado ÷ dias úteis" tone="blue" />
+            <RTile label="Dias úteis decorridos" value={`${d.ritmo.diasUteisDecorridos}`} sub={`de ${d.ritmo.diasUteisTotais} no mês`} />
+            <RTile label="Dias úteis restantes" value={`${d.ritmo.diasUteisRestantes}`} sub="p/ fechar o mês" />
+            <RTile label="Projeção fim do mês" value={`${fmt1(d.ritmo.projecao)} t`} sub="no ritmo atual" tone="green" strong />
+            <RTile label="Forecast confirmado" value={`${fmt1(d.ritmo.forecast)} t`} sub="do mês" tone="blue" />
+            <RTile label="Projeção × Forecast" value={d.ritmo.atingeForecast == null ? "—" : `${d.ritmo.atingeForecast}%`}
+              sub={`gap ${d.ritmo.gap >= 0 ? "+" : ""}${fmt1(d.ritmo.gap)} t`} tone={d.ritmo.gap >= 0 ? "green" : "red"} strong />
+          </div>
+          <div className="mt-2">
+            <ResponsiveContainer width="100%" height={90}>
+              <BarChart layout="vertical" data={[
+                { nome: "Projeção", realizado: d.ritmo.realizado, restante: r1(d.ritmo.projecao - d.ritmo.realizado), forecast: d.ritmo.forecast },
+                { nome: "Forecast", realizado: 0, restante: 0, forecast: d.ritmo.forecast },
+              ]} margin={{ top: 0, right: 40, left: 8, bottom: 0 }} barCategoryGap={8}>
+                <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={fmt} />
+                <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={64} />
+                <Tooltip formatter={(v) => fmt1(Number(v))} />
+                <Bar dataKey="realizado" name="Realizado" stackId="a" fill={COR.realizado} radius={[3, 0, 0, 3]} />
+                <Bar dataKey="restante" name="Projetado (restante)" stackId="a" fill="#86efac" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="forecast" name="Forecast" fill={COR.forecast} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* linha 1: Mensal + Ritmo */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mb-2">
