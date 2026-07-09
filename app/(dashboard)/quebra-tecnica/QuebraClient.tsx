@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
 import { Plus, Trash2, Upload, Eraser, TrendingDown, Package, Percent, CheckCircle2, Clock, FolderOpen } from "lucide-react"
+import DrillBarChart from "@/components/DrillBarChart"
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 const STATUS = [
@@ -169,33 +169,25 @@ export default function QuebraClient() {
         ))}
       </div>
 
-      {/* Gráficos: quebra por produto / cliente */}
+      {/* Gráficos com drill-down: produto → cliente → navio | cliente → produto → contrato */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-4">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
-          <p className="text-xs font-semibold text-gray-600 mb-2">Quebra técnica por produto (t)</p>
-          <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={(d?.porProduto ?? []).slice(0, 12)} layout="vertical" margin={{ top: 4, right: 24, left: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={fmt} />
-              <YAxis type="category" dataKey="nome" tick={{ fontSize: 9 }} width={90} tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + "…" : v} />
-              <Tooltip formatter={(v) => `${fmt1(Number(v))} t`} />
-              <Bar dataKey="quebra" name="Quebra (t)" fill="#ef4444" radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <DrillBarChart
+            titulo="Quebra técnica por produto (t)"
+            dados={(d?.rows ?? []).map((r) => ({ produto: r.produto || "(sem produto)", cliente: r.cliente || "(sem cliente)", navio: r.origemNavio || "(sem navio)", quebra: r.quebraTecnica }))}
+            niveis={[{ campo: "produto", titulo: "Produto" }, { campo: "cliente", titulo: "Cliente" }, { campo: "navio", titulo: "Origem/Navio" }]}
+            medidas={[{ campo: "quebra", nome: "Quebra (t)", cor: "#ef4444" }]}
+            unidade="t"
+          />
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
-          <p className="text-xs font-semibold text-gray-600 mb-2">Quebra técnica por cliente (t)</p>
-          <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={(d?.porCliente ?? []).slice(0, 12)} layout="vertical" margin={{ top: 4, right: 24, left: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={fmt} />
-              <YAxis type="category" dataKey="nome" tick={{ fontSize: 9 }} width={110} tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 18) + "…" : v} />
-              <Tooltip formatter={(v) => `${fmt1(Number(v))} t`} />
-              <Bar dataKey="quebra" name="Quebra (t)" fill="#f97316" radius={[0, 3, 3, 0]}>
-                {(d?.porCliente ?? []).slice(0, 12).map((_, i) => <Cell key={i} fill="#f97316" />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <DrillBarChart
+            titulo="Quebra técnica por cliente (t)"
+            dados={(d?.rows ?? []).map((r) => ({ cliente: r.cliente || "(sem cliente)", produto: r.produto || "(sem produto)", contrato: r.contrato || "(sem contrato)", quebra: r.quebraTecnica }))}
+            niveis={[{ campo: "cliente", titulo: "Cliente" }, { campo: "produto", titulo: "Produto" }, { campo: "contrato", titulo: "Contrato" }]}
+            medidas={[{ campo: "quebra", nome: "Quebra (t)", cor: "#f97316" }]}
+            unidade="t"
+          />
         </div>
       </div>
 
