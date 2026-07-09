@@ -210,6 +210,7 @@ export default function ExpedicaoClient({
   const [fcGran, setFcGran] = useState<"ano" | "mes" | "semana">("mes")
   const [fcAno, setFcAno] = useState(anoAtual)
   const [fcMes, setFcMes] = useState(new Date().getMonth() + 1)
+  const [fcMesAte, setFcMesAte] = useState(new Date().getMonth() + 1) // fim do intervalo (>= fcMes)
   const [fcSemana, setFcSemana] = useState(() => getSemanaAtual().semana)
   const [fcTipo, setFcTipo] = useState("ENVASE")
   const [fcRows, setFcRows] = useState<FcRow[]>([])
@@ -226,11 +227,12 @@ export default function ExpedicaoClient({
   const [fcDiasLoading, setFcDiasLoading] = useState(false)
   const [fcExplodir, setFcExplodir] = useState("")
 
-  const fcEditavel = fcGran === "mes" && fcTipo !== "TODOS"
+  const fcIntervalo = fcGran === "mes" && fcMesAte > fcMes // intervalo de meses (só visualização)
+  const fcEditavel = fcGran === "mes" && fcTipo !== "TODOS" && !fcIntervalo
 
   function carregarForecast() {
     setFcLoading(true)
-    const qs = new URLSearchParams({ gran: fcGran, ano: String(fcAno), mes: String(fcMes), semana: String(fcSemana), tipo: fcTipo })
+    const qs = new URLSearchParams({ gran: fcGran, ano: String(fcAno), mes: String(fcMes), mesAte: String(fcMesAte), semana: String(fcSemana), tipo: fcTipo })
     fetch(`/api/expedicao/forecast?${qs}`)
       .then((r) => r.json())
       .then((d) => {
@@ -244,7 +246,7 @@ export default function ExpedicaoClient({
     if (aba !== "forecast") return
     carregarForecast()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, fcGran, fcAno, fcMes, fcSemana, fcTipo])
+  }, [aba, fcGran, fcAno, fcMes, fcMesAte, fcSemana, fcTipo])
 
   async function salvarForecastMes(clienteNome: string, valor: number) {
     setFcRows((prev) => {
@@ -967,10 +969,19 @@ export default function ExpedicaoClient({
               {[anoAtual - 2, anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             {fcGran !== "ano" && (
-              <select value={fcMes} onChange={(e) => setFcMes(Number(e.target.value))}
+              <select value={fcMes} onChange={(e) => { const v = Number(e.target.value); setFcMes(v); if (fcMesAte < v) setFcMesAte(v) }}
                 className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
               </select>
+            )}
+            {fcGran === "mes" && (
+              <>
+                <span className="text-xs text-gray-400">até</span>
+                <select value={fcMesAte} onChange={(e) => setFcMesAte(Number(e.target.value))}
+                  className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${fcIntervalo ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-700"}`}>
+                  {MESES.map((nome, i) => <option key={i} value={i + 1} disabled={i + 1 < fcMes}>{nome}</option>)}
+                </select>
+              </>
             )}
             {fcGran === "semana" && (
               <div className="flex items-center gap-1 text-xs">
@@ -1004,7 +1015,9 @@ export default function ExpedicaoClient({
           </div>
           {!fcEditavel && (
             <p className="text-[11px] text-gray-400 mb-2">
-              Edição de forecast só na granularidade <strong>Mês</strong> com um tipo selecionado (não em Todos). Aqui é só visualização/soma do período.
+              {fcIntervalo
+                ? <>Intervalo de <strong>{MESES[fcMes - 1]}</strong> a <strong>{MESES[fcMesAte - 1]}</strong> — só visualização/soma. Para editar, selecione um único mês.</>
+                : <>Edição de forecast só na granularidade <strong>Mês</strong> com um tipo selecionado (não em Todos). Aqui é só visualização/soma do período.</>}
             </p>
           )}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">

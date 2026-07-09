@@ -78,7 +78,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ano, mes, cliente: clienteDet, tipo: tp, dias })
   }
 
-  const { ini, fim, label } = periodo(gran, ano, mes, semana)
+  // eslint-disable-next-line prefer-const
+  let { ini, fim, label } = periodo(gran, ano, mes, semana)
+  // intervalo de meses (de/até) — só na granularidade "mes"
+  const mesAte = Number(sp.get("mesAte")) || mes
+  if (gran === "mes" && mesAte > mes && mesAte <= 12) {
+    fim = new Date(Date.UTC(ano, mesAte, 1) - 1)
+    label = `${String(mes).padStart(2, "0")}–${String(mesAte).padStart(2, "0")}/${ano}`
+  }
 
   const [entradas, marcRaw, clientesCad] = await Promise.all([
     prisma.expedicaoForecast.findMany({ where: { data: { gte: ini, lte: fim }, ...(tipo === "TODOS" ? {} : { tipo }) } }),
