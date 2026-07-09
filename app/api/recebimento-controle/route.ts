@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
   const unidade = searchParams.get("unidade") || undefined
   const tipoProduto = searchParams.get("tipoProduto") || undefined
   const cliente = searchParams.get("cliente") || undefined
+  const statusF = searchParams.get("status") || undefined
 
   // filtra pela DATA real do registro (só o(s) mês(es) selecionado(s)); sem data → cai pelo mês de referência
   const rangesMes = meses.map(m => ({ data: { gte: new Date(Date.UTC(ano, m - 1, 1)), lte: new Date(Date.UTC(ano, m, 1) - 1) } }))
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
   if (unidade) where.unidade = unidade
   if (tipoProduto) where.tipoProduto = tipoProduto
   if (cliente) where.cliente = cliente
+  if (statusF) where.status = statusF
 
   const [registros, todos] = await Promise.all([
     prisma.recebimentoControle.findMany({ where, orderBy: [{ data: "asc" }, { cliente: "asc" }] }),
@@ -110,6 +112,7 @@ export async function POST(req: NextRequest) {
   const base = data ?? new Date()
   const { ano, semana } = semanaDeData(base)
   const mes = base.getUTCMonth() + 1
+  const statusV = b.status?.trim() || "PREVISTO"
 
   const c = await prisma.recebimentoControle.create({
     data: {
@@ -118,7 +121,8 @@ export async function POST(req: NextRequest) {
       mes: Number(b.mes) || mes,
       semana: Number(b.semana) || semana,
       unidade: b.unidade?.trim() || "ROO",
-      status: b.status?.trim() || "PREVISTO",
+      status: statusV,
+      dataFinalizacao: statusV === "FINALIZADO" ? (dataInputUTC(b.dataFinalizacao) ?? new Date()) : null,
       numeroContrato: b.numeroContrato?.trim() || null,
       cliente: String(b.cliente ?? "").trim(),
       produtoAbreviado: String(b.produtoAbreviado ?? "").trim(),

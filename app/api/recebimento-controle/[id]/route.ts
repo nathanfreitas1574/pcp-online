@@ -27,6 +27,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (data.cliente === null) data.cliente = ""
   if (data.produtoAbreviado === null) data.produtoAbreviado = ""
+  // data de finalização: preenche ao virar FINALIZADO, limpa ao sair desse status
+  if (b.status !== undefined) {
+    data.dataFinalizacao = b.status === "FINALIZADO" ? (dataInputUTC(b.dataFinalizacao) ?? new Date()) : null
+  } else if (b.dataFinalizacao !== undefined) {
+    data.dataFinalizacao = dataInputUTC(b.dataFinalizacao)
+  }
 
   const c = await prisma.recebimentoControle.update({ where: { id }, data })
   return NextResponse.json(c)

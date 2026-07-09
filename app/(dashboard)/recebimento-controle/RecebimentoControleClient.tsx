@@ -5,7 +5,7 @@ import {
   Download, Plus, Pencil, Trash2, X, Save, Table2, BarChart3, Upload, Ship, Target, CheckCircle2, TrendingDown, ChevronDown,
 } from "lucide-react"
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList,
 } from "recharts"
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
@@ -15,7 +15,7 @@ const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ou
 
 type Item = {
   id: string; data: string | null; ano: number; mes: number; semana: number | null
-  unidade: string | null; status: string | null; numeroContrato: string | null; cliente: string; produtoAbreviado: string
+  unidade: string | null; status: string | null; dataFinalizacao: string | null; numeroContrato: string | null; cliente: string; produtoAbreviado: string
   tipoProduto: string | null; navio: string | null; origem: string | null
   volumeProgramado: number; cancelado: number; adicionado: number; obs: string | null
   confirmado: number; realizado: number; saldo: number
@@ -26,7 +26,12 @@ type Dados = {
   painel: { cotas: { confirmado: number; realizado: number; saldo: number }; porCliente: Grupo[]; porProduto: Grupo[]; porTipo: Grupo[]; realizadoDia: { dia: string; valor: number }[] }
   opcoes: { anos: number[]; unidades: string[]; tiposProduto: string[]; clientes: string[] }
 }
-const VAZIO = { numeroContrato: "", data: "", unidade: "ROO", status: "PREVISTO", cliente: "", produtoAbreviado: "", tipoProduto: "GRANEL", navio: "", origem: "", volumeProgramado: "", cancelado: "", adicionado: "", obs: "" }
+const VAZIO = { numeroContrato: "", data: "", unidade: "ROO", status: "PREVISTO", dataFinalizacao: "", cliente: "", produtoAbreviado: "", tipoProduto: "GRANEL", navio: "", origem: "", volumeProgramado: "", cancelado: "", adicionado: "", obs: "" }
+const STATUS_OPCOES = ["PREVISTO", "CONFIRMADO", "REALIZADO", "FINALIZADO", "CANCELADO"]
+const STATUS_COR: Record<string, string> = {
+  PREVISTO: "bg-gray-100 text-gray-600", CONFIRMADO: "bg-blue-100 text-blue-700",
+  REALIZADO: "bg-orange-100 text-orange-700", FINALIZADO: "bg-green-100 text-green-700", CANCELADO: "bg-red-100 text-red-600",
+}
 type CadOpt = { nome?: string; descricao?: string; abreviado: string | null }
 
 export default function RecebimentoControleClient({ anoAtual, mesAtual, clientesCad, produtosCad }: { anoAtual: number; mesAtual: number; clientesCad: CadOpt[]; produtosCad: CadOpt[] }) {
@@ -36,6 +41,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
   const [unidade, setUnidade] = useState("")
   const [tipoProduto, setTipoProduto] = useState("")
   const [cliente, setCliente] = useState("")
+  const [statusF, setStatusF] = useState("")
   const [d, setD] = useState<Dados | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"tabela" | "painel">("tabela")
@@ -54,10 +60,11 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
     if (unidade) qs.set("unidade", unidade)
     if (tipoProduto) qs.set("tipoProduto", tipoProduto)
     if (cliente) qs.set("cliente", cliente)
+    if (statusF) qs.set("status", statusF)
     const r = await fetch("/api/recebimento-controle?" + qs.toString())
     setD(await r.json())
     setLoading(false)
-  }, [ano, mesesKey, unidade, tipoProduto, cliente])
+  }, [ano, mesesKey, unidade, tipoProduto, cliente, statusF])
   useEffect(() => { carregar() }, [carregar])
 
   function toggleMes(m: number) {
@@ -82,6 +89,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
     setForm({
       numeroContrato: it.numeroContrato ?? "",
       data: it.data ? it.data.slice(0, 10) : "", unidade: it.unidade ?? "ROO", status: it.status ?? "PREVISTO",
+      dataFinalizacao: it.dataFinalizacao ? it.dataFinalizacao.slice(0, 10) : "",
       cliente: it.cliente, produtoAbreviado: it.produtoAbreviado, tipoProduto: it.tipoProduto ?? "", navio: it.navio ?? "",
       origem: it.origem ?? "", volumeProgramado: String(it.volumeProgramado || ""), cancelado: String(it.cancelado || ""),
       adicionado: String(it.adicionado || ""), obs: it.obs ?? "",
@@ -188,6 +196,11 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
           <option value="">Todos os clientes</option>
           {(d?.opcoes.clientes ?? []).map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <select value={statusF} onChange={e => setStatusF(e.target.value)}
+          className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200"}`}>
+          <option value="">Todos os status</option>
+          {STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         <div className="ml-auto flex bg-gray-100 p-1 rounded-lg gap-1">
           <button onClick={() => setView("tabela")} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "tabela" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}><Table2 size={13} /> Tabela</button>
           <button onClick={() => setView("painel")} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "painel" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}><BarChart3 size={13} /> Painel</button>
@@ -211,7 +224,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={(d?.painel.realizadoDia ?? []).map(x => ({ nome: x.dia.slice(8) + "/" + x.dia.slice(5, 7), valor: Math.round(x.valor) }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#eee" /><XAxis dataKey="nome" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => fmt(Number(v)) + " t"} /><Bar dataKey="valor" name="Realizado" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                <Tooltip formatter={(v) => fmt(Number(v)) + " t"} /><Bar dataKey="valor" name="Realizado" fill="#0ea5e9" radius={[4, 4, 0, 0]}><LabelList dataKey="valor" position="top" style={{ fontSize: 9, fill: "#0369a1" }} formatter={(v: string | number | boolean | null | undefined) => (v ? fmt(Number(v)) : "")} /></Bar>
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -233,7 +246,10 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
                     <td className="px-2 py-1.5 whitespace-nowrap text-gray-600">{dt(it.data)}</td>
                     <td className="px-2 py-1.5 text-center text-gray-500">{it.semana ?? "—"}</td>
                     <td className="px-2 py-1.5 text-gray-600">{it.unidade}</td>
-                    <td className="px-2 py-1.5"><span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{it.status}</span></td>
+                    <td className="px-2 py-1.5">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${STATUS_COR[it.status ?? ""] ?? "bg-gray-100 text-gray-600"}`}>{it.status}</span>
+                      {it.status === "FINALIZADO" && it.dataFinalizacao && <div className="text-[9px] text-green-600 mt-0.5">✓ {it.dataFinalizacao.slice(8, 10)}/{it.dataFinalizacao.slice(5, 7)}/{it.dataFinalizacao.slice(2, 4)}</div>}
+                    </td>
                     <td className="px-2 py-1.5 font-mono text-gray-500">{it.numeroContrato || "—"}</td>
                     <td className="px-2 py-1.5 font-medium text-gray-800 max-w-[120px] truncate" title={it.cliente}>{it.cliente}</td>
                     <td className="px-2 py-1.5 text-gray-700 max-w-[130px] truncate" title={it.produtoAbreviado}>{it.produtoAbreviado}</td>
@@ -276,7 +292,10 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
               <Campo l="Contrato" span><input value={form.numeroContrato} onChange={e => setForm({ ...form, numeroContrato: e.target.value })} onBlur={e => buscarContrato(e.target.value)} className={inp + " font-mono"} placeholder="nº do contrato — auto-preenche cliente/produto" /></Campo>
               <Campo l="Data"><input type="date" value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} className={inp} /></Campo>
               <Campo l="Unidade"><input value={form.unidade} onChange={e => setForm({ ...form, unidade: e.target.value })} className={inp} /></Campo>
-              <Campo l="Status"><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={inp}><option>PREVISTO</option><option>CONFIRMADO</option><option>REALIZADO</option><option>CANCELADO</option></select></Campo>
+              <Campo l="Status"><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value, dataFinalizacao: e.target.value === "FINALIZADO" && !form.dataFinalizacao ? new Date().toISOString().slice(0, 10) : form.dataFinalizacao })} className={inp}>{STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}</select></Campo>
+              {form.status === "FINALIZADO" && (
+                <Campo l="Data de finalização"><input type="date" value={form.dataFinalizacao} onChange={e => setForm({ ...form, dataFinalizacao: e.target.value })} className={inp} /></Campo>
+              )}
               <Campo l="Cliente *" span><input list="rc-clientes" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} className={inp} /></Campo>
               <Campo l="Tipo"><select value={form.tipoProduto} onChange={e => setForm({ ...form, tipoProduto: e.target.value })} className={inp}><option value="GRANEL">Granel</option><option value="EMBALADO">Embalado</option><option value="">—</option></select></Campo>
               <Campo l="Produto abreviado *" span><input list="rc-produtos" value={form.produtoAbreviado} onChange={e => setForm({ ...form, produtoAbreviado: e.target.value })} className={inp} placeholder="ex: UREIA 46" /></Campo>
@@ -324,9 +343,9 @@ function GrupoChart({ data }: { data: Grupo[] }) {
       <BarChart data={data.map(g => ({ nome: g.nome, Confirmado: Math.round(g.confirmado), Realizado: Math.round(g.realizado), Saldo: Math.round(g.saldo) }))}>
         <CartesianGrid strokeDasharray="3 3" stroke="#eee" /><XAxis dataKey="nome" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 11 }} />
         <Tooltip formatter={(v) => fmt(Number(v)) + " t"} /><Legend />
-        <Bar dataKey="Confirmado" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-        <Bar dataKey="Realizado" fill="#f97316" radius={[3, 3, 0, 0]} />
-        <Bar dataKey="Saldo" fill="#22c55e" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="Confirmado" fill="#3b82f6" radius={[3, 3, 0, 0]}><LabelList dataKey="Confirmado" position="top" style={{ fontSize: 8, fill: "#1d4ed8" }} formatter={(v: string | number | boolean | null | undefined) => (v ? fmt(Number(v)) : "")} /></Bar>
+        <Bar dataKey="Realizado" fill="#f97316" radius={[3, 3, 0, 0]}><LabelList dataKey="Realizado" position="top" style={{ fontSize: 8, fill: "#c2410c" }} formatter={(v: string | number | boolean | null | undefined) => (v ? fmt(Number(v)) : "")} /></Bar>
+        <Bar dataKey="Saldo" fill="#22c55e" radius={[3, 3, 0, 0]}><LabelList dataKey="Saldo" position="top" style={{ fontSize: 8, fill: "#15803d" }} formatter={(v: string | number | boolean | null | undefined) => (v ? fmt(Number(v)) : "")} /></Bar>
       </BarChart>
     </ResponsiveContainer>
   )

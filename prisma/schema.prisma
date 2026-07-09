@@ -1521,7 +1521,8 @@ model RecebimentoControle {
   mes              Int                              // 1-12
   semana           Int?                             // semana do ano
   unidade          String?   @default("ROO")
-  status           String?   @default("PREVISTO")   // PREVISTO | CONFIRMADO | REALIZADO | CANCELADO
+  status           String?   @default("PREVISTO")   // PREVISTO | CONFIRMADO | REALIZADO | FINALIZADO | CANCELADO
+  dataFinalizacao  DateTime?                         // preenchida quando o contrato é finalizado
   numeroContrato   String?                          // contrato (auto-preenche cliente/produto)
   cliente          String
   produtoAbreviado String
