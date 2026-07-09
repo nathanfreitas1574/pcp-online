@@ -44,7 +44,6 @@ const nav: NavItem[] = [
   { section: "Estoque & BI" },
   { href: "/bi-estoques", label: "BI Estoques", icon: BarChart2 },
   { href: "/aditivos", label: "Controle de Aditivos", icon: Droplets },
-  { href: "/vistoria", label: "Vistoria Estoque", icon: Warehouse },
   { href: "/historico-vistorias", label: "Histórico de Vistorias", icon: ClipboardCheck },
   { href: "/qualidade", label: "Controle de Qualidade", icon: FlaskConical },
   { href: "/quebra-tecnica", label: "Quebra Técnica", icon: TrendingDown },
