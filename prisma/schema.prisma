@@ -1579,3 +1579,35 @@ model QuebraTecnica {
   @@index([cliente])
   @@index([produto])
 }
+
+// ─── INDICADORES DE PERDA (% mensal vs meta, YTD ponderado) ───────────────────
+// tipo: EMBALAGEM | ADITIVO | VARREDURA — base = volume movimentado (denominador),
+// perda = quebra/varredura (numerador). Resultado % e YTD são calculados.
+model IndicadorPerda {
+  id        String   @id @default(cuid())
+  ano       Int
+  tipo      String
+  mes       Int                          // 1-12
+  base      Float    @default(0)         // volume movimentado no mês
+  perda     Float    @default(0)         // quebra/varredura total no mês
+  s1        Float    @default(0)         // varredura — semanas (soma = perda p/ VARREDURA)
+  s2        Float    @default(0)
+  s3        Float    @default(0)
+  s4        Float    @default(0)
+  s5        Float    @default(0)
+  obs       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ano, tipo, mes])
+  @@index([ano, tipo])
+}
+
+model IndicadorPerdaMeta {
+  id    String @id @default(cuid())
+  ano   Int
+  tipo  String
+  meta  Float  @default(0.15)            // meta em % (parametrizável)
+
+  @@unique([ano, tipo])
+}
