@@ -1550,3 +1550,31 @@ model MotivoCancelamento {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ─── QUEBRA TÉCNICA (perda técnica de recebimento por contrato) ───────────────
+model QuebraTecnica {
+  id               String    @id @default(cuid())
+  data             DateTime?
+  filial           String?                 // ROO | AAR | ...
+  contrato         String?
+  volumeContrato   Float     @default(0)
+  cliente          String?
+  produto          String?
+  origemNavio      String?                 // origem / navio
+  volumeRecebido   Float     @default(0)
+  quebraTecnica    Float     @default(0)
+  quebraDisponivel Float     @default(0)
+  pctQuebra        Float     @default(0)   // % de quebra (0.005 = 0,5%)
+  saldoAReceber    Float     @default(0)
+  sobra            Float     @default(0)
+  quebraFutura     Float     @default(0)
+  difBalanca       Float     @default(0)
+  statusManual     String?                 // override: ABERTO | EM_ANDAMENTO | FINALIZADO (null = automático)
+  obs              String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([data])
+  @@index([cliente])
+  @@index([produto])
+}
