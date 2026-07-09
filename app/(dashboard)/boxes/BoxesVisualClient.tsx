@@ -386,9 +386,6 @@ export default function BoxesVisualClient({
               {box.statusLiberacao && box.statusLiberacao !== "LIBERADO" && (
                 <LiberacaoSinal status={box.statusLiberacao} />
               )}
-              {box.ultimoLacre === "NAO_CONFORME" && (
-                <div className="absolute top-2 left-2 z-10 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">⚠ Lacre</div>
-              )}
               {box.previsao && <PrevisaoSinal previsao={box.previsao} />}
               <BoxVisual
                 box={box}

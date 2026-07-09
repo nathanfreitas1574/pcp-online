@@ -44,11 +44,13 @@ export const STATUS_USO_CFG: Record<StatusUsoBox, { cor: string; bg: string; lab
   BLOQUEADO:  { cor: "text-red-700",    bg: "bg-red-100",    label: "Bloqueado",  emoji: "🔴" },
 }
 
+// Paleta em tons de verde (a equipe não gosta de vermelho): quanto mais cheio,
+// mais escuro o verde. Baixo volume fica azul.
 function getLiquidColor(pct: number) {
-  if (pct >= 90) return { bg: "#ef4444", wave: "#dc2626", text: "white" }
-  if (pct >= 70) return { bg: "#f97316", wave: "#ea580c", text: "white" }
-  if (pct >= 40) return { bg: "#22c55e", wave: "#16a34a", text: "white" }
-  return { bg: "#3b82f6", wave: "#2563eb", text: "white" }
+  if (pct >= 90) return { bg: "#15803d", wave: "#166534", text: "white" } // muito cheio — verde escuro
+  if (pct >= 75) return { bg: "#16a34a", wave: "#15803d", text: "white" } // quase cheio — verde
+  if (pct >= 40) return { bg: "#22c55e", wave: "#16a34a", text: "white" } // enchendo — verde claro
+  return { bg: "#3b82f6", wave: "#2563eb", text: "white" }                // baixo — azul
 }
 
 function BoxTank({
@@ -326,6 +328,13 @@ export default function BoxVisual({
 
       {box.diasEstocado && (
         <p className="text-xs text-gray-400 text-center">{box.diasEstocado} dias estocado</p>
+      )}
+
+      {/* Alerta de lacre — no rodapé do card p/ não cobrir o nome do box */}
+      {box.ultimoLacre === "NAO_CONFORME" && (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+          <span className="shrink-0">⚠</span> Lacre não conforme
+        </div>
       )}
 
       {/* ── Modal gerenciar itens (vários produtos) ── */}
