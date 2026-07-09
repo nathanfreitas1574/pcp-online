@@ -146,6 +146,11 @@ export default function ExpedicaoClient({
   const [realRows, setRealRows] = useState<RealRow[]>([])
   const [realTotal, setRealTotal] = useState(0)
   const [realLoading, setRealLoading] = useState(false)
+  // filtros da aba Realizado
+  const [realCliF, setRealCliF] = useState("")
+  const [realProdF, setRealProdF] = useState("")
+  const [realTipoOpF, setRealTipoOpF] = useState("")
+  const [realTurnoF, setRealTurnoF] = useState("")
 
   useEffect(() => {
     if (aba !== "registros") return
@@ -446,14 +451,34 @@ export default function ExpedicaoClient({
       )
     })
 
-  const realFiltrados = realRows.filter((r) => {
-    const q = busca.toLowerCase()
-    return (
-      r.cliente.toLowerCase().includes(q) ||
-      r.produto.toLowerCase().includes(q) ||
-      (r.contrato ?? "").toLowerCase().includes(q)
-    )
-  })
+  // opções dos filtros da aba Realizado (a partir dos dados carregados)
+  const realCliOpts = [...new Set(realRows.map((r) => r.cliente).filter(Boolean))].sort()
+  const realProdOpts = [...new Set(realRows.map((r) => r.produto).filter(Boolean))].sort()
+  const realTipoOpOpts = [...new Set(realRows.map((r) => r.tipoProduto).filter(Boolean) as string[])].sort()
+  const realTurnoOpts = [...new Set(realRows.map((r) => r.turno).filter(Boolean) as string[])].sort()
+  const realTemFiltro = !!busca || !!realCliF || !!realProdF || !!realTipoOpF || !!realTurnoF
+  const limparRealFiltros = () => { setBusca(""); setRealCliF(""); setRealProdF(""); setRealTipoOpF(""); setRealTurnoF("") }
+
+  const realFiltrados = realRows
+    .filter((r) => !realCliF || r.cliente === realCliF)
+    .filter((r) => !realProdF || r.produto === realProdF)
+    .filter((r) => !realTipoOpF || (r.tipoProduto ?? "") === realTipoOpF)
+    .filter((r) => !realTurnoF || (r.turno ?? "") === realTurnoF)
+    .filter((r) => {
+      const q = busca.toLowerCase()
+      return (
+        r.cliente.toLowerCase().includes(q) ||
+        r.produto.toLowerCase().includes(q) ||
+        (r.contrato ?? "").toLowerCase().includes(q)
+      )
+    })
+  const realVolFiltrado = Math.round(realFiltrados.reduce((s, r) => s + (r.realizado || 0), 0) * 10) / 10
+  // visão de volume por tipo de operação (check dos saldos)
+  const realPorTipo = (() => {
+    const m = new Map<string, number>()
+    for (const r of realFiltrados) { const k = r.tipoProduto || "(sem tipo)"; m.set(k, (m.get(k) ?? 0) + (r.realizado || 0)) }
+    return [...m.entries()].map(([nome, v]) => ({ nome, v: Math.round(v * 10) / 10 })).sort((a, b) => b.v - a.v)
+  })()
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -701,11 +726,43 @@ export default function ExpedicaoClient({
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <input type="month" value={realMes} onChange={(e) => setRealMes(e.target.value)}
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            {realCliOpts.length > 0 && (
+              <select value={realCliF} onChange={(e) => setRealCliF(e.target.value)}
+                className={`text-xs rounded-lg px-2 py-1.5 border max-w-40 focus:outline-none focus:ring-2 focus:ring-blue-200 ${realCliF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+                <option value="">Cliente: todos</option>
+                {realCliOpts.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+            {realProdOpts.length > 0 && (
+              <select value={realProdF} onChange={(e) => setRealProdF(e.target.value)}
+                className={`text-xs rounded-lg px-2 py-1.5 border max-w-40 focus:outline-none focus:ring-2 focus:ring-blue-200 ${realProdF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+                <option value="">Produto: todos</option>
+                {realProdOpts.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            )}
+            {realTipoOpOpts.length > 0 && (
+              <select value={realTipoOpF} onChange={(e) => setRealTipoOpF(e.target.value)}
+                className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${realTipoOpF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+                <option value="">Tipo op.: todos</option>
+                {realTipoOpOpts.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+            {realTurnoOpts.length > 0 && (
+              <select value={realTurnoF} onChange={(e) => setRealTurnoF(e.target.value)}
+                className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${realTurnoF ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+                <option value="">Turno: todos</option>
+                {realTurnoOpts.map((t) => <option key={t} value={t}>Turno {t}</option>)}
+              </select>
+            )}
+            {realTemFiltro && (
+              <button onClick={limparRealFiltros} className="flex items-center gap-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50">
+                <Eraser size={12} /> Limpar
+              </button>
+            )}
             <span className="text-xs font-medium text-gray-500">
               {realLoading ? "Carregando…" : `${realFiltrados.length} carregamento(s) · `}
-              {!realLoading && <span className="text-green-700 font-semibold">{realTotal.toLocaleString("pt-BR")} t</span>}
+              {!realLoading && <span className="text-green-700 font-semibold">{realVolFiltrado.toLocaleString("pt-BR")} t</span>}
             </span>
-            <span className="text-xs text-gray-400 hidden sm:inline">tipo/operação vêm do <strong>Contrato de Expedição</strong> casado por cliente + produto</span>
             <div className="relative ml-auto">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -717,6 +774,21 @@ export default function ExpedicaoClient({
               />
             </div>
           </div>
+          {/* Visão de volume (check dos saldos) — total + por tipo de operação */}
+          {!realLoading && realFiltrados.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-1.5 text-xs">
+                <span className="text-green-700">Volume realizado: </span>
+                <strong className="text-green-800">{realVolFiltrado.toLocaleString("pt-BR")} t</strong>
+                <span className="text-green-600"> · {realFiltrados.length} carga(s)</span>
+              </div>
+              {realPorTipo.map((t) => (
+                <div key={t.nome} className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs">
+                  <span className="text-gray-500">{t.nome}: </span><strong className="text-gray-800">{t.v.toLocaleString("pt-BR")} t</strong>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
