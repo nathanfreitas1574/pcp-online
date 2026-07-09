@@ -560,7 +560,7 @@ export default function ExpedicaoClient({
             {/* período: ano · mês · semana (Vol.Prog e Realizado são calculados nele) */}
             <select value={ctrAno} onChange={(e) => setCtrAno(Number(e.target.value))}
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
-              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+              {[anoAtual - 2, anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <select value={ctrMes} onChange={(e) => { setCtrMes(Number(e.target.value)); if (Number(e.target.value)) setCtrSemana(0) }}
               className={`text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-2 focus:ring-blue-200 ${ctrMes ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
@@ -900,11 +900,11 @@ export default function ExpedicaoClient({
                           <option value="">—</option>{LINHA_PROD_DIA.map((t) => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </td>
-                      <td className="px-1 py-1"><input key={`${r.chave}-f-${r.forecast}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.forecast) salvarDiaCampo(r.chave, "forecast", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-1 py-1"><input key={`${r.chave}-f-${r.forecast}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0" onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== r.forecast) salvarDiaCampo(r.chave, "forecast", v) }} className={`${DDINP} text-right`} /></td>
                       <td className="px-2 py-1 text-right font-semibold text-green-700 tabular-nums bg-green-50/50">{r.realizado ? r.realizado.toLocaleString("pt-BR") : "—"}</td>
-                      <td className="px-1 py-1"><input key={`${r.chave}-a-${r.turnoA}`} type="number" min="0" step="10" defaultValue={r.turnoA || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.turnoA) salvarDiaCampo(r.chave, "turnoA", v) }} className={`${DDINP} text-right`} /></td>
-                      <td className="px-1 py-1"><input key={`${r.chave}-b-${r.turnoB}`} type="number" min="0" step="10" defaultValue={r.turnoB || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.turnoB) salvarDiaCampo(r.chave, "turnoB", v) }} className={`${DDINP} text-right`} /></td>
-                      <td className="px-1 py-1"><input key={`${r.chave}-c-${r.turnoC}`} type="number" min="0" step="10" defaultValue={r.turnoC || ""} placeholder="0" onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.turnoC) salvarDiaCampo(r.chave, "turnoC", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-1 py-1"><input key={`${r.chave}-a-${r.turnoA}`} type="number" min="0" step="10" defaultValue={r.turnoA || ""} placeholder="0" onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== r.turnoA) salvarDiaCampo(r.chave, "turnoA", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-1 py-1"><input key={`${r.chave}-b-${r.turnoB}`} type="number" min="0" step="10" defaultValue={r.turnoB || ""} placeholder="0" onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== r.turnoB) salvarDiaCampo(r.chave, "turnoB", v) }} className={`${DDINP} text-right`} /></td>
+                      <td className="px-1 py-1"><input key={`${r.chave}-c-${r.turnoC}`} type="number" min="0" step="10" defaultValue={r.turnoC || ""} placeholder="0" onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== r.turnoC) salvarDiaCampo(r.chave, "turnoC", v) }} className={`${DDINP} text-right`} /></td>
                       <td className="px-1 py-1"><input key={`${r.chave}-o`} defaultValue={r.obs} placeholder="obs" onBlur={(e) => { if (e.target.value !== r.obs) salvarDiaCampo(r.chave, "obs", e.target.value) }} className={DDINP} /></td>
                     </tr>
                   ))}
@@ -927,7 +927,7 @@ export default function ExpedicaoClient({
             <label className="text-xs text-gray-500">Ano:</label>
             <select value={orcAno} onChange={(e) => setOrcAno(Number(e.target.value))}
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
-              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+              {[anoAtual - 2, anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <span className="text-xs text-gray-500 ml-2">
               Meta da diretoria por mês — <span className="font-semibold text-blue-700">{orcTotal.toLocaleString("pt-BR")} t</span> no ano
@@ -940,7 +940,7 @@ export default function ExpedicaoClient({
                 <div key={m.mes} className="flex items-center gap-2">
                   <span className="text-xs font-medium text-gray-500 w-8">{MESES[m.mes - 1]}</span>
                   <input key={`${orcAno}-${m.mes}`} type="number" min="0" step="10" defaultValue={m.orcado || ""} placeholder="0"
-                    onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== m.orcado) salvarOrcado(m.mes, v) }}
+                    onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== m.orcado) salvarOrcado(m.mes, v) }}
                     className="flex-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-200" />
                 </div>
               ))}
@@ -964,7 +964,7 @@ export default function ExpedicaoClient({
             </div>
             <select value={fcAno} onChange={(e) => setFcAno(Number(e.target.value))}
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
-              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+              {[anoAtual - 2, anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             {fcGran !== "ano" && (
               <select value={fcMes} onChange={(e) => setFcMes(Number(e.target.value))}
@@ -1024,7 +1024,7 @@ export default function ExpedicaoClient({
                       <td className="px-2 py-1.5">
                         {fcEditavel ? (
                           <input key={`${fcAno}-${fcMes}-${fcTipo}-${r.clienteNome}-${r.forecast}`} type="number" min="0" step="10" defaultValue={r.forecast || ""} placeholder="0"
-                            onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.forecast) salvarForecastMes(r.clienteNome, v) }}
+                            onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== r.forecast) salvarForecastMes(r.clienteNome, v) }}
                             className="w-28 text-sm border border-gray-200 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
                         ) : (
                           <span className="text-gray-700 pr-2">{r.forecast.toLocaleString("pt-BR")}</span>
@@ -1095,7 +1095,7 @@ export default function ExpedicaoClient({
                       <div key={d.dia} className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ${d.dow === 0 ? "bg-red-50" : "bg-gray-50"}`}>
                         <span className={`text-xs w-6 ${d.dow === 0 ? "text-red-500 font-semibold" : "text-gray-500"}`}>{String(d.dia).padStart(2, "0")}</span>
                         <input key={`${fcAno}-${fcMes}-${fcDiasCliente}-${d.dia}-${d.forecast}`} type="number" min="0" step="10" defaultValue={d.forecast || ""} placeholder="0"
-                          onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== d.forecast) salvarDia(d.dia, v) }}
+                          onBlur={(e) => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== d.forecast) salvarDia(d.dia, v) }}
                           className="flex-1 w-full text-xs border border-gray-200 rounded px-1.5 py-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-200" />
                       </div>
                     ))}
@@ -1115,7 +1115,7 @@ export default function ExpedicaoClient({
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <select value={capAno} onChange={(e) => setCapAno(Number(e.target.value))}
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
-              {[anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
+              {[anoAtual - 2, anoAtual - 1, anoAtual, anoAtual + 1].map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <select value={capMes} onChange={(e) => setCapMes(Number(e.target.value))}
               className="text-xs rounded-lg px-2 py-1.5 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
@@ -1188,7 +1188,7 @@ export default function ExpedicaoClient({
                               return (
                                 <td key={col} className={`px-0.5 py-0.5 ${t === capTurnos[0] ? "border-l border-gray-100" : ""}`}>
                                   <input key={`${capAno}-${capMes}-${d.dia}-${col}-${v}`} type="number" min="0" defaultValue={v || ""} placeholder="·"
-                                    onBlur={(e) => { const nv = Number(e.target.value) || 0; if (nv !== v) salvarCapDia(d.dia, eq, t, nv) }}
+                                    onBlur={(e) => { const nv = Math.max(0, Number(e.target.value) || 0); if (nv !== v) salvarCapDia(d.dia, eq, t, nv) }}
                                     className="w-12 text-[11px] text-right border border-transparent hover:border-gray-200 focus:border-blue-300 rounded px-1 py-0.5 bg-transparent focus:bg-white focus:outline-none" />
                                 </td>
                               )
