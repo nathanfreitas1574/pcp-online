@@ -33,6 +33,17 @@ export type PerdaTipo = (typeof PERDA_TIPOS)[number]["tipo"]
 export const metaPadraoDe = (tipo: string) => PERDA_TIPOS.find((t) => t.tipo === tipo)?.metaPadrao ?? 0.15
 export const usaSemanas = (tipo: string) => PERDA_TIPOS.find((t) => t.tipo === tipo)?.usaSemanas ?? false
 
+// Indicadores operacionais extras (reutilizam a MESMA tabela IndicadorPerda com mapeamento de campos):
+// TOLERANCIA — base = veículos carregados (qtd) · perda = retorno na pesagem (t) · meta = kg/veículo (90)
+//   meta mensal (t) = veículos × meta ÷ 1000 · KPI% = retorno ÷ meta mensal · MAIOR é melhor
+// VIRA — base = gasto realizado (R$) · perda = retorno cobrado (R$) · meta = meta mensal R$ (20.000)
+//   saldo líquido = gasto − retorno · dentro da meta se saldo ≤ meta · obs mensal p/ justificativas
+// BALANCO — base = volume recebido (t) · s1/s2/s3 = expedição Big Bag/Granel/Prod.Acabado (t) · meta = % quebra técnica (0,5)
+//   quebra gerada = recebido × meta% · varredura vem do tipo VARREDURA · saldo segurança = quebra − varredura
+export const TIPOS_EXTRAS = ["TOLERANCIA", "VIRA", "BALANCO"] as const
+export const METAS_EXTRAS: Record<string, number> = { TOLERANCIA: 90, VIRA: 20000, BALANCO: 0.5 }
+export const TIPOS_VALIDOS = [...PERDA_TIPOS.map((t) => t.tipo as string), ...TIPOS_EXTRAS]
+
 const r2 = (n: number) => Math.round(n * 100) / 100
 const r3 = (n: number) => Math.round(n * 1000) / 1000
 

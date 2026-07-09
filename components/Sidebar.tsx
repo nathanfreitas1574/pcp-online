@@ -49,7 +49,7 @@ const nav: NavItem[] = [
   { href: "/quebra-tecnica", label: "Quebra Técnica", icon: TrendingDown },
   { href: "/analytics", label: "Analytics & Ranking", icon: TrendingUp },
   { href: "/indicadores", label: "Indicadores PCP", icon: Gauge },
-  { href: "/indicadores-perda", label: "Indicadores de Perda", icon: TrendingDown },
+  { href: "/indicadores-perda", label: "Indicadores Operacionais", icon: TrendingDown },
   { href: "/financeiro", label: "Financeiro", icon: DollarSign },
   { href: "/custos", label: "Custo/Tonelada", icon: Receipt },
   { section: "Operação" },
