@@ -19,11 +19,11 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mesWhere: any = range ? { dataDescarga: { gte: range.gte, lt: range.lt } } : {}
 
+  // base dos filtros (mês + cliente + busca), SEM status — cada KPI fixa o seu status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { ...mesWhere }
-  if (status) where.status = status
-  if (cliente) where.cliente = { contains: cliente, mode: "insensitive" }
-  if (busca) where.OR = [
+  const whereBase: any = { ...mesWhere }
+  if (cliente) whereBase.cliente = { contains: cliente, mode: "insensitive" }
+  if (busca) whereBase.OR = [
     { codigoRomaneio: { contains: busca, mode: "insensitive" } },
     { produto: { contains: busca, mode: "insensitive" } },
     { cliente: { contains: busca, mode: "insensitive" } },
@@ -32,12 +32,14 @@ export async function GET(req: NextRequest) {
     { transportadora: { contains: busca, mode: "insensitive" } },
     { motorista: { contains: busca, mode: "insensitive" } },
   ]
+  // where da lista = base + status selecionado
+  const where = { ...whereBase, ...(status ? { status } : {}) }
 
   const TAKE = 2000
   const [itens, pendente, coberto, todasDatas, tabelaTotal] = await Promise.all([
     prisma.coberturaPendente.findMany({ where, orderBy: { createdAt: "desc" }, take: TAKE }),
-    prisma.coberturaPendente.aggregate({ where: { ...mesWhere, status: "PENDENTE" }, _count: { id: true }, _sum: { volume: true } }),
-    prisma.coberturaPendente.aggregate({ where: { ...mesWhere, status: "COBERTO" }, _count: { id: true }, _sum: { volume: true } }),
+    prisma.coberturaPendente.aggregate({ where: { ...whereBase, status: "PENDENTE" }, _count: { id: true }, _sum: { volume: true } }),
+    prisma.coberturaPendente.aggregate({ where: { ...whereBase, status: "COBERTO" }, _count: { id: true }, _sum: { volume: true } }),
     prisma.coberturaPendente.findMany({ select: { dataDescarga: true } }),
     prisma.coberturaPendente.count({ where }),
   ])
