@@ -52,6 +52,19 @@ export default async function BiEstoquesPage({
     }),
   ])
 
+  // Estoque FÍSICO atual dos boxes (Fertalvo + clientes) — fonte live quando não há snapshot importado
+  const estoquesBox = await prisma.estoque.findMany({
+    where: { quantidade: { gt: 0 } },
+    select: { quantidade: true, clienteNome: true, produto: { select: { descricao: true } } },
+  })
+  const boxSaldo = Math.round(estoquesBox.reduce((s, e) => s + e.quantidade, 0))
+  const porClienteBox = Object.entries(
+    estoquesBox.reduce((acc, e) => { const k = e.clienteNome?.trim() || "(sem cliente)"; acc[k] = (acc[k] ?? 0) + e.quantidade; return acc }, {} as Record<string, number>)
+  ).map(([k, v]) => [k, Math.round(v)] as [string, number]).sort((a, b) => b[1] - a[1])
+  const porProdutoBox = Object.entries(
+    estoquesBox.reduce((acc, e) => { const k = e.produto?.descricao?.trim() || "(sem produto)"; acc[k] = (acc[k] ?? 0) + e.quantidade; return acc }, {} as Record<string, number>)
+  ).map(([k, v]) => [k, Math.round(v)] as [string, number]).sort((a, b) => b[1] - a[1])
+
   // Calcular KPIs
   const saldoInicial = snapshots.reduce((s, x) => s + x.saldoInicial, 0)
   const entradas = snapshots.reduce((s, x) => s + x.entradas, 0)
@@ -75,6 +88,9 @@ export default async function BiEstoquesPage({
     }, {} as Record<string, number>)
   ).sort((a, b) => b[1] - a[1])
 
+  // Sem snapshot importado → usa o estoque físico live dos boxes (o que temos: Fertalvo + clientes)
+  const temSnap = snapshots.length > 0
+
   return (
     <BiEstoquesClient
       mes={mes}
@@ -83,10 +99,10 @@ export default async function BiEstoquesPage({
       saldoInicial={saldoInicial}
       entradas={entradas}
       saidas={saidas}
-      saldoFinal={saldoFinal}
+      saldoFinal={temSnap ? saldoFinal : boxSaldo}
       totalQuebras={totalQuebras}
-      porCliente={porCliente}
-      porProduto={porProduto}
+      porCliente={temSnap ? porCliente : porClienteBox}
+      porProduto={temSnap ? porProduto : porProdutoBox}
       quebras={quebras}
       insumos={insumos}
       movimentos={movimentos}
