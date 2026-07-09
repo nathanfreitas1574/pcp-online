@@ -34,8 +34,25 @@ const PRIORIDADE_CONFIG = {
 const STATUS_CONFIG = {
   PENDENTE:     { label: "Pendente",     color: "text-gray-600",  bg: "bg-gray-100",   icon: Clock        },
   EM_ANDAMENTO: { label: "Em andamento", color: "text-blue-700",  bg: "bg-blue-50",    icon: Loader2      },
+  ATRASADO:     { label: "Atrasado",     color: "text-red-700",   bg: "bg-red-100",    icon: AlertTriangle},
   CONCLUIDO:    { label: "Concluído",    color: "text-green-700", bg: "bg-green-50",   icon: CheckCircle2 },
   CANCELADO:    { label: "Cancelado",    color: "text-red-600",   bg: "bg-red-50",     icon: XCircle      },
+}
+
+// Status EFETIVO (automático): atrasado se passou do prazo e não concluído; em andamento se tem progresso.
+function statusEfetivo(p: { status: string; quando: string | Date; progresso: number }): { key: keyof typeof STATUS_CONFIG; diasAtraso: number } {
+  if (p.status === "CONCLUIDO" || p.status === "CANCELADO") return { key: p.status as keyof typeof STATUS_CONFIG, diasAtraso: 0 }
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const prazo = new Date(p.quando); prazo.setHours(0, 0, 0, 0)
+  if (prazo.getTime() < hoje.getTime()) return { key: "ATRASADO", diasAtraso: Math.round((hoje.getTime() - prazo.getTime()) / 86400000) }
+  if ((p.progresso || 0) > 0) return { key: "EM_ANDAMENTO", diasAtraso: 0 }
+  return { key: "PENDENTE", diasAtraso: 0 }
+}
+// Cor do % concluído: 0–79% vermelho, 80–90% amarelo, 90–100% verde
+function corProgresso(pct: number): { txt: string; bar: string } {
+  if (pct >= 90) return { txt: "text-green-700", bar: "#22c55e" }
+  if (pct >= 80) return { txt: "text-yellow-600", bar: "#eab308" }
+  return { txt: "text-red-600", bar: "#ef4444" }
 }
 
 const EMPTY_FORM = {
@@ -87,12 +104,14 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
   const [expanded, setExpanded] = useState<string | null>(null)
   const [filtroStatus, setFiltroStatus] = useState<string>("TODOS")
   const [filtroPrioridade, setFiltroPrioridade] = useState<string>("TODOS")
+  const [busca, setBusca] = useState("")
   const [msg, setMsg] = useState("")
   const [editProgresso, setEditProgresso] = useState<{ id: string; val: number } | null>(null)
 
   const visíveis = planos
-    .filter((p) => filtroStatus === "TODOS" || p.status === filtroStatus)
+    .filter((p) => filtroStatus === "TODOS" || statusEfetivo(p).key === filtroStatus)
     .filter((p) => filtroPrioridade === "TODOS" || p.prioridade === filtroPrioridade)
+    .filter((p) => !busca || `${p.oQue} ${p.quem} ${p.onde} ${p.como} ${p.observacao ?? ""}`.toLowerCase().includes(busca.toLowerCase()))
 
   // Ordenação: ALTA → MEDIA → BAIXA dentro de cada grupo de status
   const prioOrd = { ALTA: 0, MEDIA: 1, BAIXA: 2 }
@@ -177,11 +196,12 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
     if (res.ok) setPlanos((prev) => prev.filter((p) => p.id !== id))
   }
 
-  // Totalizadores
+  // Totalizadores (status efetivo — inclui atrasadas automáticas)
   const totais = {
     todos: planos.length,
-    emAndamento: planos.filter((p) => p.status === "EM_ANDAMENTO").length,
-    pendentes: planos.filter((p) => p.status === "PENDENTE").length,
+    emAndamento: planos.filter((p) => statusEfetivo(p).key === "EM_ANDAMENTO").length,
+    pendentes: planos.filter((p) => statusEfetivo(p).key === "PENDENTE").length,
+    atrasadas: planos.filter((p) => statusEfetivo(p).key === "ATRASADO").length,
     concluidos: planos.filter((p) => p.status === "CONCLUIDO").length,
     alta: planos.filter((p) => p.prioridade === "ALTA" && p.status !== "CONCLUIDO" && p.status !== "CANCELADO").length,
   }
@@ -242,10 +262,11 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
       {aba === "acoes" && <>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: "Em andamento", val: totais.emAndamento, color: "text-blue-700", bg: "bg-blue-50" },
           { label: "Pendentes",    val: totais.pendentes,    color: "text-yellow-700", bg: "bg-yellow-50" },
+          { label: "Atrasadas",    val: totais.atrasadas,    color: "text-red-700", bg: "bg-red-100" },
           { label: "Concluídos",   val: totais.concluidos,   color: "text-green-700", bg: "bg-green-50" },
           { label: "Alta prior. abertos", val: totais.alta, color: "text-red-700", bg: "bg-red-50" },
         ].map(({ label, val, color, bg }) => (
@@ -301,6 +322,7 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
           <option value="TODOS">Todos os status</option>
           <option value="PENDENTE">Pendente</option>
           <option value="EM_ANDAMENTO">Em andamento</option>
+          <option value="ATRASADO">Atrasado</option>
           <option value="CONCLUIDO">Concluído</option>
           <option value="CANCELADO">Cancelado</option>
         </select>
@@ -314,6 +336,8 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
           <option value="MEDIA">🟡 Média</option>
           <option value="BAIXA">🟢 Baixa</option>
         </select>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar ação, responsável, local…"
+          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]" />
         <span className="ml-auto text-xs text-gray-400 self-center">{ordenados.length} ação(ões)</span>
       </div>
 
@@ -328,9 +352,10 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
         <div className="space-y-3">
           {ordenados.map((p) => {
             const prio = PRIORIDADE_CONFIG[p.prioridade]
-            const sts = STATUS_CONFIG[p.status]
+            const stsEf = statusEfetivo(p)               // status automático (atrasado/em andamento)
+            const sts = STATUS_CONFIG[stsEf.key]
             const StsIcon = sts.icon
-            const vencido = p.status !== "CONCLUIDO" && p.status !== "CANCELADO" && new Date(p.quando) < hoje
+            const vencido = stsEf.key === "ATRASADO"
             const isExpanded = expanded === p.id
 
             return (
@@ -363,13 +388,8 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
                             </span>
                             <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sts.bg} ${sts.color}`}>
                               <StsIcon size={11} />
-                              {sts.label}
+                              {sts.label}{stsEf.key === "ATRASADO" && stsEf.diasAtraso > 0 ? ` · ${stsEf.diasAtraso}d` : ""}
                             </span>
-                            {vencido && (
-                              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">
-                                <AlertTriangle size={11} /> Vencido
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -400,7 +420,7 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
                             className="h-2 rounded-full transition-all duration-500"
                             style={{
                               width: `${p.progresso}%`,
-                              background: p.progresso >= 100 ? "#22c55e" : p.progresso >= 50 ? "#3b82f6" : "#f59e0b",
+                              background: corProgresso(p.progresso).bar,
                             }}
                           />
                         </div>
@@ -418,7 +438,7 @@ export default function PlanoAcaoClient({ initialPlanos }: { initialPlanos: Plan
                         ) : (
                           <button
                             onClick={() => setEditProgresso({ id: p.id, val: p.progresso })}
-                            className="text-xs text-gray-500 hover:text-blue-600 font-medium w-12 text-right"
+                            className={`text-xs font-bold hover:opacity-70 w-12 text-right ${corProgresso(p.progresso).txt}`}
                           >
                             {p.progresso}%
                           </button>
