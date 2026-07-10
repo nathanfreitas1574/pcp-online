@@ -960,6 +960,7 @@ export default function BoxesVisualClient({
             dataRecebimento: b.dataRecebimento, codigoLacre: b.codigoLacre,
             movimentadoHoje: b.movimentadoHoje,
             armazemId: b.armazemId, armazemNome: b.armazemNome, armazemCodigo: b.armazemCodigo,
+            itens: b.itens, // produtos do box (a vistoria edita as linhas — espelho da fábrica)
           }))}
           boxInicial={vistoriaBoxId}
           onClose={() => { setShowVistoria(false); setVistoriaBoxId(null) }}

@@ -25,7 +25,11 @@ export type VistoriaBoxOption = {
   armazemCodigo?: string | null
   statusUso?: StatusUsoBox | null
   obsBox?: string | null
+  itens?: { produtoId: string; produto: string; cliente: string; quantidade: number; navio?: string }[]
 }
+
+// linha editável de produto do box na vistoria (espelho da fábrica no dia)
+type ItemEdit = { produtoId: string | null; produto: string; cliente: string; quantidade: string; navio: string }
 
 const inp = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
 
@@ -48,12 +52,10 @@ export default function VistoriaDiariaModal({
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState("")
 
-  // Campos editáveis
-  const [editProduto, setEditProduto] = useState("")
-  const [editCliente, setEditCliente] = useState("")
-  const [editNavio, setEditNavio] = useState("")
-  const [editVolume, setEditVolume] = useState("")
+  // Campos editáveis — produtos do box (várias linhas) + lacre
+  const [itensEdit, setItensEdit] = useState<ItemEdit[]>([])
   const [editLacre, setEditLacre] = useState("")
+  const totalItens = itensEdit.reduce((s, i) => s + (parseFloat(i.quantidade) || 0), 0)
 
   // Semáforo de uso + OBS
   const [editStatusUso, setEditStatusUso] = useState<StatusUsoBox>("LIVRE")
@@ -91,11 +93,12 @@ export default function VistoriaDiariaModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boxInicial])
 
-  // Descargas que casam com o cliente+produto atualmente digitados (ao vivo)
-  const descCasadas = (editCliente && editProduto)
-    ? descRecentes.filter(d =>
-        (clienteMatch(d.cliente, editCliente) || clienteMatch(d.clienteDestino, editCliente)) &&
-        produtoMatch(d.produto, editProduto))
+  // Descargas que casam com QUALQUER produto/cliente lançado nas linhas (ao vivo)
+  const linhasValidas = itensEdit.filter((i) => i.produto.trim() && i.cliente.trim())
+  const descCasadas = linhasValidas.length
+    ? descRecentes.filter(d => linhasValidas.some(l =>
+        (clienteMatch(d.cliente, l.cliente) || clienteMatch(d.clienteDestino, l.cliente)) &&
+        produtoMatch(d.produto, l.produto)))
     : []
   const descHoje = descCasadas.filter(d => d.data === refHoje)
   const totalHoje = descHoje.reduce((s, d) => s + d.peso, 0)
@@ -110,10 +113,12 @@ export default function VistoriaDiariaModal({
     setMsgMedicao("")
     const b = boxes.find((x) => x.id === id)
     if (b) {
-      setEditProduto(b.produto ?? "")
-      setEditCliente(b.cliente ?? "")
-      setEditNavio(b.navio ?? "")
-      setEditVolume(String(b.volumeAtual))
+      const doBox: ItemEdit[] = (b.itens?.length
+        ? b.itens.map((i) => ({ produtoId: i.produtoId, produto: i.produto, cliente: i.cliente, quantidade: String(i.quantidade || ""), navio: i.navio ?? "" }))
+        : b.produto
+          ? [{ produtoId: null, produto: b.produto, cliente: b.cliente ?? "", quantidade: String(b.volumeAtual || ""), navio: b.navio ?? "" }]
+          : [])
+      setItensEdit(doBox.length ? doBox : [{ produtoId: null, produto: "", cliente: "", quantidade: "", navio: "" }])
       setEditLacre(b.codigoLacre ?? "")
       setEditStatusUso((b.statusUso as StatusUsoBox) ?? "LIVRE")
       setEditObsBox(b.obsBox ?? "")
@@ -132,7 +137,7 @@ export default function VistoriaDiariaModal({
     })
     setSavingMedicao(false)
     if (res.ok) {
-      const dif = (parseFloat(volMedido) || 0) - (parseFloat(editVolume) || 0)
+      const dif = (parseFloat(volMedido) || 0) - totalItens
       setMsgMedicao(`✅ Medição registrada! Diferença: ${dif >= 0 ? "+" : ""}${dif.toLocaleString("pt-BR")} ton`)
       setObsMedicao("")
     } else {
@@ -153,16 +158,28 @@ export default function VistoriaDiariaModal({
     setSaving(true)
     setMsg("")
 
-    // 1. Atualizar estoque + semáforo + observação do box
+    // 1. Sincroniza os PRODUTOS do box com as linhas da vistoria (espelho da fábrica no dia)
+    const finais = itensEdit.filter((i) => i.produto.trim())
+    const originais = box.itens ?? []
+    // remove produtos que saíram da lista
+    for (const o of originais) {
+      const continua = finais.some((f) => f.produtoId === o.produtoId || f.produto.trim().toUpperCase() === o.produto.trim().toUpperCase())
+      if (!continua) await fetch(`/api/boxes/${box.id}/itens?produtoId=${encodeURIComponent(o.produtoId)}`, { method: "DELETE" }).catch(() => {})
+    }
+    // grava/atualiza cada linha (produto, cliente, quantidade, navio)
+    for (const f of finais) {
+      await fetch(`/api/boxes/${box.id}/itens`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produto: f.produto.trim(), cliente: f.cliente.trim(), quantidade: parseFloat(f.quantidade) || 0, navio: f.navio || null }),
+      }).catch(() => {})
+    }
+    // campos do box (semáforo, observação, capacidade) — sem mexer nos estoques
     await fetch(`/api/boxes/${box.id}/estoque`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        volumeAtual: parseFloat(editVolume) || 0,
-        fixarTotal: true, // o valor lançado é o TOTAL do box (espelho da vistoria do dia)
-        produto:    editProduto || null,
-        cliente:    editCliente || null,
-        navio:      editNavio  || null,
+        volumeAtual: totalItens,
         capacidade: box.capacidade,
         statusUso:  editStatusUso,
         obsBox:     editObsBox || null,
@@ -186,10 +203,10 @@ export default function VistoriaDiariaModal({
     if (res.ok) {
       // Notifica o pai com os novos valores — SEM recarregar a página
       onSaved?.(box.id, {
-        volumeAtual: parseFloat(editVolume) || 0,
-        produto:     editProduto || null,
-        cliente:     editCliente || null,
-        navio:       editNavio  || null,
+        volumeAtual: totalItens,
+        produto:     finais[0]?.produto || null,
+        cliente:     finais[0]?.cliente || null,
+        navio:       finais[0]?.navio || null,
         statusUso:   editStatusUso,
         obsBox:      editObsBox || null,
       })
@@ -201,10 +218,7 @@ export default function VistoriaDiariaModal({
         setObservacao("")
         setFoto(null)
         setLacreConforme(true)
-        setEditProduto("")
-        setEditCliente("")
-        setEditNavio("")
-        setEditVolume("")
+        setItensEdit([])
         setEditLacre("")
         setEditObsBox("")
         setEditStatusUso("LIVRE")
@@ -272,54 +286,44 @@ export default function VistoriaDiariaModal({
                   <p className="text-xs font-semibold text-blue-700">Dados do box — edite se necessário</p>
                 </div>
 
-                {/* Volume */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Volume atual (ton)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={box.capacidade}
-                    step="0.1"
-                    value={editVolume}
-                    onChange={(e) => setEditVolume(e.target.value)}
-                    className={inp}
-                  />
-                </div>
-
-                {/* Produto + Cliente */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Produto</label>
-                    <input
-                      type="text"
-                      value={editProduto}
-                      onChange={(e) => setEditProduto(e.target.value)}
-                      placeholder="Ex: UREIA 46%"
-                      className={inp}
-                    />
+                {/* Produtos do box — espelho da fábrica no dia (várias linhas) */}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[1fr_1fr_84px_24px] gap-1.5 text-[10px] font-semibold text-gray-500 px-0.5">
+                    <span>Produto</span><span>Cliente</span><span className="text-right">Qtd (ton)</span><span />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Cliente</label>
-                    <input
-                      type="text"
-                      value={editCliente}
-                      onChange={(e) => setEditCliente(e.target.value)}
-                      placeholder="Ex: FTO"
-                      className={inp}
-                    />
+                  {itensEdit.map((it, idx) => (
+                    <div key={idx} className="grid grid-cols-[1fr_1fr_84px_24px] gap-1.5 items-center">
+                      <input value={it.produto} placeholder="Ex: UREIA 46%"
+                        onChange={(e) => setItensEdit((p) => p.map((x, i) => i === idx ? { ...x, produto: e.target.value } : x))} className={inp} />
+                      <input value={it.cliente} placeholder="Ex: FTO"
+                        onChange={(e) => setItensEdit((p) => p.map((x, i) => i === idx ? { ...x, cliente: e.target.value } : x))} className={inp} />
+                      <input type="number" min="0" step="0.1" value={it.quantidade} placeholder="0"
+                        onChange={(e) => setItensEdit((p) => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))} className={`${inp} text-right`} />
+                      <button type="button" title="Remover produto" onClick={() => setItensEdit((p) => p.filter((_, i) => i !== idx))}
+                        className="text-gray-300 hover:text-red-600 text-sm">✕</button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between">
+                    <button type="button" onClick={() => setItensEdit((p) => [...p, { produtoId: null, produto: "", cliente: "", quantidade: "", navio: "" }])}
+                      className="flex items-center gap-1 text-xs font-medium text-blue-700 border border-blue-200 bg-white rounded-lg px-2.5 py-1.5 hover:bg-blue-50">
+                      <Plus size={13} /> Adicionar produto
+                    </button>
+                    <p className="text-sm">
+                      <span className="text-gray-500 text-xs">Total do box: </span>
+                      <strong className={totalItens > box.capacidade ? "text-red-600" : "text-gray-800"}>{fmtT(totalItens)} ton</strong>
+                      <span className="text-gray-400 text-xs"> / {box.capacidade.toLocaleString("pt-BR")}</span>
+                    </p>
                   </div>
                 </div>
 
-                {/* Navio + Número do lacre */}
+                {/* Navio (1º produto) + Número do lacre */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Navio</label>
                     <input
                       type="text"
-                      value={editNavio}
-                      onChange={(e) => setEditNavio(e.target.value)}
+                      value={itensEdit[0]?.navio ?? ""}
+                      onChange={(e) => setItensEdit((p) => p.map((x, i) => i === 0 ? { ...x, navio: e.target.value } : x))}
                       placeholder="Ex: MSC Lucinda"
                       className={inp}
                     />
@@ -344,10 +348,10 @@ export default function VistoriaDiariaModal({
                   <span className="text-[11px] font-normal text-emerald-600">últimos {DIAS_REF} dias</span>
                 </div>
                 <div className="p-4 space-y-2 bg-emerald-50/30">
-                  {(!editCliente || !editProduto) ? (
+                  {linhasValidas.length === 0 ? (
                     <p className="text-xs text-gray-500">Preencha <strong>Cliente</strong> e <strong>Produto</strong> acima para ver as descargas casadas da Marcação de Veículos.</p>
                   ) : descCasadas.length === 0 ? (
-                    <p className="text-xs text-gray-500">Nenhuma descarga (CHECKOUT) casou com <strong>{editCliente}</strong> / <strong>{editProduto}</strong> nos últimos {DIAS_REF} dias.</p>
+                    <p className="text-xs text-gray-500">Nenhuma descarga (CHECKOUT) casou com os produtos/clientes lançados nos últimos {DIAS_REF} dias.</p>
                   ) : (
                     <>
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
@@ -355,7 +359,9 @@ export default function VistoriaDiariaModal({
                         <div><span className="text-gray-500 text-xs">Últimos {DIAS_REF} dias: </span><strong className="text-gray-700">{fmtT(totalPeriodo)} t</strong> <span className="text-gray-400 text-xs">({descCasadas.length})</span></div>
                       </div>
                       {totalHoje > 0 && (
-                        <button type="button" onClick={() => setEditVolume(String((parseFloat(editVolume) || 0) + totalHoje))}
+                        <button type="button" disabled={itensEdit.length !== 1}
+                          title={itensEdit.length !== 1 ? "Com mais de um produto, ajuste a quantidade na linha correspondente" : undefined}
+                          onClick={() => setItensEdit((p) => p.map((x, i) => i === 0 ? { ...x, quantidade: String(((parseFloat(x.quantidade) || 0) + totalHoje)) } : x))}
                           className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 bg-white rounded-lg px-2.5 py-1.5 hover:bg-emerald-50">
                           <Plus size={13} /> Somar hoje ao volume (+{fmtT(totalHoje)} t)
                         </button>
@@ -433,7 +439,7 @@ export default function VistoriaDiariaModal({
                 {showMedicao && (
                   <div className="p-4 space-y-3 bg-purple-50/30">
                     <p className="text-xs text-gray-500">
-                      Registra a contagem física do box. Calculamos automaticamente a diferença em relação ao sistema ({parseFloat(editVolume) || 0} ton).
+                      Registra a contagem física do box. Calculamos automaticamente a diferença em relação ao sistema ({fmtT(totalItens)} ton).
                     </p>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Volume medido fisicamente (ton)</label>
@@ -445,10 +451,10 @@ export default function VistoriaDiariaModal({
                       />
                       {volMedido && (
                         <p className={`text-xs mt-1 font-semibold ${
-                          (parseFloat(volMedido)||0) - (parseFloat(editVolume)||0) >= 0 ? "text-green-600" : "text-red-600"
+                          (parseFloat(volMedido)||0) - totalItens >= 0 ? "text-green-600" : "text-red-600"
                         }`}>
-                          Diferença: {((parseFloat(volMedido)||0)-(parseFloat(editVolume)||0))>=0?"+":""}
-                          {((parseFloat(volMedido)||0)-(parseFloat(editVolume)||0)).toLocaleString("pt-BR")} ton
+                          Diferença: {((parseFloat(volMedido)||0)-totalItens)>=0?"+":""}
+                          {((parseFloat(volMedido)||0)-totalItens).toLocaleString("pt-BR")} ton
                         </p>
                       )}
                     </div>
