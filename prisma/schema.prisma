@@ -1611,3 +1611,22 @@ model IndicadorPerdaMeta {
 
   @@unique([ano, tipo])
 }
+
+// ─── SNAPSHOT DIÁRIO DOS BOXES (histórico: total nos boxes em qualquer dia) ───
+// Gravado automaticamente a cada vistoria/alteração de estoque (upsert por dia+box).
+model BoxSnapshot {
+  id         String   @id @default(cuid())
+  data       DateTime                     // dia (UTC 00:00)
+  boxId      String
+  boxCodigo  String
+  volume     Float    @default(0)
+  capacidade Float    @default(0)
+  produto    String?
+  cliente    String?
+  statusUso  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([data, boxId])
+  @@index([data])
+}

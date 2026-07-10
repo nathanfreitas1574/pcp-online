@@ -164,11 +164,13 @@ function BoxTank({
 export default function BoxVisual({
   box,
   onUpdate,
+  onVistoria,
   produtos = [],
   clientes = [],
 }: {
   box: BoxData
   onUpdate?: (id: string, updates: Partial<BoxData>) => void
+  onVistoria?: (boxId: string) => void   // abre a Vistoria do Dia já neste box
   produtos?: string[]
   clientes?: string[]
 }) {
@@ -428,6 +430,13 @@ export default function BoxVisual({
                 Para incluir/remover produtos, use o botão <span className="font-semibold text-blue-600">+</span> no card.
               </p>
             </div>
+
+            {onVistoria && (
+              <button type="button" onClick={() => { setEditing(false); onVistoria(box.id) }}
+                className="w-full mt-3 flex items-center justify-center gap-2 border border-green-300 text-green-700 bg-green-50 rounded-lg py-2.5 text-sm font-medium hover:bg-green-100 transition">
+                ✅ Lançar vistoria deste box
+              </button>
+            )}
 
             <div className="flex gap-3 mt-4">
               <button onClick={() => setEditing(false)}

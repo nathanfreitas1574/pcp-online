@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { logReq } from "@/lib/log"
 import { alertarLacreNaoConforme } from "@/lib/actions"
+import { snapshotBoxesHoje } from "@/lib/box-snapshot"
 
 export async function POST(req: NextRequest) {
   try {
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest) {
     if (!lacreConforme) {
       try { await alertarLacreNaoConforme(boxId, box.codigo, usuarioId) } catch (e) { console.error("alerta lacre:", e) }
     }
+
+    // snapshot diário dos boxes (histórico por dia) — não bloqueia a vistoria
+    snapshotBoxesHoje().catch((e) => console.error("snapshot boxes:", e))
 
     return NextResponse.json({ auditoria, lacre }, { status: 201 })
   } catch (e) {

@@ -31,10 +31,12 @@ const inp = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focu
 
 export default function VistoriaDiariaModal({
   boxes,
+  boxInicial,
   onClose,
   onSaved,
 }: {
   boxes: VistoriaBoxOption[]
+  boxInicial?: string | null   // abre já com este box selecionado (ex.: vindo do "Editar" do card)
   onClose: () => void
   onSaved?: (boxId: string, updates: Pick<VistoriaBoxOption, "volumeAtual" | "produto" | "cliente" | "navio" | "statusUso" | "obsBox">) => void
 }) {
@@ -78,6 +80,16 @@ export default function VistoriaDiariaModal({
 
   const box = boxes.find((b) => b.id === boxId) ?? null
   const hoje = new Date().toLocaleDateString("pt-BR")
+
+  // Pré-seleciona o box quando o modal é aberto a partir do card (Editar → vistoria)
+  useEffect(() => {
+    if (!boxInicial) return
+    const b = boxes.find((x) => x.id === boxInicial)
+    if (!b) return
+    setArmazemSel(b.armazemId ?? "")
+    selectBox(b.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boxInicial])
 
   // Descargas que casam com o cliente+produto atualmente digitados (ao vivo)
   const descCasadas = (editCliente && editProduto)

@@ -283,6 +283,7 @@ export default function BoxesVisualClient({
   const [filtro, setFiltro] = useState<"TODOS" | "LIVRE" | "OCUPADO" | "CRITICO">("TODOS")
   const [showModal, setShowModal] = useState(false)
   const [showVistoria, setShowVistoria] = useState(false)
+  const [vistoriaBoxId, setVistoriaBoxId] = useState<string | null>(null) // box pré-selecionado (Editar → vistoria)
   const [showNovoRecebimento, setShowNovoRecebimento] = useState(false)
   const [showPrevisoes, setShowPrevisoes] = useState(false)
   const [form, setForm] = useState({ codigo: "", descricao: "", localizacao: "", capacidade: "" })
@@ -392,6 +393,7 @@ export default function BoxesVisualClient({
                 produtos={produtosCad}
                 clientes={clientesCad}
                 onUpdate={(id, upd) => handleBoxUpdate(id, upd as Partial<BoxItem>)}
+                onVistoria={(id) => { setVistoriaBoxId(id); setShowVistoria(true) }}
               />
             </div>
           ))}
@@ -959,7 +961,8 @@ export default function BoxesVisualClient({
             movimentadoHoje: b.movimentadoHoje,
             armazemId: b.armazemId, armazemNome: b.armazemNome, armazemCodigo: b.armazemCodigo,
           }))}
-          onClose={() => setShowVistoria(false)}
+          boxInicial={vistoriaBoxId}
+          onClose={() => { setShowVistoria(false); setVistoriaBoxId(null) }}
           onSaved={handleVistoriaSaved}
         />
       )}

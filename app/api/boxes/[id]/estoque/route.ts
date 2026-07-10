@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
+import { snapshotBoxesHoje } from "@/lib/box-snapshot"
 import { logReq } from "@/lib/log"
 import { registrarHistoricoBox } from "@/lib/actions"
 
@@ -101,5 +102,6 @@ export async function PATCH(
   })
   await logReq(req, "BOXES", "ATUALIZAR_ESTOQUE", `Box ${box.codigo}: ${volumeAtual} ton (${pct.toFixed(1)}%) — ${produtoDesc ?? "sem produto"}`, box.codigo)
 
+  snapshotBoxesHoje().catch((e) => console.error("snapshot boxes:", e)) // histórico por dia
   return NextResponse.json({ ok: true, pct: pct.toFixed(1) })
 }

@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
+import { snapshotBoxesHoje } from "@/lib/box-snapshot"
 import { logReq } from "@/lib/log"
 import { registrarHistoricoBox } from "@/lib/actions"
 
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { total, pct } = await recalcAlerta(id, box.codigo, box.capacidade, session.user.id)
   await registrarHistoricoBox(id, box.codigo, "ATUALIZAR", { produto: produtoDesc, clienteNome: cliente, volume: quantidade, pctOcupacao: pct })
   await logReq(req, "BOXES", "ITEM_ADD", `Box ${box.codigo}: +${produtoDesc} (${cliente || "—"}) ${quantidade} t`, box.codigo)
+  snapshotBoxesHoje().catch(() => {}) // histórico por dia
   return NextResponse.json({ ok: true, produtoId: prod.id, total, pct: pct.toFixed(1) }, { status: 201 })
 }
 
@@ -111,5 +113,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   await prisma.estoque.deleteMany({ where: { boxId: id, produtoId } })
   const { total, pct } = await recalcAlerta(id, box.codigo, box.capacidade, session.user.id)
   await logReq(req, "BOXES", "ITEM_DEL", `Box ${box.codigo}: removeu item`, box.codigo)
+  snapshotBoxesHoje().catch(() => {}) // histórico por dia
   return NextResponse.json({ ok: true, total, pct: pct.toFixed(1) })
 }
