@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, romaneio: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, romaneio: true, ordem: true },
     }),
     prisma.contratoExpedicao.findMany({ select: { numero: true, linhaProducao: true, produtoAbreviado: true, produtoSistema: true, cliente: { select: { nome: true } } } }),
   ])

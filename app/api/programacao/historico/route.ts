@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const fim = new Date(Date.UTC(ano, 11, 31) + 8 * DIA)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true },
   })
 
   // Bucket por dia + operação(carga?) → lista (cliente/produto casam de forma flexível no laço)

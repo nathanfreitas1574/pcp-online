@@ -46,19 +46,26 @@ export function semanaDeData(d: Date): { ano: number; semana: number } {
 export const ehCheckout = (s: string | null | undefined) =>
   (s ?? "").toUpperCase().replace(/[^A-Z]/g, "").includes("CHECKOUT")
 
-// Remove marcações duplicadas pelo ROMANEIO (a origem/Connect às vezes traz a mesma
-// entrega em 2 linhas com nº diferentes → inflava o realizado). Mantém a 1ª ocorrência
-// de cada romaneio não-vazio; linhas sem romaneio ficam todas (não dá p/ identificar).
-export function dedupePorRomaneio<T extends { romaneio?: string | null }>(arr: T[]): T[] {
-  const vistos = new Set<string>()
+// Remove marcações duplicadas pelo ROMANEIO e pela ORDEM (a origem/Connect às vezes
+// traz a mesma entrega em 2+ linhas com nº diferentes → inflava o realizado).
+// Mantém a 1ª ocorrência de cada romaneio/ordem não-vazios; linhas sem ambos ficam todas.
+export function dedupePorRomaneio<T extends { romaneio?: string | null; ordem?: string | null }>(arr: T[]): T[] {
+  const romVistos = new Set<string>()
+  const ordVistos = new Set<string>()
   const out: T[] = []
   for (const m of arr) {
     const rom = String(m.romaneio ?? "").trim()
-    if (rom) { if (vistos.has(rom)) continue; vistos.add(rom) }
+    const ord = String(m.ordem ?? "").trim()
+    if ((rom && romVistos.has(rom)) || (ord && ordVistos.has(ord))) continue
+    if (rom) romVistos.add(rom)
+    if (ord) ordVistos.add(ord)
     out.push(m)
   }
   return out
 }
+
+// nº de contrato normalizado (sem zeros à esquerda) p/ casar marcação (pedidoCliente) × contrato
+export const normNumContrato = (s: string | null | undefined) => String(s ?? "").trim().replace(/^0+/, "") || "0"
 
 // Classifica a operação da marcação: true = CARGA (expedição), false = DESCARGA, null = nenhuma.
 export function ehCarga(operacao: string | null | undefined): boolean | null {

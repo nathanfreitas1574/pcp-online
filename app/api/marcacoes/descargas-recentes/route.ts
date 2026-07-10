@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const raw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, operacao: { contains: "DESCARGA" }, dataCarregamento: { gte: corte } },
-    select: { clienteDestino: true, cliente: true, produto: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
+    select: { clienteDestino: true, cliente: true, produto: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true },
     orderBy: { dataCarregamento: "desc" },
   })
 

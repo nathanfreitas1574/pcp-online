@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, romaneio: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, romaneio: true, ordem: true, pedidoCliente: true },
     }),
     // tipo de contrato (definido na importação dos Contratos TOTVS)
     prisma.contratoArmazenagem.findMany({ where: { tipoContrato: { not: null } }, select: { numero: true, clienteNome: true, tipoContrato: true } }),
@@ -70,15 +70,27 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Realizado = Marcação CHECKOUT · CARGA no período
+  // Realizado = Marcação CHECKOUT · CARGA no período (dedupe por romaneio/ordem)
   const cargas = dedupePorRomaneio(marcRaw.filter((m) => ehCheckout(m.status) && ehCarga(m.operacao) === true))
+  // carga com Pedido Cliente conhecido na lista SÓ conta no contrato correspondente
+  const numerosLista = new Set(contratos.map((c) => normNum(c.numero)).filter((n) => n !== "0"))
 
   const rows = contratos.map((c) => {
     const programado = progPorNum.get(normNum(c.numero)) ?? 0
+    const numC = normNum(c.numero)
     let realizado = 0
     for (const m of cargas) {
-      if (clienteMatch(m.clienteDestino || m.cliente, c.cliente.nome) && produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema))
-        realizado += m.pesoLiquido || 0
+      const ped = normNum(m.pedidoCliente)
+      if (ped !== "0" && numerosLista.has(ped)) {
+        // check por CONTRATO + produto
+        if (ped !== numC) continue
+        if (!produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)) continue
+      } else {
+        // sem contrato na marcação → fallback fuzzy cliente + produto
+        if (!clienteMatch(m.clienteDestino || m.cliente, c.cliente.nome)) continue
+        if (!produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)) continue
+      }
+      realizado += m.pesoLiquido || 0
     }
     realizado = Math.round(realizado * 10) / 10
     const saldo = Math.round((programado - realizado) * 10) / 10

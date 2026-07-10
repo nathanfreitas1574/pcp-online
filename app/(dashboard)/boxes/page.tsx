@@ -59,10 +59,10 @@ export default async function BoxesPage() {
     alertasAbertos.map((a) => [a.boxId as string, a._count.id])
   )
 
-  // Mapa boxId → próxima previsão ativa
+  // Mapa boxId → próxima previsão ativa (previsões sem box ficam só na lista geral)
   const previsaoPorBox = new Map<string, typeof previsoes[0]>()
   for (const p of previsoes) {
-    if (!previsaoPorBox.has(p.boxId)) previsaoPorBox.set(p.boxId, p)
+    if (p.boxId && !previsaoPorBox.has(p.boxId)) previsaoPorBox.set(p.boxId, p)
   }
 
   // ── Referência de descargas da Marcação (CHECKOUT) dos últimos N dias ──────
@@ -72,7 +72,7 @@ export default async function BoxesPage() {
   const hojeYmd = ymd(hojeD)
   const descRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, operacao: { contains: "DESCARGA" }, dataCarregamento: { gte: corteDesc } },
-    select: { cliente: true, clienteDestino: true, produto: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
+    select: { cliente: true, clienteDestino: true, produto: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true },
   })
   const descargas = dedupePorRomaneio(descRaw.filter((m) => ehCheckout(m.status) && m.dataCarregamento))
     .map((m) => ({

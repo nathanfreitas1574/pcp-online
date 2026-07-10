@@ -270,7 +270,7 @@ export default function BoxesVisualClient({
   totalVolume: number
   boxesCheios: number
   boxesLivres: number
-  todasPrevisoes?: (Previsao & { boxId: string })[]
+  todasPrevisoes?: (Previsao & { boxId: string | null })[]
   naviosDisponiveis?: { id: string; nome: string; eta: string; produto?: string | null; clienteNome?: string | null }[]
   contabilGranel?: number | null
   coberturaPendente?: { volume: number; count: number } | null
@@ -495,8 +495,8 @@ export default function BoxesVisualClient({
                       <span className="font-medium">{dataFmt}</span>
                     </div>
                     {/* Box */}
-                    <span className="font-mono text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold shrink-0">
-                      {box?.codigo ?? p.boxId.slice(0, 6)}
+                    <span className={`font-mono text-xs px-2 py-0.5 rounded font-bold shrink-0 ${box ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>
+                      {box?.codigo ?? (p.boxId ? p.boxId.slice(0, 6) : "box a definir")}
                     </span>
                     {/* Produto / Cliente */}
                     <div className="flex-1 min-w-0 text-xs text-gray-700 truncate">

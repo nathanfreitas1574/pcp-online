@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import ProgramacaoClient from "./ProgramacaoClient"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
-import { DIA, ymd, ddMM, getSemanaAtual, semanasDoAno, diasDaSemana, ehCheckout, dedupePorRomaneio } from "@/lib/programacao"
+import { DIA, ymd, ddMM, getSemanaAtual, semanasDoAno, diasDaSemana, ehCheckout, dedupePorRomaneio, normNumContrato } from "@/lib/programacao"
 
 export const dynamic = "force-dynamic"
 
@@ -59,25 +59,38 @@ export default async function ProgramacaoPage({
   const semanaFim = new Date(diasSemana[6].getTime() + DIA - 1)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: semanaIni, lte: semanaFim } },
-    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true, pedidoCliente: true },
   })
   const marcacoes = dedupePorRomaneio(marcacoesRaw.filter(m => ehCheckout(m.status)))
 
   const idxPorData = new Map<string, number>()
   diasSemana.forEach((d, i) => idxPorData.set(ymd(d), i))
 
+  // Contratos presentes no quadro: carga com Pedido Cliente conhecido SÓ entra na linha
+  // do MESMO contrato (evita o fuzzy cruzar produtos do mesmo cliente, ex.: UREIA 46% × TSP 46)
+  const contratosQuadro = new Set(programacoes.map(p => normNumContrato(p.numeroContrato)).filter(n => n !== "0"))
+
   const realizadoPorDia: Record<string, number[]> = {}
   for (const prog of programacoes) {
     const arr = [0, 0, 0, 0, 0, 0, 0]
     const querCarga = prog.tipo === "EXPEDICAO"
+    const numProg = normNumContrato(prog.numeroContrato)
     for (const m of marcacoes) {
       if (!m.dataCarregamento) continue
       const op = (m.operacao || "").toUpperCase()
       const ehDescarga = op.includes("DESCARGA")
       const ehCarga = op.includes("CARGA") && !ehDescarga
       if (querCarga ? !ehCarga : !ehDescarga) continue
-      if (!clienteMatch(m.clienteDestino || m.cliente, prog.clienteNome)) continue
-      if (!produtoMatch(m.produto, prog.produto)) continue
+      const ped = normNumContrato(m.pedidoCliente)
+      if (ped !== "0" && contratosQuadro.has(ped)) {
+        // check por CONTRATO + produto (marcação traz o contrato no Pedido Cliente)
+        if (ped !== numProg) continue
+        if (!produtoMatch(m.produto, prog.produto)) continue
+      } else {
+        // sem contrato na marcação → fallback fuzzy cliente + produto
+        if (!clienteMatch(m.clienteDestino || m.cliente, prog.clienteNome)) continue
+        if (!produtoMatch(m.produto, prog.produto)) continue
+      }
       const idx = idxPorData.get(ymd(new Date(m.dataCarregamento)))
       if (idx === undefined) continue
       arr[idx] += m.pesoLiquido || 0

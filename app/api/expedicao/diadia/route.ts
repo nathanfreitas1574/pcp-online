@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   const [marcRaw, contratos, overlays] = await Promise.all([
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true, romaneio: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true, romaneio: true, ordem: true },
     }),
     prisma.contratoExpedicao.findMany({
       orderBy: { numero: "asc" },

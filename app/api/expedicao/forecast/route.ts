@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
     prisma.expedicaoForecast.findMany({ where: { data: { gte: ini, lte: fim }, ...(tipo === "TODOS" ? {} : { tipo }) } }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-      select: { clienteDestino: true, cliente: true, operacao: true, status: true, pesoLiquido: true, tipoServico: true, romaneio: true },
+      select: { clienteDestino: true, cliente: true, operacao: true, status: true, pesoLiquido: true, tipoServico: true, romaneio: true, ordem: true },
     }),
     prisma.cliente.findMany({ where: { ativo: true }, select: { nome: true, abreviado: true }, orderBy: { nome: "asc" } }),
   ])

@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { clienteMatch, produtoMatch } from "@/lib/texto"
 import { dataInputUTC } from "@/lib/cobertura"
-import { ehCheckout, ehCarga, ymd, semanaDeData, getSemanaAtual, dedupePorRomaneio } from "@/lib/programacao"
+import { ehCheckout, ehCarga, ymd, semanaDeData, getSemanaAtual, dedupePorRomaneio, normNumContrato } from "@/lib/programacao"
 import { NextRequest, NextResponse } from "next/server"
 
 // GET — registros do mês + realizado (marcação CHECKOUT/DESCARGA) + dados do painel
@@ -44,20 +44,31 @@ export async function GET(req: NextRequest) {
   const fim = new Date(Date.UTC(ano, Math.max(...meses), 1) - 1)
   const marcRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
-    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true, pedidoCliente: true },
   })
   const descargas = dedupePorRomaneio(marcRaw.filter(m => ehCheckout(m.status) && ehCarga(m.operacao) === false && m.dataCarregamento
     && mesesSet.has(new Date(m.dataCarregamento).getUTCMonth() + 1)))
+  // descarga com Pedido Cliente conhecido nos registros SÓ conta no registro do mesmo contrato
+  const contratosRegistros = new Set(registros.map(r => normNumContrato(r.numeroContrato)).filter(n => n !== "0"))
 
   // calcula realizado por registro + realizado por dia (painel)
   const realizadoDiaMap = new Map<string, number>()
   const itens = registros.map(r => {
     const rm = r.data ? new Date(r.data).getUTCMonth() + 1 : r.mes // mês do registro (data real ou referência)
+    const numR = normNumContrato(r.numeroContrato)
     let realizado = 0
     for (const m of descargas) {
       if (new Date(m.dataCarregamento!).getUTCMonth() + 1 !== rm) continue // realizado só do mês do registro
-      if (!clienteMatch(m.clienteDestino || m.cliente, r.cliente)) continue
-      if (!produtoMatch(m.produto, r.produtoAbreviado)) continue
+      const ped = normNumContrato(m.pedidoCliente)
+      if (ped !== "0" && contratosRegistros.has(ped)) {
+        // check por CONTRATO + produto (marcação traz o contrato no Pedido Cliente)
+        if (ped !== numR) continue
+        if (!produtoMatch(m.produto, r.produtoAbreviado)) continue
+      } else {
+        // sem contrato na marcação → fallback fuzzy cliente + produto
+        if (!clienteMatch(m.clienteDestino || m.cliente, r.cliente)) continue
+        if (!produtoMatch(m.produto, r.produtoAbreviado)) continue
+      }
       const peso = m.pesoLiquido || 0
       realizado += peso
       const d = ymd(new Date(m.dataCarregamento!))
@@ -136,5 +147,24 @@ export async function POST(req: NextRequest) {
       criadoPorNome: session.user.name ?? null,
     },
   })
+
+  // Reflete na Gestão de Box: contrato com volume vira Previsão de Recebimento ATIVA
+  // (box "a definir" — o operador vincula depois). Não bloqueia o cadastro se falhar.
+  const volumePrev = (Number(b.volumeProgramado) || 0) + (Number(b.adicionado) || 0) - (Number(b.cancelado) || 0)
+  if (volumePrev > 0 && statusV !== "CANCELADO") {
+    await prisma.previsaoRecebimento.create({
+      data: {
+        boxId: null,
+        produto: String(b.produtoAbreviado ?? "").trim(),
+        cliente: String(b.cliente ?? "").trim(),
+        volumePrev,
+        dataPrevisao: data ?? new Date(),
+        naveNome: b.navio?.trim() || null,
+        observacao: `Criada pelo Controle de Recebimento${b.numeroContrato ? ` — contrato ${String(b.numeroContrato).trim()}` : ""}`,
+        criadoPorNome: session.user.name ?? null,
+      },
+    }).catch(() => {})
+  }
+
   return NextResponse.json(c, { status: 201 })
 }

@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     prisma.expedicaoForecast.findMany({ where: { data: { gte: anoIni, lte: anoFim } } }),
     prisma.marcacaoVeiculo.findMany({
       where: { ativo: true, dataCarregamento: { gte: anoIni, lte: anoFim } },
-      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true, romaneio: true },
+      select: { clienteDestino: true, cliente: true, produto: true, operacao: true, status: true, pesoLiquido: true, dataCarregamento: true, local: true, tipoServico: true, romaneio: true, ordem: true },
     }),
     prisma.expedicaoCapacidade.findMany({ where: { ano } }),
     prisma.programacaoSemanal.findMany({ where: { ano, tipo: "EXPEDICAO" }, select: { semana: true, seg: true, ter: true, qua: true, qui: true, sex: true, sab: true } }),

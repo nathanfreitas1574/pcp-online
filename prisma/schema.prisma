@@ -1052,7 +1052,7 @@ enum PrevisaoStatus {
 
 model PrevisaoRecebimento {
   id            String          @id @default(cuid())
-  boxId         String
+  boxId         String?                          // null = box ainda não definido (ex.: criada pelo Controle de Recebimento)
   naveId        String?
   naveNome      String?
   produto       String
@@ -1065,7 +1065,7 @@ model PrevisaoRecebimento {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  box  Box           @relation(fields: [boxId], references: [id])
+  box  Box?          @relation(fields: [boxId], references: [id])
   nave NaveAgendada? @relation(fields: [naveId], references: [id])
 }
 
