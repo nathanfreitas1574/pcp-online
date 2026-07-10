@@ -159,6 +159,7 @@ export default function VistoriaDiariaModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         volumeAtual: parseFloat(editVolume) || 0,
+        fixarTotal: true, // o valor lançado é o TOTAL do box (espelho da vistoria do dia)
         produto:    editProduto || null,
         cliente:    editCliente || null,
         navio:      editNavio  || null,
