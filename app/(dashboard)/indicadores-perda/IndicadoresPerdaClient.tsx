@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from "recharts"
-import { TrendingDown, ChevronDown, ChevronUp, Pencil } from "lucide-react"
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, LabelList } from "recharts"
+import { TrendingDown, ChevronDown, ChevronUp, Pencil, Gauge, CheckCircle2, XCircle, MinusCircle } from "lucide-react"
 
 const MES_LBL = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 const OK = "#16a34a", RUIM = "#dc2626", META = "#f59e0b"
@@ -55,10 +55,10 @@ export default function IndicadoresPerdaClient() {
     <div className="p-6 max-w-[1500px] mx-auto">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center"><TrendingDown className="text-red-600" size={22} /></div>
+          <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center"><Gauge className="text-blue-700" size={22} /></div>
           <div>
-            <h1 className="text-xl font-bold text-gray-800">Indicadores Operacionais</h1>
-            <p className="text-sm text-gray-500">Quebras (embalagem/aditivo), varredura, tolerância de carregamento, custo do vira interno e balanço operacional</p>
+            <h1 className="text-xl font-bold text-gray-800">KPI PCP</h1>
+            <p className="text-sm text-gray-500">Painel gerencial — metas, resultados e faróis dos indicadores do PCP</p>
           </div>
         </div>
         <select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm">
@@ -68,13 +68,56 @@ export default function IndicadoresPerdaClient() {
 
       {loading && <p className="text-sm text-gray-400">Carregando…</p>}
 
+      {/* ── Resumo executivo: farol de cada KPI (YTD × meta) — clique desce ao indicador ── */}
+      {!loading && inds.length > 0 && (() => {
+        const rotulo: Record<string, string> = { EMBALAGEM: "Quebra Embalagens", ADITIVO: "Quebra Aditivo", VARREDURA: "Varredura" }
+        const ultimoVira = vira ? [...vira.meses].reverse().find((m) => m.dentro != null) : null
+        const resumo: { id: string; titulo: string; valor: string; meta: string; ok: boolean | null }[] = [
+          ...inds.map((i) => ({
+            id: i.tipo, titulo: rotulo[i.tipo] ?? i.tipo,
+            valor: pct(i.ytd.pct), meta: `meta ${i.meta}%`,
+            ok: i.ytd.pct == null ? null : i.ytd.pct <= i.meta,
+          })),
+          ...(tol ? [{
+            id: "TOLERANCIA", titulo: "Tolerância Carreg.",
+            valor: tol.ytd.kpi == null ? "—" : `${tol.ytd.kpi.toLocaleString("pt-BR")}%`, meta: "meta ≥ 100%",
+            ok: tol.ytd.kpi == null ? null : tol.ytd.kpi >= 100,
+          }] : []),
+          ...(vira ? [{
+            id: "VIRA", titulo: "Custo Vira Interno",
+            valor: ultimoVira ? fmtR$(ultimoVira.saldo) : "—", meta: `meta ≤ ${fmtR$(vira.meta)}/mês`,
+            ok: ultimoVira ? ultimoVira.dentro : null,
+          }] : []),
+          ...(bal ? [{
+            id: "BALANCO", titulo: "Saldo de Segurança",
+            valor: bal.ytd.quebraGerada || bal.ytd.varredura ? `${bal.ytd.saldoSeguranca >= 0 ? "+" : ""}${fmt(bal.ytd.saldoSeguranca)} t` : "—", meta: "meta ≥ 0 t",
+            ok: bal.ytd.quebraGerada || bal.ytd.varredura ? bal.ytd.saldoSeguranca >= 0 : null,
+          }] : []),
+        ]
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-5">
+            {resumo.map((r) => (
+              <button key={r.id} onClick={() => document.getElementById(`kpi-${r.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className={`text-left bg-white rounded-xl border shadow-sm p-3 transition hover:shadow-md border-l-4 ${r.ok == null ? "border-gray-200 border-l-gray-300" : r.ok ? "border-green-100 border-l-green-500" : "border-red-100 border-l-red-500"}`}>
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-[11px] text-gray-500 leading-tight">{r.titulo}</p>
+                  {r.ok == null ? <MinusCircle size={15} className="text-gray-300 shrink-0" /> : r.ok ? <CheckCircle2 size={15} className="text-green-600 shrink-0" /> : <XCircle size={15} className="text-red-500 shrink-0" />}
+                </div>
+                <p className={`text-lg font-bold leading-tight mt-0.5 ${r.ok == null ? "text-gray-400" : r.ok ? "text-green-700" : "text-red-600"}`}>{r.valor}</p>
+                <p className="text-[10px] text-gray-400">{r.meta}{r.ok != null && <span className={`ml-1 font-semibold ${r.ok ? "text-green-600" : "text-red-500"}`}>· {r.ok ? "no alvo" : "fora"}</span>}</p>
+              </button>
+            ))}
+          </div>
+        )
+      })()}
+
       <div className="space-y-5">
         {inds.map((ind) => {
           const aberto = abertos[ind.tipo] ?? false
           const dentro = ind.ytd.pct != null && ind.ytd.pct <= ind.meta
           const chartData = ind.meses.map((m) => ({ mes: MES_LBL[m.mes - 1], resultado: m.resultado, base: m.base, perda: m.perdaEfetiva, meta: ind.meta }))
           return (
-            <div key={ind.tipo} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div key={ind.tipo} id={`kpi-${ind.tipo}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-4">
               {/* cabeçalho */}
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <div>
@@ -104,6 +147,8 @@ export default function IndicadoresPerdaClient() {
                     <ReferenceLine y={ind.meta} stroke={META} strokeDasharray="5 4" label={{ value: `Meta ${ind.meta}%`, fontSize: 10, fill: META, position: "right" }} />
                     <Bar dataKey="resultado" name="Resultado (%)" radius={[3, 3, 0, 0]} maxBarSize={30}>
                       {chartData.map((c, i) => <Cell key={i} fill={c.resultado != null && c.resultado > ind.meta ? RUIM : OK} />)}
+                      <LabelList dataKey="resultado" position="top" style={{ fontSize: 9, fill: "#6b7280" }}
+                        formatter={(v: string | number | boolean | null | undefined) => (v == null || v === "" ? "" : `${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`)} />
                     </Bar>
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -165,7 +210,7 @@ export default function IndicadoresPerdaClient() {
 
         {/* ── 4. Controle de Tolerância de Carregamento (maior é melhor) ── */}
         {tol && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div id="kpi-TOLERANCIA" className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-4">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h3 className="font-bold text-gray-800">Controle de Tolerância de Carregamento</h3>
@@ -189,9 +234,14 @@ export default function IndicadoresPerdaClient() {
                   <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v) => (typeof v === "number" ? `${fmt(v)} t` : v)} />
-                  <Bar dataKey="Meta mensal" fill="#1d4ed8" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                  <Bar dataKey="Meta mensal" fill="#1d4ed8" radius={[3, 3, 0, 0]} maxBarSize={26}>
+                    <LabelList dataKey="Meta mensal" position="top" style={{ fontSize: 9, fill: "#1d4ed8" }}
+                      formatter={(v: string | number | boolean | null | undefined) => (v ? fmt(Number(v)) : "")} />
+                  </Bar>
                   <Bar dataKey="Retorno na pesagem" radius={[3, 3, 0, 0]} maxBarSize={26}>
                     {tol.meses.map((m, i) => <Cell key={i} fill={m.kpi != null && m.kpi >= 100 ? OK : "#f59e0b"} />)}
+                    <LabelList dataKey="Retorno na pesagem" position="top" style={{ fontSize: 9, fill: "#374151" }}
+                      formatter={(v: string | number | boolean | null | undefined) => (v ? fmt(Number(v)) : "")} />
                   </Bar>
                 </ComposedChart>
               </ResponsiveContainer>
@@ -243,7 +293,7 @@ export default function IndicadoresPerdaClient() {
 
         {/* ── 5. Controle de Custo do Vira Interno (menor gasto líquido é melhor) ── */}
         {vira && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div id="kpi-VIRA" className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-4">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h3 className="font-bold text-gray-800">Controle de Custo do Vira Interno</h3>
@@ -328,7 +378,7 @@ export default function IndicadoresPerdaClient() {
 
         {/* ── 7. Balanço Operacional (recebido → quebra técnica → varredura → saldo de segurança → expedição) ── */}
         {bal && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div id="kpi-BALANCO" className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-4">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h3 className="font-bold text-gray-800">Balanço Operacional — Movimentação Geral</h3>
