@@ -140,6 +140,27 @@ export default function MarcacoesClient({ safras, clientes, produtos, transporta
 
   function limparFiltros() {
     setBusca(""); setOperacao(""); setCliente(""); setProduto(""); setTransportadora(""); setDataInicio(""); setDataFim("")
+    setPeriodoRapido("")
+  }
+
+  // Filtros rápidos de período: Hoje / Esta semana / Este mês (docx atualização 2, item 1)
+  const [periodoRapido, setPeriodoRapido] = useState<"" | "dia" | "semana" | "mes">("")
+  function aplicarPeriodo(p: "dia" | "semana" | "mes") {
+    if (periodoRapido === p) { setPeriodoRapido(""); setDataInicio(""); setDataFim(""); return } // clica de novo = desliga
+    const hoje = new Date()
+    const iso = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`
+    if (p === "dia") { setDataInicio(iso(hoje)); setDataFim(iso(hoje)) }
+    if (p === "semana") {
+      const dow = hoje.getDay() // 0=domingo
+      const ini = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - dow)
+      const fim = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + 6)
+      setDataInicio(iso(ini)); setDataFim(iso(fim))
+    }
+    if (p === "mes") {
+      setDataInicio(iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1)))
+      setDataFim(iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)))
+    }
+    setPeriodoRapido(p)
   }
 
   // KPIs a partir do agregado (total geral) — independente dos filtros
@@ -250,10 +271,19 @@ export default function MarcacoesClient({ safras, clientes, produtos, transporta
                 <option value="">Todas transportadoras</option>
                 {transportadoras.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className={inp} title="Data inicial (carregamento)" />
-              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className={inp} title="Data final (carregamento)" />
+              <input type="date" value={dataInicio} onChange={e => { setDataInicio(e.target.value); setPeriodoRapido("") }} className={inp} title="Data inicial (carregamento)" />
+              <input type="date" value={dataFim} onChange={e => { setDataFim(e.target.value); setPeriodoRapido("") }} className={inp} title="Data final (carregamento)" />
             </div>
-            <div className="flex gap-2 mt-3">
+            <div className="flex gap-2 mt-3 flex-wrap">
+              {/* período rápido: diário / semanal / mensal */}
+              <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
+                {([["dia", "Hoje"], ["semana", "Esta semana"], ["mes", "Este mês"]] as const).map(([p, lbl]) => (
+                  <button key={p} onClick={() => aplicarPeriodo(p)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${periodoRapido === p ? "bg-white shadow text-blue-700" : "text-gray-500 hover:text-gray-700"}`}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
               <button onClick={carregar} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Aplicar filtros</button>
               <button onClick={limparFiltros} className="text-gray-500 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition">Limpar</button>
               <div className="ml-auto self-center text-sm text-gray-500">
