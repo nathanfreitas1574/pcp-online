@@ -52,7 +52,7 @@ type Dia = { ymd: string; label: string }
 type Prog = {
   id: string; clienteNome: string; produto: string; boxId?: string | null; boxCodigo: string | null; numeroContrato: string | null
   dom: number; seg: number; ter: number; qua: number; qui: number; sex: number; sab: number
-  total: number; realizado: number; tipo: string; turno?: string | null
+  total: number; realizado: number; tipo: string; turno?: string | null; obs?: string | null
 }
 type Box = { id: string; codigo: string }
 type Cliente = { id: string; nome: string; codigo: string }
@@ -235,6 +235,14 @@ export default function ProgramacaoClient({
     setSaving(null)
   }
 
+  async function salvarObs(row: Prog, obs: string) {
+    if (obs === (row.obs ?? "")) return
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, obs: obs || null } : r)))
+    await fetch(`/api/programacao/${row.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ obs }),
+    }).catch(() => {})
+  }
+
   async function salvarBox(row: Prog, boxId: string) {
     const codigo = boxes.find(b => b.id === boxId)?.codigo ?? null
     setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, boxId, boxCodigo: codigo } : r))
@@ -262,15 +270,6 @@ export default function ProgramacaoClient({
     if (!confirm("Excluir esta linha da programação?")) return
     setRows((prev) => prev.filter((r) => r.id !== id))
     await fetch(`/api/programacao/${id}`, { method: "DELETE" }).catch(() => {})
-  }
-
-  async function excluirProgramacao() {
-    const doTipo = rows.filter((r) => r.tipo === tipo)
-    if (doTipo.length === 0) return
-    const nome = tipo === "RECEBIMENTO" ? "Recebimento" : "Expedição"
-    if (!confirm(`Excluir TODA a programação de ${nome} da semana ${semana}/${ano}? (${doTipo.length} linha(s))`)) return
-    setRows((prev) => prev.filter((r) => r.tipo !== tipo))
-    await fetch(`/api/programacao?ano=${ano}&semana=${semana}&tipo=${tipo}`, { method: "DELETE" }).catch(() => {})
   }
 
   // arrastar linha (reordena SÓ dentro do tipo atual e persiste)
@@ -381,12 +380,6 @@ export default function ProgramacaoClient({
               <Plus size={15} /> Adicionar linha
             </button>
           )}
-          {view === "tabela" && rows.some((r) => r.tipo === tipo) && (
-            <button onClick={excluirProgramacao} title="Excluir toda a programação desta semana/tipo"
-              className="flex items-center gap-2 border border-red-200 text-red-600 bg-red-50 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-100">
-              <Trash2 size={15} /> Excluir programação
-            </button>
-          )}
         </div>
       </div>
 
@@ -451,6 +444,7 @@ export default function ProgramacaoClient({
                 <th className="px-3 py-3 text-center font-medium min-w-24" title="Semana até hoje (dias decorridos)">YTD semana</th>
                 <th className="px-3 py-3 text-center font-medium">Realiz.</th>
                 <th className="px-3 py-3 text-center font-medium">Saldo</th>
+                <th className="px-3 py-3 text-left font-medium min-w-40">Observações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -543,6 +537,11 @@ export default function ProgramacaoClient({
                       return <span className="text-amber-600 text-xs font-bold" title="Ultrapassou o programado">▲ +{fmt1(-saldo)}</span>
                     })()}
                   </td>
+                  <td className="px-2 py-2 align-top">
+                    <input defaultValue={row.obs ?? ""} placeholder="obs…" title={row.obs ?? ""} key={`obs-${row.id}-${row.obs ?? ""}`}
+                      onBlur={(e) => salvarObs(row, e.target.value)}
+                      className="w-full text-xs border border-transparent hover:border-gray-300 rounded px-1.5 py-1 bg-transparent text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:bg-white placeholder-gray-300" />
+                  </td>
                 </tr>
                 )
               })}
@@ -590,7 +589,7 @@ export default function ProgramacaoClient({
                 </tr>
               )}
               {addMode && ctrInfo && (
-                <tr className="bg-blue-50"><td colSpan={16} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
+                <tr className="bg-blue-50"><td colSpan={17} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
               )}
 
               {/* Linha de totais */}
@@ -624,11 +623,12 @@ export default function ProgramacaoClient({
                       return <span className="text-amber-600 text-xs">▲ +{fmt1(-saldo)}</span>
                     })()}
                   </td>
+                  <td />
                 </tr>
               )}
 
               {filtradas.length === 0 && !addMode && (
-                <tr><td colSpan={16} className="py-12 text-center text-gray-400">
+                <tr><td colSpan={17} className="py-12 text-center text-gray-400">
                   {temFiltro ? "Nenhuma linha para esse filtro." : <>Nenhuma programação para a semana {semana}. Clique em &quot;Adicionar linha&quot; para começar.</>}
                 </td></tr>
               )}

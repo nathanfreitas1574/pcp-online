@@ -177,11 +177,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Programação semanal
-    await prisma.programacaoSemanal.upsert({
-      where: { ano_semana_clienteNome_produto_tipo: { ano: 2026, semana: 99, clienteNome: "TESTE", produto: "TESTE", tipo: "RECEBIMENTO" } },
-      update: { seg: 1000, ter: 800 },
-      create: { ano: 2026, semana: 99, dataInicio: new Date(), dataFim: new Date(), clienteNome: "TESTE", produto: "TESTE", tipo: "RECEBIMENTO", seg: 1000, ter: 800 },
-    })
+    // sem unique por cliente+produto (contrato pode duplicar) → find-or-create
+    const progTeste = await prisma.programacaoSemanal.findFirst({ where: { ano: 2026, semana: 99, clienteNome: "TESTE", produto: "TESTE", tipo: "RECEBIMENTO" } })
+    if (progTeste) await prisma.programacaoSemanal.update({ where: { id: progTeste.id }, data: { seg: 1000, ter: 800 } })
+    else await prisma.programacaoSemanal.create({ data: { ano: 2026, semana: 99, dataInicio: new Date(), dataFim: new Date(), clienteNome: "TESTE", produto: "TESTE", tipo: "RECEBIMENTO", seg: 1000, ter: 800 } })
     ok("CRUD — Programação Semanal")
 
     // Log de atividade

@@ -709,12 +709,15 @@ model ProgramacaoSemanal {
   tipo        String   @default("RECEBIMENTO")
   turno       String?                 // A | B | C
   ordem       Int      @default(0)   // ordem manual das linhas (arrastar)
+  obs         String?                 // observações da linha
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   box Box? @relation(fields: [boxId], references: [id])
 
-  @@unique([ano, semana, clienteNome, produto, tipo])
+  // sem unique por cliente+produto: o MESMO contrato pode ter 2+ linhas na semana
+  // (ex.: uma p/ GRANEL e outra p/ BIG BAG) — o realizado atribui cada carga a 1 linha só
+  @@index([ano, semana, tipo])
 }
 
 // Outras demandas internas da semana (varredura, organização, transferências…)

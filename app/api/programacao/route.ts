@@ -11,10 +11,10 @@ export async function POST(req: NextRequest) {
     where: { ano: body.ano, semana: body.semana, tipo: body.tipo }, _max: { ordem: true },
   })
   const proxOrdem = (ultimo._max.ordem ?? 0) + 1
-  const prog = await prisma.programacaoSemanal.upsert({
-    where: { ano_semana_clienteNome_produto_tipo: { ano: body.ano, semana: body.semana, clienteNome: body.clienteNome, produto: body.produto, tipo: body.tipo } },
-    update: { numeroContrato: body.numeroContrato || undefined },
-    create: {
+  // create direto (sem upsert): o MESMO contrato/produto pode ter mais de uma linha
+  // na semana (ex.: uma p/ GRANEL e outra p/ BIG BAG)
+  const prog = await prisma.programacaoSemanal.create({
+    data: {
       ano: body.ano, semana: body.semana,
       dataInicio: new Date(body.dataInicio), dataFim: new Date(body.dataFim),
       boxId: body.boxId || null,

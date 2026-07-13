@@ -59,7 +59,7 @@ export default async function ProgramacaoPage({
   const semanaFim = new Date(diasSemana[6].getTime() + DIA - 1)
   const marcacoesRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: semanaIni, lte: semanaFim } },
-    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true, pedidoCliente: true },
+    select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true, pedidoCliente: true, tipoServico: true },
   })
   const marcacoes = dedupePorRomaneio(marcacoesRaw.filter(m => ehCheckout(m.status)))
 
@@ -70,32 +70,48 @@ export default async function ProgramacaoPage({
   // do MESMO contrato (evita o fuzzy cruzar produtos do mesmo cliente, ex.: UREIA 46% × TSP 46)
   const contratosQuadro = new Set(programacoes.map(p => normNumContrato(p.numeroContrato)).filter(n => n !== "0"))
 
+  // Afinidade BIG BAG × GRANEL entre o tipoServico da carga e o texto do produto da linha —
+  // desempata quando o MESMO contrato tem 2+ linhas na semana (uma granel, outra bag)
+  const afinidade = (tipoServico: string | null, produtoLinha: string): number => {
+    const ts = (tipoServico ?? "").toUpperCase()
+    const pl = produtoLinha.toUpperCase()
+    const linhaBag = /\bBB\b|BIG ?BAG|\bBAG\b/.test(pl)
+    const linhaGranel = /\bGR\b|GRANEL/.test(pl)
+    if (ts.includes("BIG BAG") || ts.includes("BAG")) return linhaBag ? 1 : linhaGranel ? -1 : 0
+    if (ts.includes("GRANEL")) return linhaGranel ? 1 : linhaBag ? -1 : 0
+    return 0
+  }
+
+  // Cada carga é atribuída a UMA linha só (não duplica o realizado com contrato repetido)
   const realizadoPorDia: Record<string, number[]> = {}
-  for (const prog of programacoes) {
-    const arr = [0, 0, 0, 0, 0, 0, 0]
-    const querCarga = prog.tipo === "EXPEDICAO"
-    const numProg = normNumContrato(prog.numeroContrato)
-    for (const m of marcacoes) {
-      if (!m.dataCarregamento) continue
-      const op = (m.operacao || "").toUpperCase()
-      const ehDescarga = op.includes("DESCARGA")
-      const ehCarga = op.includes("CARGA") && !ehDescarga
-      if (querCarga ? !ehCarga : !ehDescarga) continue
-      const ped = normNumContrato(m.pedidoCliente)
+  for (const prog of programacoes) realizadoPorDia[prog.id] = [0, 0, 0, 0, 0, 0, 0]
+  for (const m of marcacoes) {
+    if (!m.dataCarregamento) continue
+    const op = (m.operacao || "").toUpperCase()
+    const ehDescarga = op.includes("DESCARGA")
+    const ehCargaOp = op.includes("CARGA") && !ehDescarga
+    if (!ehDescarga && !ehCargaOp) continue
+    const idx = idxPorData.get(ymd(new Date(m.dataCarregamento)))
+    if (idx === undefined) continue
+    const ped = normNumContrato(m.pedidoCliente)
+
+    const candidatas = programacoes.filter(prog => {
+      if ((prog.tipo === "EXPEDICAO") !== ehCargaOp) return false
       if (ped !== "0" && contratosQuadro.has(ped)) {
         // check por CONTRATO + produto (marcação traz o contrato no Pedido Cliente)
-        if (ped !== numProg) continue
-        if (!produtoMatch(m.produto, prog.produto)) continue
-      } else {
-        // sem contrato na marcação → fallback fuzzy cliente + produto
-        if (!clienteMatch(m.clienteDestino || m.cliente, prog.clienteNome)) continue
-        if (!produtoMatch(m.produto, prog.produto)) continue
+        return ped === normNumContrato(prog.numeroContrato) && produtoMatch(m.produto, prog.produto)
       }
-      const idx = idxPorData.get(ymd(new Date(m.dataCarregamento)))
-      if (idx === undefined) continue
-      arr[idx] += m.pesoLiquido || 0
+      // sem contrato na marcação → fallback fuzzy cliente + produto
+      return clienteMatch(m.clienteDestino || m.cliente, prog.clienteNome) && produtoMatch(m.produto, prog.produto)
+    })
+    if (!candidatas.length) continue
+    let melhor = candidatas[0]
+    let best = afinidade(m.tipoServico, melhor.produto)
+    for (const c of candidatas.slice(1)) {
+      const a = afinidade(m.tipoServico, c.produto)
+      if (a > best) { melhor = c; best = a }
     }
-    realizadoPorDia[prog.id] = arr
+    realizadoPorDia[melhor.id][idx] += m.pesoLiquido || 0
   }
 
   return (
