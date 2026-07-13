@@ -643,7 +643,7 @@ export default function ExpedicaoClient({
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Contrato", "Tipo Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Início", "Fim", "Status", ""].map((h, i) => (
+                    {["Contrato", "Tipo Contrato", "Cliente", "Produto", "Tipo", "Operação", "Linha Produção", "Vol. Prog.", "Realizado", "Saldo", "%", "Início", "Fim", "Status"].map((h, i) => (
                       <th key={i} className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -651,7 +651,13 @@ export default function ExpedicaoClient({
                 <tbody className="divide-y divide-gray-50">
                   {contratosFiltrados.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 font-mono text-xs text-gray-700">{c.numero}</td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          <button onClick={() => excluirContrato(c.id, c.numero)} title="Excluir contrato"
+                            className="text-gray-300 hover:text-red-600 transition"><Trash2 size={13} /></button>
+                          <span className="font-mono text-xs text-gray-700">{c.numero}</span>
+                        </span>
+                      </td>
                       <td className="px-2 py-2">
                         <select value={c.tipoContrato ?? ""} onChange={(e) => salvarContratoCampo(c.id, "tipoContratoManual", e.target.value)}
                           className={`text-[11px] font-semibold rounded-full border px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${c.tipoContrato ? (TIPO_CONTRATO_COLOR[c.tipoContrato] ?? "bg-gray-100 text-gray-600") + " border-transparent" : "bg-white text-gray-400 border-gray-200"}`}>
@@ -706,14 +712,10 @@ export default function ExpedicaoClient({
                           {STATUS_CONTRATO.map((s) => <option key={s.key} value={s.key} className="bg-white text-gray-800">{s.label}</option>)}
                         </select>
                       </td>
-                      <td className="px-2 py-2 text-center">
-                        <button onClick={() => excluirContrato(c.id, c.numero)} title="Excluir contrato"
-                          className="text-gray-300 hover:text-red-600 transition"><Trash2 size={14} /></button>
-                      </td>
                     </tr>
                   ))}
                   {contratosFiltrados.length === 0 && (
-                    <tr><td colSpan={15} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
+                    <tr><td colSpan={14} className="py-10 text-center text-gray-400">Nenhum contrato no período/filtro.</td></tr>
                   )}
                 </tbody>
               </table>
