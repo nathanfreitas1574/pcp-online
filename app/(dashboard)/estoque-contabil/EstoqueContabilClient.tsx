@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
   Database, Upload, Search, ArrowDownToLine, ArrowUpFromLine, Boxes,
-  CheckCircle2, AlertTriangle, X, Scale, Table2, ArrowLeftRight,
+  CheckCircle2, AlertTriangle, X, Scale, Table2, ArrowLeftRight, Settings2, TrendingUp,
 } from "lucide-react"
 import DrillBarChart from "@/components/DrillBarChart"
 import DeParaProdutos from "./DeParaProdutos"
@@ -45,6 +45,36 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
   const [sentido, setSentido] = useState("")
   const [dataIni, setDataIni] = useState("")
   const [dataFim, setDataFim] = useState("")
+  const [natureza, setNatureza] = useState("")
+  const [naturezas, setNaturezas] = useState<string[]>([])
+
+  // KPIs do topo — RESPEITAM os filtros (inicial = totais globais do servidor)
+  const entradaG = porSentido.find(x => x.sentido === "ENTRADA")
+  const saidaG = porSentido.find(x => x.sentido === "SAIDA")
+  const [kpis, setKpis] = useState({
+    count: totalGeral.count, quantidade: totalGeral.quantidade,
+    entradas: entradaG?.quantidade ?? 0, entradasN: entradaG?.count ?? 0,
+    saidas: saidaG?.quantidade ?? 0, saidasN: saidaG?.count ?? 0,
+  })
+  const [pico, setPico] = useState<{ dia: string; valor: number } | null>(null)
+
+  // gerenciador de TES (natureza de operação)
+  type TesItem = { tes: string; natureza: string | null; registros: number; entradas: number; saidas: number }
+  const [showTes, setShowTes] = useState(false)
+  const [tesList, setTesList] = useState<TesItem[]>([])
+  const [tesLoading, setTesLoading] = useState(false)
+  const NATUREZAS_SUGERIDAS = ["ARMAZENAGEM", "INDUSTRIALIZACAO", "COMPRA", "VENDA", "TRANSFERENCIA", "DEVOLUCAO"]
+  async function abrirTes() {
+    setShowTes(true); setTesLoading(true)
+    const r = await fetch("/api/estoque-contabil/tes")
+    const d = await r.json().catch(() => null)
+    setTesList(d?.itens ?? [])
+    setTesLoading(false)
+  }
+  async function salvarTes(tes: string, nat: string) {
+    setTesList(prev => prev.map(t => t.tes === tes ? { ...t, natureza: nat.trim().toUpperCase() || null } : t))
+    await fetch("/api/estoque-contabil/tes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tes, natureza: nat }) }).catch(() => {})
+  }
 
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null)
@@ -59,13 +89,21 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
     if (sentido) qs.set("sentido", sentido)
     if (dataIni) qs.set("dataInicio", dataIni)
     if (dataFim) qs.set("dataFim", dataFim)
+    if (natureza) qs.set("natureza", natureza)
     const r = await fetch("/api/estoque-contabil?" + qs.toString())
     const d = await r.json()
     setItens(d.itens ?? [])
     setTotalFiltrado(d.totalFiltrado ?? { count: 0, quantidade: 0, saldo: 0 })
+    if (d.totalFiltrado) setKpis({
+      count: d.totalFiltrado.count, quantidade: d.totalFiltrado.quantidade,
+      entradas: d.porSentidoFiltrado?.entradas?.quantidade ?? 0, entradasN: d.porSentidoFiltrado?.entradas?.count ?? 0,
+      saidas: d.porSentidoFiltrado?.saidas?.quantidade ?? 0, saidasN: d.porSentidoFiltrado?.saidas?.count ?? 0,
+    })
+    setPico(d.pico ?? null)
+    if (d.naturezas) setNaturezas(d.naturezas)
     if (d.importadoEm) setImportadoEm(d.importadoEm)
     setLoading(false)
-  }, [busca, cliente, armazem, produto, sentido, dataIni, dataFim])
+  }, [busca, cliente, armazem, produto, sentido, dataIni, dataFim, natureza])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -91,10 +129,7 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
     if (fileRef.current) fileRef.current.value = ""
   }
 
-  function limpar() { setBusca(""); setCliente(""); setArmazem(""); setProduto(""); setSentido(""); setDataIni(""); setDataFim("") }
-
-  const entrada = porSentido.find(s => s.sentido === "ENTRADA")
-  const saida   = porSentido.find(s => s.sentido === "SAIDA")
+  function limpar() { setBusca(""); setCliente(""); setArmazem(""); setProduto(""); setSentido(""); setDataIni(""); setDataFim(""); setNatureza("") }
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -150,25 +185,39 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
       {view === "dashboard" && <DashboardContabil />}
 
       {view === "estoque" && (<>
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      {/* KPIs — atualizam conforme os filtros aplicados */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-gray-500 text-xs font-medium mb-1"><Boxes size={14}/> Registros</div>
-          <p className="text-2xl font-bold text-gray-800">{fmtInt(totalGeral.count)}</p>
+          <p className="text-2xl font-bold text-gray-800">{fmtInt(kpis.count)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-gray-500 text-xs font-medium mb-1"><Scale size={14}/> Quantidade total</div>
-          <p className="text-2xl font-bold text-gray-800">{fmt(totalGeral.quantidade)}</p>
+          <p className="text-2xl font-bold text-gray-800">{fmt(kpis.quantidade)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-green-600 text-xs font-medium mb-1"><ArrowDownToLine size={14}/> Entradas (R)</div>
-          <p className="text-2xl font-bold text-gray-800">{fmt(entrada?.quantidade ?? 0)} <span className="text-sm font-medium text-gray-400">· {fmtInt(entrada?.count ?? 0)}</span></p>
+          <p className="text-2xl font-bold text-gray-800">{fmt(kpis.entradas)} <span className="text-sm font-medium text-gray-400">· {fmtInt(kpis.entradasN)}</span></p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-amber-600 text-xs font-medium mb-1"><ArrowUpFromLine size={14}/> Saídas (D)</div>
-          <p className="text-2xl font-bold text-gray-800">{fmt(saida?.quantidade ?? 0)} <span className="text-sm font-medium text-gray-400">· {fmtInt(saida?.count ?? 0)}</span></p>
+          <p className="text-2xl font-bold text-gray-800">{fmt(kpis.saidas)} <span className="text-sm font-medium text-gray-400">· {fmtInt(kpis.saidasN)}</span></p>
+        </div>
+        <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-blue-700 text-xs font-medium mb-1"><Scale size={14}/> Saldo (E − S)</div>
+          <p className={`text-2xl font-bold ${kpis.entradas - kpis.saidas >= 0 ? "text-blue-800" : "text-red-600"}`}>{fmt(kpis.entradas - kpis.saidas)}</p>
         </div>
       </div>
+
+      {/* Pico de estoque no período filtrado */}
+      {pico && (
+        <div className="flex items-center gap-2 mb-4 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-sm">
+          <TrendingUp size={16} className="text-blue-700 shrink-0" />
+          <span className="text-blue-800">
+            Maior pico de estoque no período: <strong>{pico.dia.slice(8, 10)}/{pico.dia.slice(5, 7)}/{pico.dia.slice(0, 4)}</strong> — acumulado de <strong>{fmt(pico.valor)}</strong> (entradas − saídas até o dia)
+          </span>
+        </div>
+      )}
 
       {/* Saldo pendente de cobertura */}
       {coberturaPendente.volume > 0 && (
@@ -203,6 +252,10 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
             <option value="ENTRADA">Entrada (R)</option>
             <option value="SAIDA">Saída (D)</option>
           </select>
+          <select value={natureza} onChange={e => setNatureza(e.target.value)} className={inp} title="Natureza de operação (definida no Gerenciar TES)">
+            <option value="">Natureza: todas</option>
+            {naturezas.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
           <input value={produto} onChange={e => setProduto(e.target.value)} placeholder="Produto contém…"
             className={inp} onKeyDown={e => e.key === "Enter" && carregar()} />
           <div>
@@ -225,6 +278,9 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
         <div className="flex gap-2 mt-3 flex-wrap">
           <button onClick={carregar} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Aplicar filtros</button>
           <button onClick={limpar} className="text-gray-500 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition">Limpar</button>
+          <button onClick={abrirTes} className="flex items-center gap-1.5 border border-purple-200 text-purple-700 bg-purple-50 px-3 py-2 rounded-lg text-sm font-medium hover:bg-purple-100 transition">
+            <Settings2 size={14} /> Gerenciar TES
+          </button>
           <div className="ml-auto self-center text-sm text-gray-500">
             {loading ? "Carregando…" : <>
               {fmtInt(totalFiltrado.count)} registros · {fmt(totalFiltrado.quantidade)} qtd ·
@@ -233,6 +289,57 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
           </div>
         </div>
       </div>
+
+      {/* Modal Gerenciar TES — natureza de operação por código */}
+      {showTes && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-800">Gerenciador de TES</h3>
+                <p className="text-xs text-gray-500">Informe a natureza de operação de cada TES — vira filtro no estoque (armazenagem × industrialização…)</p>
+              </div>
+              <button onClick={() => { setShowTes(false); carregar() }} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <div className="overflow-y-auto p-4">
+              {tesLoading ? <p className="text-sm text-gray-400 py-6 text-center">Carregando…</p> : (
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-semibold">TES</th>
+                      <th className="text-left px-3 py-2 font-semibold min-w-[180px]">Natureza de operação</th>
+                      <th className="text-right px-3 py-2 font-semibold">Registros</th>
+                      <th className="text-right px-3 py-2 font-semibold">Entradas</th>
+                      <th className="text-right px-3 py-2 font-semibold">Saídas</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {tesList.map(t => (
+                      <tr key={t.tes} className="hover:bg-gray-50">
+                        <td className="px-3 py-1.5 font-mono font-bold text-gray-700">{t.tes}</td>
+                        <td className="px-2 py-1">
+                          <input list="tes-naturezas" defaultValue={t.natureza ?? ""} placeholder="ex: ARMAZENAGEM"
+                            onBlur={e => { if (e.target.value.trim().toUpperCase() !== (t.natureza ?? "")) salvarTes(t.tes, e.target.value) }}
+                            className="w-full border border-gray-200 rounded px-2 py-1 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-purple-400" />
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{fmtInt(t.registros)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-green-700">{fmt(t.entradas)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-amber-700">{fmt(t.saidas)}</td>
+                      </tr>
+                    ))}
+                    {tesList.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-gray-400">Nenhum TES encontrado nos relatórios importados.</td></tr>}
+                  </tbody>
+                </table>
+              )}
+              <datalist id="tes-naturezas">{NATUREZAS_SUGERIDAS.map(n => <option key={n} value={n} />)}</datalist>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-between items-center">
+              <p className="text-[11px] text-gray-400">Salva ao sair do campo. Deixar vazio remove a natureza.</p>
+              <button onClick={() => { setShowTes(false); carregar() }} className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">Concluir</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Gráfico drill-down (top 500 carregados) */}
       {itens.length > 0 && (

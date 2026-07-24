@@ -1529,7 +1529,8 @@ model RecebimentoControle {
   numeroContrato   String?                          // contrato (auto-preenche cliente/produto)
   cliente          String
   produtoAbreviado String
-  tipoProduto      String?                          // GRANEL | EMBALADO
+  tipoProduto      String?                          // GRANEL | PRODUTO ACABADO | SACARIA
+  linhaDescarga    String?                          // NAVE | ESTRUTURADO | PRODUTO ACABADO
   navio            String?
   origem           String?
   volumeProgramado Float     @default(0)
@@ -1632,4 +1633,15 @@ model BoxSnapshot {
 
   @@unique([data, boxId])
   @@index([data])
+}
+
+// ─── NATUREZA DAS TES (Estoque Contábil) ──────────────────────────────────────
+// Gerenciador: cada código TES recebe uma natureza de operação (armazenagem,
+// industrialização, …) — vira filtro no Estoque Contábil.
+model TesNatureza {
+  id        String   @id @default(cuid())
+  tes       String   @unique
+  natureza  String                     // ARMAZENAGEM | INDUSTRIALIZACAO | ...
+  descricao String?
+  updatedAt DateTime @updatedAt
 }
