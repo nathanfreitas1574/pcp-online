@@ -29,7 +29,7 @@ export type VistoriaBoxOption = {
 }
 
 // linha editável de produto do box na vistoria (espelho da fábrica no dia)
-type ItemEdit = { produtoId: string | null; produto: string; cliente: string; quantidade: string; navio: string }
+type ItemEdit = { produtoId: string | null; produtoOriginal: string; produto: string; cliente: string; quantidade: string; navio: string }
 
 const inp = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
 
@@ -42,7 +42,7 @@ export default function VistoriaDiariaModal({
   boxes: VistoriaBoxOption[]
   boxInicial?: string | null   // abre já com este box selecionado (ex.: vindo do "Editar" do card)
   onClose: () => void
-  onSaved?: (boxId: string, updates: Pick<VistoriaBoxOption, "volumeAtual" | "produto" | "cliente" | "navio" | "statusUso" | "obsBox">) => void
+  onSaved?: (boxId: string, updates: Pick<VistoriaBoxOption, "volumeAtual" | "produto" | "cliente" | "navio" | "statusUso" | "obsBox" | "itens">) => void
 }) {
   const [armazemSel, setArmazemSel] = useState("")
   const [boxId, setBoxId] = useState("")
@@ -114,11 +114,11 @@ export default function VistoriaDiariaModal({
     const b = boxes.find((x) => x.id === id)
     if (b) {
       const doBox: ItemEdit[] = (b.itens?.length
-        ? b.itens.map((i) => ({ produtoId: i.produtoId, produto: i.produto, cliente: i.cliente, quantidade: String(i.quantidade || ""), navio: i.navio ?? "" }))
+        ? b.itens.map((i) => ({ produtoId: i.produtoId, produtoOriginal: i.produto, produto: i.produto, cliente: i.cliente, quantidade: String(i.quantidade || ""), navio: i.navio ?? "" }))
         : b.produto
-          ? [{ produtoId: null, produto: b.produto, cliente: b.cliente ?? "", quantidade: String(b.volumeAtual || ""), navio: b.navio ?? "" }]
+          ? [{ produtoId: null, produtoOriginal: b.produto, produto: b.produto, cliente: b.cliente ?? "", quantidade: String(b.volumeAtual || ""), navio: b.navio ?? "" }]
           : [])
-      setItensEdit(doBox.length ? doBox : [{ produtoId: null, produto: "", cliente: "", quantidade: "", navio: "" }])
+      setItensEdit(doBox.length ? doBox : [{ produtoId: null, produtoOriginal: "", produto: "", cliente: "", quantidade: "", navio: "" }])
       setEditLacre(b.codigoLacre ?? "")
       setEditStatusUso((b.statusUso as StatusUsoBox) ?? "LIVRE")
       setEditObsBox(b.obsBox ?? "")
@@ -161,18 +161,23 @@ export default function VistoriaDiariaModal({
     // 1. Sincroniza os PRODUTOS do box com as linhas da vistoria (espelho da fábrica no dia)
     const finais = itensEdit.filter((i) => i.produto.trim())
     const originais = box.itens ?? []
-    // remove produtos que saíram da lista
-    for (const o of originais) {
-      const continua = finais.some((f) => f.produtoId === o.produtoId || f.produto.trim().toUpperCase() === o.produto.trim().toUpperCase())
-      if (!continua) await fetch(`/api/boxes/${box.id}/itens?produtoId=${encodeURIComponent(o.produtoId)}`, { method: "DELETE" }).catch(() => {})
-    }
-    // grava/atualiza cada linha (produto, cliente, quantidade, navio)
+    // grava/atualiza cada linha coletando o produtoId REAL de cada uma
+    const novosItens: NonNullable<VistoriaBoxOption["itens"]> = []
     for (const f of finais) {
-      await fetch(`/api/boxes/${box.id}/itens`, {
+      // envia o produtoId só se o nome NÃO mudou (nome trocado = outro produto)
+      const mesmoNome = f.produtoId && f.produto.trim().toUpperCase() === f.produtoOriginal.trim().toUpperCase()
+      const r = await fetch(`/api/boxes/${box.id}/itens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ produto: f.produto.trim(), cliente: f.cliente.trim(), quantidade: parseFloat(f.quantidade) || 0, navio: f.navio || null }),
-      }).catch(() => {})
+        body: JSON.stringify({ produtoId: mesmoNome ? f.produtoId : undefined, produto: f.produto.trim(), cliente: f.cliente.trim(), quantidade: parseFloat(f.quantidade) || 0, navio: f.navio || null }),
+      }).catch(() => null)
+      const d = r ? await r.json().catch(() => null) : null
+      novosItens.push({ produtoId: d?.produtoId ?? f.produtoId ?? `tmp_${f.produto.trim().toLowerCase()}`, produto: f.produto.trim(), cliente: f.cliente.trim(), quantidade: parseFloat(f.quantidade) || 0, navio: f.navio || undefined })
+    }
+    // remove do box os produtos que NÃO ficaram na lista final (por id resolvido)
+    const idsFinais = new Set(novosItens.map((n) => n.produtoId))
+    for (const o of originais) {
+      if (!idsFinais.has(o.produtoId)) await fetch(`/api/boxes/${box.id}/itens?produtoId=${encodeURIComponent(o.produtoId)}`, { method: "DELETE" }).catch(() => {})
     }
     // campos do box (semáforo, observação, capacidade) — sem mexer nos estoques
     await fetch(`/api/boxes/${box.id}/estoque`, {
@@ -209,6 +214,7 @@ export default function VistoriaDiariaModal({
         navio:       finais[0]?.navio || null,
         statusUso:   editStatusUso,
         obsBox:      editObsBox || null,
+        itens:       novosItens,
       })
       setMsg("✅ Vistoria registrada com sucesso!")
       // Após 2 s, limpa o formulário mas MANTÉM o armazém selecionado
@@ -304,7 +310,7 @@ export default function VistoriaDiariaModal({
                     </div>
                   ))}
                   <div className="flex items-center justify-between">
-                    <button type="button" onClick={() => setItensEdit((p) => [...p, { produtoId: null, produto: "", cliente: "", quantidade: "", navio: "" }])}
+                    <button type="button" onClick={() => setItensEdit((p) => [...p, { produtoId: null, produtoOriginal: "", produto: "", cliente: "", quantidade: "", navio: "" }])}
                       className="flex items-center gap-1 text-xs font-medium text-blue-700 border border-blue-200 bg-white rounded-lg px-2.5 py-1.5 hover:bg-blue-50">
                       <Plus size={13} /> Adicionar produto
                     </button>

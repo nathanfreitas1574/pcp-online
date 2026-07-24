@@ -71,8 +71,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const box = await prisma.box.findUnique({ where: { id } })
   if (!box) return NextResponse.json({ error: "Box não encontrado" }, { status: 404 })
 
-  // encontra ou cria o produto (match exato por descrição, senão cria)
-  let prod = await prisma.produto.findFirst({ where: { descricao: { equals: produtoDesc, mode: "insensitive" } } })
+  // resolve o produto: por ID (linha existente — evita duplicar quando há descrições repetidas),
+  // senão por descrição exata; por último cria
+  let prod = b.produtoId ? await prisma.produto.findUnique({ where: { id: String(b.produtoId) } }) : null
+  if (!prod) prod = await prisma.produto.findFirst({ where: { descricao: { equals: produtoDesc, mode: "insensitive" } } })
   if (!prod) {
     const baseCod = produtoDesc.substring(0, 20).replace(/\s+/g, "_").toUpperCase() || "PROD"
     let codigo = baseCod

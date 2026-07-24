@@ -69,6 +69,15 @@ export default async function ProgramacaoPage({
   // Contratos presentes no quadro: carga com Pedido Cliente conhecido SÓ entra na linha
   // do MESMO contrato (evita o fuzzy cruzar produtos do mesmo cliente, ex.: UREIA 46% × TSP 46)
   const contratosQuadro = new Set(programacoes.map(p => normNumContrato(p.numeroContrato)).filter(n => n !== "0"))
+  // quantas linhas cada contrato tem (por tipo): 1 linha → casa direto pelo contrato
+  // (o apelido do produto pode divergir do nome da marcação); 2+ → produto desempata
+  const linhasPorContrato = new Map<string, number>()
+  for (const p of programacoes) {
+    const n = normNumContrato(p.numeroContrato)
+    if (n === "0") continue
+    const k = `${p.tipo}|${n}`
+    linhasPorContrato.set(k, (linhasPorContrato.get(k) ?? 0) + 1)
+  }
 
   // Afinidade BIG BAG × GRANEL entre o tipoServico da carga e o texto do produto da linha —
   // desempata quando o MESMO contrato tem 2+ linhas na semana (uma granel, outra bag)
@@ -98,8 +107,11 @@ export default async function ProgramacaoPage({
     const candidatas = programacoes.filter(prog => {
       if ((prog.tipo === "EXPEDICAO") !== ehCargaOp) return false
       if (ped !== "0" && contratosQuadro.has(ped)) {
-        // check por CONTRATO + produto (marcação traz o contrato no Pedido Cliente)
-        return ped === normNumContrato(prog.numeroContrato) && produtoMatch(m.produto, prog.produto)
+        // check por CONTRATO (marcação traz o contrato no Pedido Cliente);
+        // produto só desempata quando o contrato tem 2+ linhas
+        if (ped !== normNumContrato(prog.numeroContrato)) return false
+        const nLinhas = linhasPorContrato.get(`${prog.tipo}|${ped}`) ?? 1
+        return nLinhas <= 1 || produtoMatch(m.produto, prog.produto)
       }
       // sem contrato na marcação → fallback fuzzy cliente + produto
       return clienteMatch(m.clienteDestino || m.cliente, prog.clienteNome) && produtoMatch(m.produto, prog.produto)

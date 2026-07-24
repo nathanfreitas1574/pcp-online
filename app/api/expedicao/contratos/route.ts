@@ -74,6 +74,12 @@ export async function GET(req: NextRequest) {
   const cargas = dedupePorRomaneio(marcRaw.filter((m) => ehCheckout(m.status) && ehCarga(m.operacao) === true))
   // carga com Pedido Cliente conhecido na lista SÓ conta no contrato correspondente
   const numerosLista = new Set(contratos.map((c) => normNum(c.numero)).filter((n) => n !== "0"))
+  // contrato com 1 linha → casa direto; 2+ → produto desempata
+  const linhasPorNumero = new Map<string, number>()
+  for (const c of contratos) {
+    const n = normNum(c.numero)
+    if (n !== "0") linhasPorNumero.set(n, (linhasPorNumero.get(n) ?? 0) + 1)
+  }
 
   const rows = contratos.map((c) => {
     const programado = progPorNum.get(normNum(c.numero)) ?? 0
@@ -82,9 +88,9 @@ export async function GET(req: NextRequest) {
     for (const m of cargas) {
       const ped = normNum(m.pedidoCliente)
       if (ped !== "0" && numerosLista.has(ped)) {
-        // check por CONTRATO + produto
+        // check por CONTRATO; produto só desempata quando o contrato tem 2+ linhas
         if (ped !== numC) continue
-        if (!produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)) continue
+        if ((linhasPorNumero.get(ped) ?? 1) > 1 && !produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)) continue
       } else {
         // sem contrato na marcação → fallback fuzzy cliente + produto
         if (!clienteMatch(m.clienteDestino || m.cliente, c.cliente.nome)) continue

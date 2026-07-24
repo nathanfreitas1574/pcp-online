@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, X, Trash2, Package, Truck } from "lucide-react"
 
 export type StatusUsoBox = "LIVRE" | "CONSUMO" | "PROGRAMADO" | "BLOQUEADO"
@@ -182,6 +182,13 @@ export default function BoxVisual({
         ? [{ produtoId: "__legacy__", produto: box.produto, cliente: box.cliente ?? "", quantidade: box.volumeAtual }]
         : []
   )
+
+  // Re-sincroniza quando o pai atualiza os itens (ex.: vistoria salvou) — sem isso o
+  // card/vistoria reabria com a lista antiga e regravava produtos já removidos
+  useEffect(() => {
+    if (box.itens) setItens(box.itens)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [box.itens])
 
   const [editing, setEditing] = useState(false)
   const [showItens, setShowItens] = useState(false)

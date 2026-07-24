@@ -50,6 +50,12 @@ export async function GET(req: NextRequest) {
     && mesesSet.has(new Date(m.dataCarregamento).getUTCMonth() + 1)))
   // descarga com Pedido Cliente conhecido nos registros SÓ conta no registro do mesmo contrato
   const contratosRegistros = new Set(registros.map(r => normNumContrato(r.numeroContrato)).filter(n => n !== "0"))
+  // contrato com 1 registro → casa direto (o apelido do produto pode divergir); 2+ → produto desempata
+  const registrosPorContrato = new Map<string, number>()
+  for (const r of registros) {
+    const n = normNumContrato(r.numeroContrato)
+    if (n !== "0") registrosPorContrato.set(n, (registrosPorContrato.get(n) ?? 0) + 1)
+  }
 
   // calcula realizado por registro + realizado por dia (painel)
   const realizadoDiaMap = new Map<string, number>()
@@ -61,9 +67,9 @@ export async function GET(req: NextRequest) {
       if (new Date(m.dataCarregamento!).getUTCMonth() + 1 !== rm) continue // realizado só do mês do registro
       const ped = normNumContrato(m.pedidoCliente)
       if (ped !== "0" && contratosRegistros.has(ped)) {
-        // check por CONTRATO + produto (marcação traz o contrato no Pedido Cliente)
+        // check por CONTRATO; produto só desempata quando o contrato tem 2+ registros
         if (ped !== numR) continue
-        if (!produtoMatch(m.produto, r.produtoAbreviado)) continue
+        if ((registrosPorContrato.get(ped) ?? 1) > 1 && !produtoMatch(m.produto, r.produtoAbreviado)) continue
       } else {
         // sem contrato na marcação → fallback fuzzy cliente + produto
         if (!clienteMatch(m.clienteDestino || m.cliente, r.cliente)) continue
