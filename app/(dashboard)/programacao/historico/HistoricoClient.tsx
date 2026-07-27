@@ -56,7 +56,7 @@ export default function HistoricoClient({ anoAtual }: { anoAtual: number }) {
   const anos = Array.from({ length: 5 }, (_, i) => anoAtual - 3 + i)
 
   return (
-    <div className="p-6 max-w-[1500px] mx-auto">
+    <div className="p-6">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">

@@ -188,7 +188,7 @@ export default function CoberturasClient({ clientes, produtos, boxes }: Props) {
   }
 
   return (
-    <div className="p-6 max-w-[1500px] mx-auto">
+    <div className="p-6">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">

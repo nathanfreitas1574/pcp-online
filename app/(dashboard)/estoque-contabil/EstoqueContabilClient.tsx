@@ -132,7 +132,7 @@ export default function EstoqueContabilClient({ clientes, armazens, totalGeral, 
   function limpar() { setBusca(""); setCliente(""); setArmazem(""); setProduto(""); setSentido(""); setDataIni(""); setDataFim(""); setNatureza("") }
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">

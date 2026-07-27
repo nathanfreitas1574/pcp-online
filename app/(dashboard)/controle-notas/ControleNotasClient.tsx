@@ -168,7 +168,7 @@ export default function ControleNotasClient({ clientes, usuarios, motivos }: Pro
   ].filter(s => s.valor > 0)
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">

@@ -207,7 +207,7 @@ export default function ConciliadorClient({ lotesIniciais }: { lotesIniciais: Lo
   const pctConc = loteSel && loteSel.total > 0 ? (loteSel.conciliados / loteSel.total) * 100 : 0
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">

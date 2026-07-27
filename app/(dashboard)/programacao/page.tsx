@@ -49,6 +49,18 @@ export default async function ProgramacaoPage({
     if (c.linhaProducao && !(normNum(c.numero) in linhaPorContrato)) linhaPorContrato[normNum(c.numero)] = c.linhaProducao
   }
 
+  // mapa nº contrato → LINHA DE DESCARGA (vem do Controle de Recebimento — usado nas linhas de RECEBIMENTO)
+  const recebs = await prisma.recebimentoControle.findMany({
+    where: { numeroContrato: { not: null }, linhaDescarga: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { numeroContrato: true, linhaDescarga: true },
+  })
+  const linhaDescargaPorContrato: Record<string, string> = {}
+  for (const r of recebs) {
+    const n = normNum(r.numeroContrato)
+    if (r.linhaDescarga && !(n in linhaDescargaPorContrato)) linhaDescargaPorContrato[n] = r.linhaDescarga
+  }
+
   // Datas da semana SELECIONADA (Dom → Sáb), em UTC
   const diasSemana = diasDaSemana(ano, semana)
   // payload neutro para o cliente (sem reinterpretação de fuso)
@@ -139,6 +151,7 @@ export default async function ProgramacaoPage({
       dias={dias}
       realizadoPorDia={realizadoPorDia}
       linhaPorContrato={linhaPorContrato}
+      linhaDescargaPorContrato={linhaDescargaPorContrato}
       demandasIniciais={demandas}
     />
   )

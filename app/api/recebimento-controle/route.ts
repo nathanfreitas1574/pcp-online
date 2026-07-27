@@ -82,16 +82,20 @@ export async function GET(req: NextRequest) {
     }
     const confirmado = (r.volumeProgramado || 0) + (r.adicionado || 0) - (r.cancelado || 0)
     const saldo = confirmado - realizado
+    // dias p/ finalizar o lote = dataFinalizacao − data (prevista/chegada)
+    const diasFinalizacao = r.dataFinalizacao && r.data
+      ? Math.max(0, Math.round((r.dataFinalizacao.getTime() - r.data.getTime()) / 86400000))
+      : null
     return {
       ...r,
       data: r.data ? r.data.toISOString() : null,
-      confirmado, realizado, saldo,
+      confirmado, realizado, saldo, diasFinalizacao,
     }
   })
 
   // agregações do painel
   const soma = (arr: typeof itens) => arr.reduce((a, x) => ({ confirmado: a.confirmado + x.confirmado, realizado: a.realizado + x.realizado, saldo: a.saldo + x.saldo }), { confirmado: 0, realizado: 0, saldo: 0 })
-  const agrupar = (campo: "cliente" | "produtoAbreviado" | "tipoProduto") => {
+  const agrupar = (campo: "cliente" | "produtoAbreviado" | "tipoProduto" | "linhaDescarga") => {
     const m = new Map<string, { nome: string; confirmado: number; realizado: number; saldo: number }>()
     for (const x of itens) {
       const k = (x[campo] as string) || "(vazio)"
@@ -101,6 +105,11 @@ export async function GET(req: NextRequest) {
     return [...m.values()].sort((a, b) => b.confirmado - a.confirmado)
   }
   const realizadoDia = [...realizadoDiaMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([dia, valor]) => ({ dia, valor }))
+  // média de dias p/ finalizar (só lotes finalizados com data)
+  const comDias = itens.filter(i => i.diasFinalizacao != null)
+  const mediaDiasFinalizacao = comDias.length
+    ? Math.round((comDias.reduce((s2, i) => s2 + (i.diasFinalizacao ?? 0), 0) / comDias.length) * 10) / 10
+    : null
 
   const opcoes = {
     anos: [...new Set(todos.map(t => t.ano))].sort((a, b) => b - a),
@@ -112,7 +121,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ano, meses,
     itens,
-    painel: { cotas: soma(itens), porCliente: agrupar("cliente"), porProduto: agrupar("produtoAbreviado"), porTipo: agrupar("tipoProduto"), realizadoDia },
+    painel: {
+      cotas: soma(itens), porCliente: agrupar("cliente"), porProduto: agrupar("produtoAbreviado"),
+      porTipo: agrupar("tipoProduto"), porLinhaDescarga: agrupar("linhaDescarga"), realizadoDia,
+      mediaDiasFinalizacao, lotesFinalizados: comDias.length,
+    },
     opcoes,
   })
 }
@@ -144,6 +157,7 @@ export async function POST(req: NextRequest) {
       cliente: String(b.cliente ?? "").trim(),
       produtoAbreviado: String(b.produtoAbreviado ?? "").trim(),
       tipoProduto: b.tipoProduto?.trim() || null,
+      linhaDescarga: b.linhaDescarga?.trim() || null,
       navio: b.navio?.trim() || null,
       origem: b.origem?.trim() || null,
       volumeProgramado: Number(b.volumeProgramado) || 0,

@@ -52,7 +52,7 @@ export default function IndicadoresPerdaClient() {
   }
 
   return (
-    <div className="p-6 max-w-[1500px] mx-auto">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center"><Gauge className="text-blue-700" size={22} /></div>

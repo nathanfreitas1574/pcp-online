@@ -15,18 +15,26 @@ const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ou
 
 type Item = {
   id: string; data: string | null; ano: number; mes: number; semana: number | null
-  unidade: string | null; status: string | null; dataFinalizacao: string | null; numeroContrato: string | null; cliente: string; produtoAbreviado: string
-  tipoProduto: string | null; navio: string | null; origem: string | null
+  unidade: string | null; status: string | null; dataFinalizacao: string | null; diasFinalizacao: number | null; numeroContrato: string | null; cliente: string; produtoAbreviado: string
+  tipoProduto: string | null; linhaDescarga: string | null; navio: string | null; origem: string | null
   volumeProgramado: number; cancelado: number; adicionado: number; obs: string | null
   confirmado: number; realizado: number; saldo: number
 }
 type Grupo = { nome: string; confirmado: number; realizado: number; saldo: number }
 type Dados = {
   ano: number; meses: number[]; itens: Item[]
-  painel: { cotas: { confirmado: number; realizado: number; saldo: number }; porCliente: Grupo[]; porProduto: Grupo[]; porTipo: Grupo[]; realizadoDia: { dia: string; valor: number }[] }
+  painel: {
+    cotas: { confirmado: number; realizado: number; saldo: number }
+    porCliente: Grupo[]; porProduto: Grupo[]; porTipo: Grupo[]; porLinhaDescarga: Grupo[]
+    realizadoDia: { dia: string; valor: number }[]
+    mediaDiasFinalizacao: number | null; lotesFinalizados: number
+  }
   opcoes: { anos: number[]; unidades: string[]; tiposProduto: string[]; clientes: string[] }
 }
-const VAZIO = { numeroContrato: "", data: "", unidade: "ROO", status: "PREVISTO", dataFinalizacao: "", cliente: "", produtoAbreviado: "", tipoProduto: "GRANEL", navio: "", origem: "", volumeProgramado: "", cancelado: "", adicionado: "", obs: "" }
+const VAZIO = { numeroContrato: "", data: "", unidade: "ROO", status: "PREVISTO", dataFinalizacao: "", cliente: "", produtoAbreviado: "", tipoProduto: "GRANEL", linhaDescarga: "", navio: "", origem: "", volumeProgramado: "", cancelado: "", adicionado: "", obs: "" }
+const TIPOS_PRODUTO = ["GRANEL", "PRODUTO ACABADO", "SACARIA"]
+const LINHAS_DESCARGA = ["NAVE", "ESTRUTURADO", "PRODUTO ACABADO"]
+const LINHA_DESC_COR: Record<string, string> = { NAVE: "bg-blue-100 text-blue-700", ESTRUTURADO: "bg-purple-100 text-purple-700", "PRODUTO ACABADO": "bg-emerald-100 text-emerald-700" }
 const STATUS_OPCOES = ["PREVISTO", "CONFIRMADO", "REALIZADO", "FINALIZADO", "CANCELADO"]
 const STATUS_COR: Record<string, string> = {
   PREVISTO: "bg-gray-100 text-gray-600", CONFIRMADO: "bg-blue-100 text-blue-700",
@@ -82,7 +90,8 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
       const r = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(numero.trim())}`)
       const d = await r.json()
       const m = d.matches?.[0]
-      if (m) setForm((f: typeof form) => f ? { ...f, cliente: f.cliente || m.clienteNome, produtoAbreviado: f.produtoAbreviado || m.desProduto } : f)
+      // contrato criado DEPOIS do lançamento: ao informar o nº, atualiza cliente/produto com os oficiais
+      if (m) setForm((f: typeof form) => f ? { ...f, cliente: m.clienteNome || f.cliente, produtoAbreviado: m.desProduto || f.produtoAbreviado } : f)
     } catch { /* silencioso */ }
   }
   function abrirEdit(it: Item) {
@@ -90,7 +99,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
       numeroContrato: it.numeroContrato ?? "",
       data: it.data ? it.data.slice(0, 10) : "", unidade: it.unidade ?? "ROO", status: it.status ?? "PREVISTO",
       dataFinalizacao: it.dataFinalizacao ? it.dataFinalizacao.slice(0, 10) : "",
-      cliente: it.cliente, produtoAbreviado: it.produtoAbreviado, tipoProduto: it.tipoProduto ?? "", navio: it.navio ?? "",
+      cliente: it.cliente, produtoAbreviado: it.produtoAbreviado, tipoProduto: it.tipoProduto ?? "", linhaDescarga: it.linhaDescarga ?? "", navio: it.navio ?? "",
       origem: it.origem ?? "", volumeProgramado: String(it.volumeProgramado || ""), cancelado: String(it.cancelado || ""),
       adicionado: String(it.adicionado || ""), obs: it.obs ?? "",
     })
@@ -134,7 +143,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
   const pct = cotas.confirmado > 0 ? Math.round((cotas.realizado / cotas.confirmado) * 100) : 0
 
   return (
-    <div className="p-6 max-w-[1700px] mx-auto">
+    <div className="p-6">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -208,11 +217,13 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <Kpi icon={<Target size={14} />} cor="text-blue-700" label="Confirmado (cotas)" v={`${fmt(cotas.confirmado)} t`} />
         <Kpi icon={<CheckCircle2 size={14} />} cor="text-green-700" label="Realizado" v={`${fmt(cotas.realizado)} t · ${pct}%`} />
         <Kpi icon={<TrendingDown size={14} />} cor="text-amber-700" label="Saldo a receber" v={`${fmt(cotas.saldo)} t`} />
         <Kpi icon={<Ship size={14} />} cor="text-gray-700" label="Registros no mês" v={String(itens.length)} />
+        <Kpi icon={<CheckCircle2 size={14} />} cor="text-purple-700" label="Média dias p/ finalizar"
+          v={d?.painel.mediaDiasFinalizacao != null ? `${d.painel.mediaDiasFinalizacao} dias · ${d.painel.lotesFinalizados} lote(s)` : "—"} />
       </div>
 
       {view === "painel" ? (
@@ -220,6 +231,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
           <Card titulo="Cotas por Cliente"><GrupoChart data={d?.painel.porCliente ?? []} /></Card>
           <Card titulo="Saldo por Produto"><GrupoChart data={d?.painel.porProduto ?? []} /></Card>
           <Card titulo="Tipo de Produto"><GrupoChart data={d?.painel.porTipo ?? []} /></Card>
+          <Card titulo="Volume por Linha de Descarga"><GrupoChart data={d?.painel.porLinhaDescarga ?? []} /></Card>
           <Card titulo="Realizado por Dia">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={(d?.painel.realizadoDia ?? []).map(x => ({ nome: x.dia.slice(8) + "/" + x.dia.slice(5, 7), valor: Math.round(x.valor) }))}>
@@ -235,7 +247,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
             <table className="w-full text-xs">
               <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
                 <tr>
-                  {["Data", "Sem", "Unid", "Status", "Contr.", "Cliente", "Produto", "Tipo", "Navio", "Origem", "Prog.", "Canc.", "Adic.", "Confirm.", "Realiz.", "Saldo", "Obs", ""].map((h, i) => (
+                  {["Data", "Sem", "Unid", "Status", "Contr.", "Cliente", "Produto", "Tipo", "Linha Desc.", "Navio", "Origem", "Prog.", "Canc.", "Adic.", "Confirm.", "Realiz.", "Saldo", "Obs", ""].map((h, i) => (
                     <th key={i} className={`px-2 py-2.5 font-semibold ${["Prog.", "Canc.", "Adic.", "Confirm.", "Realiz.", "Saldo"].includes(h) ? "text-right" : "text-left"}`}>{h}</th>
                   ))}
                 </tr>
@@ -248,12 +260,22 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
                     <td className="px-2 py-1.5 text-gray-600">{it.unidade}</td>
                     <td className="px-2 py-1.5">
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${STATUS_COR[it.status ?? ""] ?? "bg-gray-100 text-gray-600"}`}>{it.status}</span>
-                      {it.status === "FINALIZADO" && it.dataFinalizacao && <div className="text-[9px] text-green-600 mt-0.5">✓ {it.dataFinalizacao.slice(8, 10)}/{it.dataFinalizacao.slice(5, 7)}/{it.dataFinalizacao.slice(2, 4)}</div>}
+                      {it.status === "FINALIZADO" && it.dataFinalizacao && (
+                        <div className="text-[9px] text-green-600 mt-0.5">
+                          ✓ {it.dataFinalizacao.slice(8, 10)}/{it.dataFinalizacao.slice(5, 7)}/{it.dataFinalizacao.slice(2, 4)}
+                          {it.diasFinalizacao != null && <span className="text-gray-400"> · {it.diasFinalizacao}d</span>}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-1.5 font-mono text-gray-500">{it.numeroContrato || "—"}</td>
                     <td className="px-2 py-1.5 font-medium text-gray-800 max-w-[120px] truncate" title={it.cliente}>{it.cliente}</td>
                     <td className="px-2 py-1.5 text-gray-700 max-w-[130px] truncate" title={it.produtoAbreviado}>{it.produtoAbreviado}</td>
                     <td className="px-2 py-1.5 text-gray-500">{it.tipoProduto || "—"}</td>
+                    <td className="px-2 py-1.5">
+                      {it.linhaDescarga
+                        ? <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${LINHA_DESC_COR[it.linhaDescarga] ?? "bg-gray-100 text-gray-600"}`}>{it.linhaDescarga}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="px-2 py-1.5 text-gray-500 max-w-[100px] truncate" title={it.navio ?? ""}>{it.navio || "—"}</td>
                     <td className="px-2 py-1.5 text-gray-500">{it.origem || "—"}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-gray-700">{fmt(it.volumeProgramado)}</td>
@@ -272,7 +294,7 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
                   </tr>
                 ))}
                 {!loading && itens.length === 0 && (
-                  <tr><td colSpan={18} className="text-center py-12 text-gray-400">Nenhum recebimento em {mesesLabel}/{ano}. Clique em <strong>Adicionar</strong>.</td></tr>
+                  <tr><td colSpan={19} className="text-center py-12 text-gray-400">Nenhum recebimento em {mesesLabel}/{ano}. Clique em <strong>Adicionar</strong>.</td></tr>
                 )}
               </tbody>
             </table>
@@ -297,7 +319,8 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
                 <Campo l="Data de finalização"><input type="date" value={form.dataFinalizacao} onChange={e => setForm({ ...form, dataFinalizacao: e.target.value })} className={inp} /></Campo>
               )}
               <Campo l="Cliente *" span><input list="rc-clientes" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} className={inp} /></Campo>
-              <Campo l="Tipo"><select value={form.tipoProduto} onChange={e => setForm({ ...form, tipoProduto: e.target.value })} className={inp}><option value="GRANEL">Granel</option><option value="EMBALADO">Embalado</option><option value="">—</option></select></Campo>
+              <Campo l="Tipo"><select value={form.tipoProduto} onChange={e => setForm({ ...form, tipoProduto: e.target.value })} className={inp}>{TIPOS_PRODUTO.map(t => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}{form.tipoProduto && !TIPOS_PRODUTO.includes(form.tipoProduto) && <option value={form.tipoProduto}>{form.tipoProduto}</option>}<option value="">—</option></select></Campo>
+              <Campo l="Linha de Descarga"><select value={form.linhaDescarga} onChange={e => setForm({ ...form, linhaDescarga: e.target.value })} className={inp}><option value="">—</option>{LINHAS_DESCARGA.map(l => <option key={l} value={l}>{l.charAt(0) + l.slice(1).toLowerCase()}</option>)}</select></Campo>
               <Campo l="Produto abreviado *" span><input list="rc-produtos" value={form.produtoAbreviado} onChange={e => setForm({ ...form, produtoAbreviado: e.target.value })} className={inp} placeholder="ex: UREIA 46" /></Campo>
               <datalist id="rc-clientes">{clientesCad.map((c, i) => <option key={i} value={c.nome}>{c.abreviado || c.nome}</option>)}</datalist>
               <datalist id="rc-produtos">{produtosCad.map((p, i) => <option key={i} value={p.abreviado || p.descricao}>{p.descricao}</option>)}</datalist>

@@ -19,6 +19,9 @@ const LINHA_PROD_COLORS: Record<string, string> = {
   "BAG MÓVEL": "bg-green-100 text-green-700",
   "PRODUTO ACABADO": "bg-emerald-100 text-emerald-700",
   GRANEL: "bg-yellow-100 text-yellow-700",
+  // linhas de DESCARGA (recebimento — vêm do Controle de Recebimento)
+  NAVE: "bg-blue-100 text-blue-700",
+  ESTRUTURADO: "bg-purple-100 text-purple-700",
 }
 const SEM_LINHA = "— sem linha —"
 const STORAGE_KEY = "pcp:prog:filtros" // filtros persistidos entre navegações
@@ -64,11 +67,12 @@ type Demanda = {
 }
 
 export default function ProgramacaoClient({
-  programacoes: inicial, boxes, clientes, produtos, semana, ano, maxSemana, dias, realizadoPorDia, linhaPorContrato = {}, demandasIniciais = []
+  programacoes: inicial, boxes, clientes, produtos, semana, ano, maxSemana, dias, realizadoPorDia, linhaPorContrato = {}, linhaDescargaPorContrato = {}, demandasIniciais = []
 }: {
   programacoes: Prog[]; boxes: Box[]; clientes: Cliente[]; produtos: Produto[]
   semana: number; ano: number; maxSemana: number; dias: Dia[]; realizadoPorDia: Record<string, number[]>
   linhaPorContrato?: Record<string, string>
+  linhaDescargaPorContrato?: Record<string, string>
   demandasIniciais?: Demanda[]
 }) {
   const router = useRouter()
@@ -106,9 +110,12 @@ export default function ProgramacaoClient({
   }, [tipo, busca, linhasSel, filtrosOk])
 
   const realDe = (id: string) => realizadoPorDia[id] ?? [0, 0, 0, 0, 0, 0, 0]
-  // Linha de Produção do contrato (definida no Controle de Expedição)
-  const linhaDe = (numeroContrato: string | null) =>
-    numeroContrato ? linhaPorContrato[String(numeroContrato).trim().replace(/^0+/, "") || "0"] ?? null : null
+  // EXPEDIÇÃO: Linha de Produção (Controle de Expedição) · RECEBIMENTO: Linha de Descarga (Controle de Recebimento)
+  const linhaDe = (numeroContrato: string | null) => {
+    if (!numeroContrato) return null
+    const n = String(numeroContrato).trim().replace(/^0+/, "") || "0"
+    return tipo === "RECEBIMENTO" ? (linhaDescargaPorContrato[n] ?? null) : (linhaPorContrato[n] ?? null)
+  }
 
   // Dias já decorridos (ymd do dia < hoje no fuso do navegador) — p/ YTD e "não atendido"
   const now = new Date()
@@ -126,6 +133,18 @@ export default function ProgramacaoClient({
     if (!numero.trim()) { setCtrInfo(""); return }
     setBuscandoCtr(true); setCtrInfo("")
     try {
+      // RECEBIMENTO: os contratos vêm do CONTROLE DE RECEBIMENTO (fallback: TOTVS)
+      if (tipo === "RECEBIMENTO") {
+        const rr = await fetch(`/api/recebimento-controle/lookup?numero=${encodeURIComponent(numero.trim())}`)
+        const dr = await rr.json().catch(() => null)
+        const mr = dr?.matches?.[0]
+        if (mr) {
+          setNovaLinha(p => ({ ...p, clienteNome: mr.clienteNome, produto: mr.desProduto }))
+          setCtrInfo(`✓ ${mr.clienteNome} — ${mr.desProduto} (Controle de Recebimento${mr.linhaDescarga ? ` · ${mr.linhaDescarga}` : ""})`)
+          setBuscandoCtr(false)
+          return
+        }
+      }
       const res = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(numero.trim())}`)
       const d = await res.json()
       const m = d.matches?.[0]
@@ -133,7 +152,7 @@ export default function ProgramacaoClient({
         setNovaLinha(p => ({ ...p, clienteNome: m.clienteNome, produto: m.desProduto }))
         setCtrInfo(`✓ ${m.clienteNome} — ${m.desProduto}${d.matches.length > 1 ? ` (+${d.matches.length - 1} filial)` : ""}`)
       } else {
-        setCtrInfo("Contrato não encontrado — preencha cliente/produto manualmente.")
+        setCtrInfo(tipo === "RECEBIMENTO" ? "Contrato não encontrado no Controle de Recebimento nem no TOTVS — preencha manualmente." : "Contrato não encontrado — preencha cliente/produto manualmente.")
       }
     } catch {
       setCtrInfo("Erro ao buscar contrato.")
@@ -220,8 +239,13 @@ export default function ProgramacaoClient({
     // busca o contrato e alinha cliente/produto (só o cabeçalho — volumes ficam como estão)
     if (num) {
       try {
-        const res = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(num)}`)
-        const d = await res.json()
+        const origem = row.tipo === "RECEBIMENTO" ? "/api/recebimento-controle/lookup" : "/api/contratos/lookup"
+        let res = await fetch(`${origem}?numero=${encodeURIComponent(num)}`)
+        let d = await res.json()
+        if (!d.matches?.length && row.tipo === "RECEBIMENTO") {
+          res = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(num)}`)
+          d = await res.json()
+        }
         const m = d.matches?.[0]
         if (m && (m.clienteNome || m.desProduto)) {
           const upd = { clienteNome: m.clienteNome || row.clienteNome, produto: m.desProduto || row.produto }
@@ -400,7 +424,7 @@ export default function ProgramacaoClient({
         {/* Filtro por Linha de Produção (multi-seleção) */}
         {linhasDisponiveis.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="flex items-center gap-1 text-xs text-gray-500 font-medium"><Layers size={13} /> Linha:</span>
+            <span className="flex items-center gap-1 text-xs text-gray-500 font-medium"><Layers size={13} /> {tipo === "RECEBIMENTO" ? "Linha descarga:" : "Linha:"}</span>
             {linhasDisponiveis.map((lp) => {
               const on = linhasSel.includes(lp)
               const cor = lp === SEM_LINHA ? "bg-gray-100 text-gray-600" : (LINHA_PROD_COLORS[lp] ?? "bg-gray-100 text-gray-600")
@@ -432,7 +456,7 @@ export default function ProgramacaoClient({
                 <th className="px-3 py-3 text-left font-medium min-w-24">Box</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Cliente</th>
                 <th className="px-3 py-3 text-left font-medium min-w-32">Produto</th>
-                <th className="px-3 py-3 text-left font-medium min-w-24" title="Definida no Controle de Expedição">Linha Prod.</th>
+                <th className="px-3 py-3 text-left font-medium min-w-24" title={tipo === "RECEBIMENTO" ? "Linha de Descarga — definida no Controle de Recebimento" : "Definida no Controle de Expedição"}>{tipo === "RECEBIMENTO" ? "Linha Descarga" : "Linha Prod."}</th>
                 {VIS.map((i) => (
                   <th key={i} className={`px-2 py-3 text-center font-medium min-w-20 ${passou(i) ? "" : "opacity-80"}`}>
                     <div>{DIAS[i]}</div>
