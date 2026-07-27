@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ── BALANÇO OPERACIONAL — quebra gerada × varredura × saldo de segurança ────
-  const pctQT = metaByTipo.get("BALANCO") ?? METAS_EXTRAS.BALANCO
+  // quebra técnica gerada é DIGITADA mês a mês (campo perda) — sem % automático
   const varrPorMes = new Map<number, number>()
   for (let m = 1; m <= 12; m++) {
     const rv = linha("VARREDURA", m)
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     const recebido = r?.base ?? 0
     const bigbag = r?.s1 ?? 0, granel = r?.s2 ?? 0, acabado = r?.s3 ?? 0
     const expedido = r2(bigbag + granel + acabado)
-    const quebraGerada = r2((recebido * pctQT) / 100)
+    const quebraGerada = r2(r?.perda ?? 0)
     const varredura = varrPorMes.get(i + 1) ?? 0
     return {
       mes: i + 1, recebido: r2(recebido), bigbag: r2(bigbag), granel: r2(granel), acabado: r2(acabado), expedido,
@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     }
   })
   const balanco = {
-    pctQuebraTecnica: pctQT, meses: balMeses,
+    meses: balMeses,
     ytd: {
       recebido: r1(balMeses.reduce((s, m) => s + m.recebido, 0)),
       expedido: r1(balMeses.reduce((s, m) => s + m.expedido, 0)),

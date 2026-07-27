@@ -16,7 +16,7 @@ type Tolerancia = { metaKg: number; meses: TolMes[]; ytd: { meta: number; retorn
 type ViraMes = { mes: number; gasto: number; retorno: number; saldo: number; atingimento: number | null; dentro: boolean | null; economia: number | null; obs: string | null }
 type Vira = { meta: number; meses: ViraMes[]; ytd: { gasto: number; retorno: number; saldo: number } }
 type BalMes = { mes: number; recebido: number; bigbag: number; granel: number; acabado: number; expedido: number; quebraGerada: number; varredura: number; saldoSeguranca: number; consumo: number | null; obs: string | null }
-type Balanco = { pctQuebraTecnica: number; meses: BalMes[]; ytd: { recebido: number; expedido: number; quebraGerada: number; varredura: number; saldoSeguranca: number } }
+type Balanco = { meses: BalMes[]; ytd: { recebido: number; expedido: number; quebraGerada: number; varredura: number; saldoSeguranca: number } }
 const fmtR$ = (n: number) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
 
 const INP = "w-full text-xs border border-gray-200 rounded px-1 py-1 text-right bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 dark:bg-gray-700 dark:text-gray-100"
@@ -385,10 +385,6 @@ export default function IndicadoresPerdaClient() {
                 <p className="text-xs text-gray-500">Recebido → quebra técnica gerada → varredura → saldo de segurança → expedição (Big Bag · Granel · Prod. Acabado)</p>
               </div>
               <div className="flex items-center gap-3 text-xs flex-wrap">
-                <span className="flex items-center gap-1 text-gray-500">% quebra técnica:
-                  <input type="number" step="0.05" min="0" defaultValue={bal.pctQuebraTecnica} onBlur={(e) => { if (Number(e.target.value) !== bal.pctQuebraTecnica) salvarMeta("BALANCO", e.target.value) }}
-                    className="w-16 text-right border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400" title="Percentual parametrizável aplicado ao volume recebido" />
-                </span>
                 <span className={`px-2 py-0.5 rounded-full font-semibold ${bal.ytd.saldoSeguranca >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                   Saldo de Segurança YTD {bal.ytd.saldoSeguranca >= 0 ? "+" : ""}{fmt(bal.ytd.saldoSeguranca)} t
                 </span>
@@ -464,6 +460,7 @@ export default function IndicadoresPerdaClient() {
                       { label: "Expedição Big Bag (t)", campo: "s1" as const, get: (m: BalMes) => m.bigbag, tot: null },
                       { label: "Expedição Granel (t)", campo: "s2" as const, get: (m: BalMes) => m.granel, tot: null },
                       { label: "Expedição Prod. Acabado (t)", campo: "s3" as const, get: (m: BalMes) => m.acabado, tot: null },
+                      { label: "Quebra técnica gerada (t)", campo: "perda" as const, get: (m: BalMes) => m.quebraGerada, tot: bal.ytd.quebraGerada },
                     ]).map((linha) => (
                       <tr key={linha.campo} className="hover:bg-gray-50">
                         <td className="text-left px-3 py-1 font-medium text-gray-700 sticky left-0 bg-white">{linha.label}</td>
@@ -471,11 +468,6 @@ export default function IndicadoresPerdaClient() {
                         <td className="text-right px-3 py-1 tabular-nums font-semibold bg-blue-50/50 text-blue-700">{linha.tot != null ? fmt(linha.tot) : fmt(bal.meses.reduce((s, m) => s + linha.get(m), 0))}</td>
                       </tr>
                     ))}
-                    <tr className="bg-amber-50/40">
-                      <td className="text-left px-3 py-1 font-medium text-amber-700 sticky left-0 bg-amber-50/40">Quebra técnica gerada (t) — auto</td>
-                      {bal.meses.map((m) => <td key={m.mes} className="text-right px-2 py-1 tabular-nums text-amber-700">{m.quebraGerada ? fmt(m.quebraGerada) : "—"}</td>)}
-                      <td className="text-right px-3 py-1 tabular-nums font-bold bg-amber-50">{fmt(bal.ytd.quebraGerada)}</td>
-                    </tr>
                     <tr className="bg-orange-50/40">
                       <td className="text-left px-3 py-1 font-medium text-orange-700 sticky left-0 bg-orange-50/40">Varredura gerada (t) — do indicador</td>
                       {bal.meses.map((m) => <td key={m.mes} className="text-right px-2 py-1 tabular-nums text-orange-700">{m.varredura ? fmt(m.varredura) : "—"}</td>)}
@@ -493,7 +485,7 @@ export default function IndicadoresPerdaClient() {
                     </tr>
                   </tbody>
                 </table>
-                <p className="px-4 py-2 text-[11px] text-gray-400">Quebra gerada = recebido × % quebra técnica. Varredura vem automática do indicador de Geração de Varredura (não digite 2×). Saldo positivo = margem de segurança; negativo = perda acima da quebra técnica (risco de falta). Consumo ≤ 100% = varredura coberta pela quebra.</p>
+                <p className="px-4 py-2 text-[11px] text-gray-400">Quebra técnica gerada é DIGITADA mês a mês. Varredura vem automática do indicador de Geração de Varredura (não digite 2×). Saldo positivo = margem de segurança; negativo = perda acima da quebra técnica (risco de falta). Consumo ≤ 100% = varredura coberta pela quebra.</p>
               </div>
             )}
           </div>
