@@ -118,14 +118,21 @@ export default async function ProgramacaoPage({
 
     const candidatas = programacoes.filter(prog => {
       if ((prog.tipo === "EXPEDICAO") !== ehCargaOp) return false
-      if (ped !== "0" && contratosQuadro.has(ped)) {
-        // check por CONTRATO (marcação traz o contrato no Pedido Cliente);
-        // produto só desempata quando o contrato tem 2+ linhas
-        if (ped !== normNumContrato(prog.numeroContrato)) return false
-        const nLinhas = linhasPorContrato.get(`${prog.tipo}|${ped}`) ?? 1
-        return nLinhas <= 1 || produtoMatch(m.produto, prog.produto)
+      const numLinha = normNumContrato(prog.numeroContrato)
+      if (ped !== "0") {
+        if (numLinha !== "0") {
+          // linha COM contrato só recebe carga do MESMO contrato — nunca por fuzzy
+          // de outro contrato (evita inflar com cargas de contratos vizinhos);
+          // produto só desempata quando o contrato tem 2+ linhas
+          if (ped !== numLinha) return false
+          const nLinhas = linhasPorContrato.get(`${prog.tipo}|${ped}`) ?? 1
+          return nLinhas <= 1 || produtoMatch(m.produto, prog.produto)
+        }
+        // linha ainda sem contrato: fuzzy, mas só se o contrato da carga
+        // não pertence a outra linha do quadro
+        if (contratosQuadro.has(ped)) return false
       }
-      // sem contrato na marcação → fallback fuzzy cliente + produto
+      // sem contrato na marcação (ou linha sem contrato) → fuzzy cliente + produto
       return clienteMatch(m.clienteDestino || m.cliente, prog.clienteNome) && produtoMatch(m.produto, prog.produto)
     })
     if (!candidatas.length) continue

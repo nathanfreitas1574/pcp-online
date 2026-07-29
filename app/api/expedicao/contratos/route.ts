@@ -72,8 +72,6 @@ export async function GET(req: NextRequest) {
 
   // Realizado = Marcação CHECKOUT · CARGA no período (dedupe por romaneio/ordem)
   const cargas = dedupePorRomaneio(marcRaw.filter((m) => ehCheckout(m.status) && ehCarga(m.operacao) === true))
-  // carga com Pedido Cliente conhecido na lista SÓ conta no contrato correspondente
-  const numerosLista = new Set(contratos.map((c) => normNum(c.numero)).filter((n) => n !== "0"))
   // contrato com 1 linha → casa direto; 2+ → produto desempata
   const linhasPorNumero = new Map<string, number>()
   for (const c of contratos) {
@@ -81,24 +79,30 @@ export async function GET(req: NextRequest) {
     if (n !== "0") linhasPorNumero.set(n, (linhasPorNumero.get(n) ?? 0) + 1)
   }
 
+  // ── cada carga atribuída a UM contrato só ──────────────────────────────────
+  // carga COM Pedido Cliente só conta no contrato do MESMO número — nunca por
+  // fuzzy em contrato de outro número (evita inflar um contrato com cargas de
+  // contratos vizinhos do mesmo cliente); fuzzy fica só p/ carga sem contrato
+  const realizadoPorId = new Map<string, number>()
+  for (const m of cargas) {
+    const ped = normNum(m.pedidoCliente)
+    const cands = contratos.filter((c) => {
+      const numC = normNum(c.numero)
+      if (ped !== "0") {
+        if (ped !== numC) return false
+        return (linhasPorNumero.get(ped) ?? 1) <= 1 || produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)
+      }
+      return clienteMatch(m.clienteDestino || m.cliente, c.cliente.nome) && produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)
+    })
+    if (!cands.length) continue
+    // desempate: prefere o contrato cujo produto casa com o da carga
+    const alvo = cands.find((c) => produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)) ?? cands[0]
+    realizadoPorId.set(alvo.id, (realizadoPorId.get(alvo.id) ?? 0) + (m.pesoLiquido || 0))
+  }
+
   const rows = contratos.map((c) => {
     const programado = progPorNum.get(normNum(c.numero)) ?? 0
-    const numC = normNum(c.numero)
-    let realizado = 0
-    for (const m of cargas) {
-      const ped = normNum(m.pedidoCliente)
-      if (ped !== "0" && numerosLista.has(ped)) {
-        // check por CONTRATO; produto só desempata quando o contrato tem 2+ linhas
-        if (ped !== numC) continue
-        if ((linhasPorNumero.get(ped) ?? 1) > 1 && !produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)) continue
-      } else {
-        // sem contrato na marcação → fallback fuzzy cliente + produto
-        if (!clienteMatch(m.clienteDestino || m.cliente, c.cliente.nome)) continue
-        if (!produtoMatch(m.produto, c.produtoAbreviado || c.produtoSistema)) continue
-      }
-      realizado += m.pesoLiquido || 0
-    }
-    realizado = Math.round(realizado * 10) / 10
+    const realizado = Math.round((realizadoPorId.get(c.id) ?? 0) * 10) / 10
     const saldo = Math.round((programado - realizado) * 10) / 10
     const pct = programado > 0 ? Math.round((realizado / programado) * 1000) / 10 : null
     return {

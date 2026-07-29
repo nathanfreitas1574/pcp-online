@@ -24,6 +24,12 @@ export async function GET(req: NextRequest) {
   const tipoProduto = searchParams.get("tipoProduto") || undefined
   const cliente = searchParams.get("cliente") || undefined
   const statusF = searchParams.get("status") || undefined
+  // período do REALIZADO (opcional): recorta as descargas por data e ignora a trava
+  // do mês do registro — p/ contratos que viram o mês (descarga continua no mês seguinte)
+  const dataDe = dataInputUTC(searchParams.get("dataDe"))
+  const dataAteRaw = dataInputUTC(searchParams.get("dataAte"))
+  const dataAte = dataAteRaw ? new Date(dataAteRaw.getTime() + 86400000 - 1) : null
+  const rangeRealizado = !!(dataDe || dataAte)
 
   // filtra pela DATA real do registro (só o(s) mês(es) selecionado(s)); sem data → cai pelo mês de referência
   const rangesMes = meses.map(m => ({ data: { gte: new Date(Date.UTC(ano, m - 1, 1)), lte: new Date(Date.UTC(ano, m, 1) - 1) } }))
@@ -39,16 +45,16 @@ export async function GET(req: NextRequest) {
     prisma.recebimentoControle.findMany({ select: { ano: true, mes: true, unidade: true, tipoProduto: true, cliente: true } }),
   ])
 
-  // marcações finalizadas (CHECKOUT) de DESCARGA nos meses selecionados
-  const ini = new Date(Date.UTC(ano, Math.min(...meses) - 1, 1))
-  const fim = new Date(Date.UTC(ano, Math.max(...meses), 1) - 1)
+  // marcações finalizadas (CHECKOUT) de DESCARGA no período
+  // (com dataDe/dataAte o período é o range informado; senão, o(s) mês(es) selecionado(s))
+  const ini = dataDe ?? new Date(Date.UTC(ano, Math.min(...meses) - 1, 1))
+  const fim = dataAte ?? new Date(Date.UTC(ano, Math.max(...meses), 1) - 1)
   const marcRaw = await prisma.marcacaoVeiculo.findMany({
     where: { ativo: true, dataCarregamento: { gte: ini, lte: fim } },
     select: { clienteDestino: true, cliente: true, produto: true, operacao: true, pesoLiquido: true, dataCarregamento: true, status: true, romaneio: true, ordem: true, pedidoCliente: true },
   })
   const descargas = dedupePorRomaneio(marcRaw.filter(m => ehCheckout(m.status) && ehCarga(m.operacao) === false && m.dataCarregamento
-    && mesesSet.has(new Date(m.dataCarregamento).getUTCMonth() + 1)))
-  // descarga com Pedido Cliente conhecido nos registros SÓ conta no registro do mesmo contrato
+    && (rangeRealizado || mesesSet.has(new Date(m.dataCarregamento).getUTCMonth() + 1))))
   const contratosRegistros = new Set(registros.map(r => normNumContrato(r.numeroContrato)).filter(n => n !== "0"))
   // contrato com 1 registro → casa direto (o apelido do produto pode divergir); 2+ → produto desempata
   const registrosPorContrato = new Map<string, number>()
@@ -57,29 +63,47 @@ export async function GET(req: NextRequest) {
     if (n !== "0") registrosPorContrato.set(n, (registrosPorContrato.get(n) ?? 0) + 1)
   }
 
-  // calcula realizado por registro + realizado por dia (painel)
+  // ── Realizado: cada descarga atribuída a UM registro só ─────────────────────
+  // Regras: descarga COM contrato só conta no registro do MESMO contrato — nunca
+  // por fuzzy em registro de OUTRO contrato (era isso que inflava registro recém-
+  // criado com descargas de contratos vizinhos do mesmo cliente). Fuzzy fica p/
+  // descarga sem contrato, ou registro ainda sem contrato digitado.
+  const mesReg = (r: (typeof registros)[number]) => r.data ? new Date(r.data).getUTCMonth() + 1 : r.mes
+  const realizadoPorReg = new Map<string, number>()
   const realizadoDiaMap = new Map<string, number>()
-  const itens = registros.map(r => {
-    const rm = r.data ? new Date(r.data).getUTCMonth() + 1 : r.mes // mês do registro (data real ou referência)
-    const numR = normNumContrato(r.numeroContrato)
-    let realizado = 0
-    for (const m of descargas) {
-      if (new Date(m.dataCarregamento!).getUTCMonth() + 1 !== rm) continue // realizado só do mês do registro
-      const ped = normNumContrato(m.pedidoCliente)
-      if (ped !== "0" && contratosRegistros.has(ped)) {
-        // check por CONTRATO; produto só desempata quando o contrato tem 2+ registros
-        if (ped !== numR) continue
-        if ((registrosPorContrato.get(ped) ?? 1) > 1 && !produtoMatch(m.produto, r.produtoAbreviado)) continue
-      } else {
-        // sem contrato na marcação → fallback fuzzy cliente + produto
-        if (!clienteMatch(m.clienteDestino || m.cliente, r.cliente)) continue
-        if (!produtoMatch(m.produto, r.produtoAbreviado)) continue
+  for (const m of descargas) {
+    const ped = normNumContrato(m.pedidoCliente)
+    const candidatos = registros.filter(r => {
+      const numR = normNumContrato(r.numeroContrato)
+      if (ped !== "0") {
+        if (numR !== "0") {
+          if (ped !== numR) return false // contrato diferente NUNCA conta aqui
+          return (registrosPorContrato.get(ped) ?? 1) <= 1 || produtoMatch(m.produto, r.produtoAbreviado)
+        }
+        // registro sem contrato: aceita por fuzzy, mas só se o contrato da descarga
+        // não pertence a outro registro do quadro
+        if (contratosRegistros.has(ped)) return false
       }
-      const peso = m.pesoLiquido || 0
-      realizado += peso
-      const d = ymd(new Date(m.dataCarregamento!))
-      realizadoDiaMap.set(d, (realizadoDiaMap.get(d) ?? 0) + peso)
+      return clienteMatch(m.clienteDestino || m.cliente, r.cliente) && produtoMatch(m.produto, r.produtoAbreviado)
+    })
+    if (!candidatos.length) continue
+    const mesM = new Date(m.dataCarregamento!).getUTCMonth() + 1
+    let alvo = candidatos.find(r => mesReg(r) === mesM)
+    if (!alvo) {
+      if (!rangeRealizado) continue // sem filtro de datas mantém: realizado só no mês do registro
+      // com filtro de datas: contrato que virou o mês — atribui ao registro com data
+      // anterior mais próxima (a descarga continua do lote anterior); senão o 1º
+      const anteriores = candidatos.filter(r => r.data && r.data <= m.dataCarregamento!)
+      alvo = anteriores.sort((a, b) => (b.data!.getTime()) - (a.data!.getTime()))[0] ?? candidatos[0]
     }
+    const peso = m.pesoLiquido || 0
+    realizadoPorReg.set(alvo.id, (realizadoPorReg.get(alvo.id) ?? 0) + peso)
+    const d = ymd(new Date(m.dataCarregamento!))
+    realizadoDiaMap.set(d, (realizadoDiaMap.get(d) ?? 0) + peso)
+  }
+
+  const itens = registros.map(r => {
+    const realizado = realizadoPorReg.get(r.id) ?? 0
     const confirmado = (r.volumeProgramado || 0) + (r.adicionado || 0) - (r.cancelado || 0)
     const saldo = confirmado - realizado
     // dias p/ finalizar o lote = dataFinalizacao − data (prevista/chegada)

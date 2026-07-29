@@ -50,6 +50,8 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
   const [tipoProduto, setTipoProduto] = useState("")
   const [cliente, setCliente] = useState("")
   const [statusF, setStatusF] = useState("")
+  const [dataDe, setDataDe] = useState("")   // período do REALIZADO (contratos que viram o mês)
+  const [dataAte, setDataAte] = useState("")
   const [d, setD] = useState<Dados | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"tabela" | "painel">("tabela")
@@ -69,10 +71,12 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
     if (tipoProduto) qs.set("tipoProduto", tipoProduto)
     if (cliente) qs.set("cliente", cliente)
     if (statusF) qs.set("status", statusF)
+    if (dataDe) qs.set("dataDe", dataDe)
+    if (dataAte) qs.set("dataAte", dataAte)
     const r = await fetch("/api/recebimento-controle?" + qs.toString())
     setD(await r.json())
     setLoading(false)
-  }, [ano, mesesKey, unidade, tipoProduto, cliente, statusF])
+  }, [ano, mesesKey, unidade, tipoProduto, cliente, statusF, dataDe, dataAte])
   useEffect(() => { carregar() }, [carregar])
 
   function toggleMes(m: number) {
@@ -210,6 +214,20 @@ export default function RecebimentoControleClient({ anoAtual, mesAtual, clientes
           <option value="">Todos os status</option>
           {STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        {/* período do REALIZADO — p/ contrato que vira o mês (a descarga continua no mês seguinte) */}
+        <div className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-sm ${dataDe || dataAte ? "border-green-300 bg-green-50" : "border-gray-200"}`}
+          title="Recorta o REALIZADO pelo período informado (ignora a trava do mês do registro) — útil p/ contratos que continuam descarregando no mês seguinte">
+          <span className={`text-xs font-semibold ${dataDe || dataAte ? "text-green-700" : "text-gray-500"}`}>Realizado:</span>
+          <input type="date" value={dataDe} onChange={e => setDataDe(e.target.value)}
+            className="border-0 bg-transparent text-xs focus:outline-none w-[118px]" />
+          <span className="text-gray-400 text-xs">até</span>
+          <input type="date" value={dataAte} onChange={e => setDataAte(e.target.value)}
+            className="border-0 bg-transparent text-xs focus:outline-none w-[118px]" />
+          {(dataDe || dataAte) && (
+            <button onClick={() => { setDataDe(""); setDataAte("") }} title="Limpar período do realizado"
+              className="text-green-700 hover:text-red-500"><X size={13} /></button>
+          )}
+        </div>
         <div className="ml-auto flex bg-gray-100 p-1 rounded-lg gap-1">
           <button onClick={() => setView("tabela")} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "tabela" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}><Table2 size={13} /> Tabela</button>
           <button onClick={() => setView("painel")} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${view === "painel" ? "bg-white shadow text-blue-700" : "text-gray-500"}`}><BarChart3 size={13} /> Painel</button>
