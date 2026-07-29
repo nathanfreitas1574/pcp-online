@@ -65,6 +65,8 @@ type Demanda = {
   responsavel: string | null; status: string
   createdAt: string; dataInicio: string | null; dataFim: string | null
 }
+// opção de contrato do Controle de Expedição (mesmo nº pode ter 2+ operações: granel × bag etc.)
+type CtrOpcao = { clienteNome: string; desProduto: string; operacao: string | null; tipoProduto: string | null; linhaProducao: string | null }
 
 export default function ProgramacaoClient({
   programacoes: inicial, boxes, clientes, produtos, semana, ano, maxSemana, dias, realizadoPorDia, linhaPorContrato = {}, linhaDescargaPorContrato = {}, demandasIniciais = []
@@ -83,6 +85,7 @@ export default function ProgramacaoClient({
   const [addMode, setAddMode] = useState(false)
   const [buscandoCtr, setBuscandoCtr] = useState(false)
   const [ctrInfo, setCtrInfo] = useState<string>("")
+  const [ctrOpcoes, setCtrOpcoes] = useState<CtrOpcao[]>([]) // contrato com 2+ operações → usuário escolhe qual programar
   const [view, setView] = useState<"tabela" | "graficos">("tabela")
   const [busca, setBusca] = useState("")
   const [linhasSel, setLinhasSel] = useState<string[]>([]) // filtro por linha de produção (multi)
@@ -130,8 +133,8 @@ export default function ProgramacaoClient({
   }
 
   async function buscarContrato(numero: string) {
-    if (!numero.trim()) { setCtrInfo(""); return }
-    setBuscandoCtr(true); setCtrInfo("")
+    if (!numero.trim()) { setCtrInfo(""); setCtrOpcoes([]); return }
+    setBuscandoCtr(true); setCtrInfo(""); setCtrOpcoes([])
     try {
       // RECEBIMENTO: os contratos vêm do CONTROLE DE RECEBIMENTO (fallback: TOTVS)
       if (tipo === "RECEBIMENTO") {
@@ -141,6 +144,22 @@ export default function ProgramacaoClient({
         if (mr) {
           setNovaLinha(p => ({ ...p, clienteNome: mr.clienteNome, produto: mr.desProduto }))
           setCtrInfo(`✓ ${mr.clienteNome} — ${mr.desProduto} (Controle de Recebimento${mr.linhaDescarga ? ` · ${mr.linhaDescarga}` : ""})`)
+          setBuscandoCtr(false)
+          return
+        }
+      } else {
+        // EXPEDIÇÃO: primeiro o CONTROLE DE EXPEDIÇÃO — o mesmo nº pode ter 2+ operações (granel × bag…)
+        const re = await fetch(`/api/expedicao/contratos/lookup?numero=${encodeURIComponent(numero.trim())}`)
+        const de = await re.json().catch(() => null)
+        const ops: CtrOpcao[] = de?.matches ?? []
+        if (ops.length === 1) {
+          escolherOpcaoContrato(ops[0])
+          setBuscandoCtr(false)
+          return
+        }
+        if (ops.length > 1) {
+          setCtrOpcoes(ops)
+          setCtrInfo(`⚠ Este contrato tem ${ops.length} operações no Controle de Expedição — escolha qual programar:`)
           setBuscandoCtr(false)
           return
         }
@@ -158,6 +177,14 @@ export default function ProgramacaoClient({
       setCtrInfo("Erro ao buscar contrato.")
     }
     setBuscandoCtr(false)
+  }
+
+  // usuário escolheu QUAL operação do contrato programar (ou só havia uma)
+  function escolherOpcaoContrato(o: CtrOpcao) {
+    setNovaLinha(p => ({ ...p, clienteNome: o.clienteNome, produto: o.desProduto }))
+    setCtrOpcoes([])
+    const detalhes = [o.tipoProduto, o.operacao, o.linhaProducao].filter(Boolean).join(" · ")
+    setCtrInfo(`✓ ${o.clienteNome} — ${o.desProduto} (Controle de Expedição${detalhes ? ` · ${detalhes}` : ""})`)
   }
 
   // Linhas de produção disponíveis (do tipo atual) + as já selecionadas (p/ chip visível mesmo mudando de semana)
@@ -239,16 +266,22 @@ export default function ProgramacaoClient({
     // busca o contrato e alinha cliente/produto (só o cabeçalho — volumes ficam como estão)
     if (num) {
       try {
-        const origem = row.tipo === "RECEBIMENTO" ? "/api/recebimento-controle/lookup" : "/api/contratos/lookup"
+        const origem = row.tipo === "RECEBIMENTO" ? "/api/recebimento-controle/lookup" : "/api/expedicao/contratos/lookup"
         let res = await fetch(`${origem}?numero=${encodeURIComponent(num)}`)
         let d = await res.json()
-        if (!d.matches?.length && row.tipo === "RECEBIMENTO") {
+        if (!d.matches?.length) {
           res = await fetch(`/api/contratos/lookup?numero=${encodeURIComponent(num)}`)
           d = await res.json()
         }
         const m = d.matches?.[0]
         if (m && (m.clienteNome || m.desProduto)) {
-          const upd = { clienteNome: m.clienteNome || row.clienteNome, produto: m.desProduto || row.produto }
+          // contrato com 2+ operações → preenche só o cliente e PRESERVA o produto digitado
+          // (o produto é o que distingue granel × bag na linha; não sobrescrever com a 1ª operação)
+          const multi = (d.matches?.length ?? 0) > 1
+          const upd = {
+            clienteNome: m.clienteNome || row.clienteNome,
+            produto: multi ? (row.produto || m.desProduto) : (m.desProduto || row.produto),
+          }
           setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...upd } : r)))
           await fetch(`/api/programacao/${row.id}`, {
             method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd),
@@ -287,7 +320,7 @@ export default function ProgramacaoClient({
     const nova = await res.json()
     setRows((prev) => [...prev, nova])
     setNovaLinha({ numeroContrato: "", clienteNome: "", produto: "", boxId: "" })
-    setCtrInfo(""); setAddMode(false); setSaving(null)
+    setCtrInfo(""); setCtrOpcoes([]); setAddMode(false); setSaving(null)
   }
 
   async function excluirLinha(id: string) {
@@ -399,7 +432,7 @@ export default function ProgramacaoClient({
             <History size={15} /> Histórico
           </Link>
           {view === "tabela" && (
-            <button onClick={() => setAddMode(true)}
+            <button onClick={() => { setAddMode(true); setCtrInfo(""); setCtrOpcoes([]) }}
               className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">
               <Plus size={15} /> Adicionar linha
             </button>
@@ -608,12 +641,34 @@ export default function ProgramacaoClient({
                       <Save size={12} /> {saving === "nova" ? "…" : "OK"}
                     </button>
                   </td>
-                  <td className="px-2 py-2"><button onClick={() => setAddMode(false)} className="text-xs text-gray-400 hover:text-red-500">✕</button></td>
+                  <td className="px-2 py-2"><button onClick={() => { setAddMode(false); setCtrInfo(""); setCtrOpcoes([]) }} className="text-xs text-gray-400 hover:text-red-500">✕</button></td>
                   <td /><td />
                 </tr>
               )}
-              {addMode && ctrInfo && (
-                <tr className="bg-blue-50"><td colSpan={17} className="px-3 pb-2 text-[11px] text-blue-700">{ctrInfo}</td></tr>
+              {addMode && (ctrInfo || ctrOpcoes.length > 0) && (
+                <tr className="bg-blue-50"><td colSpan={17} className="px-3 pb-2 text-[11px] text-blue-700">
+                  {ctrInfo}
+                  {ctrOpcoes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {ctrOpcoes.map((o, i) => {
+                        const tipoCls = o.tipoProduto === "GRANEL" ? "bg-yellow-100 text-yellow-700"
+                          : o.tipoProduto === "BIG BAG" ? "bg-green-100 text-green-700"
+                          : o.tipoProduto === "PRODUTO ACABADO" ? "bg-emerald-100 text-emerald-700"
+                          : "bg-gray-100 text-gray-600"
+                        return (
+                          <button key={i} onClick={() => escolherOpcaoContrato(o)} type="button"
+                            className="flex items-center gap-1.5 border border-blue-300 bg-white hover:bg-blue-100 rounded-lg px-2.5 py-1.5 text-[11px] text-left transition"
+                            title={`Programar esta operação: ${o.desProduto}`}>
+                            {o.tipoProduto && <span className={`px-1.5 py-0.5 rounded font-semibold ${tipoCls}`}>{o.tipoProduto}</span>}
+                            {o.operacao && <span className="font-semibold text-gray-700">{o.operacao}</span>}
+                            <span className="text-gray-500">{o.desProduto}</span>
+                            {o.linhaProducao && <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${LINHA_PROD_COLORS[o.linhaProducao] ?? "bg-gray-100 text-gray-600"}`}>{o.linhaProducao}</span>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </td></tr>
               )}
 
               {/* Linha de totais */}
